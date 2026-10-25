@@ -508,7 +508,9 @@ def _report_history(root: Path, rel: str) -> list[dict]:
 # "0.53" is unique in a 20k-leaf file by accident; a 4-digit "0.7174" in a 300-leaf summary is not).
 MIN_SIG = 3
 CHANCE = 0.05     # max expected chance matches: leaves / 10**significant_digits
-NUMBER = re.compile(r"(?<![\w.])([-−]?\d+\.\d{2,})(?![\w.])")
+# A whole decimal token: not the tail of a grouped number (1,234.5678) or of a dotted id, and
+# allowed to end a sentence ("0.7101."). views.js uses the same pattern.
+NUMBER = re.compile(r"(?<![\w.,])([-−]?\d+\.\d{2,})(?!\w|[.,]\d)")
 
 
 def _leaves(obj: Any, pointer: str = "") -> list[tuple[str, float]]:
@@ -555,12 +557,14 @@ def _number_links(studies: list[dict], root: Path) -> None:
 
     for s in studies:
         for r in s["reports"]:
-            inputs = [i["path"] for i in r["inputs"] if i["path"] in artifacts and i["path"].endswith(".json")]
+            # an artifact cited under several roles is one candidate, not several
+            inputs = list(dict.fromkeys(i["path"] for i in r["inputs"]
+                                        if i["path"] in artifacts and i["path"].endswith(".json")))
             for b in r["result_blocks"]:
                 sources = declared.get(f"{r['path']}#{b['name']}")
                 how = "declared" if sources else "inputs"
                 links = []
-                cands = sources or inputs
+                cands = list(dict.fromkeys(sources or inputs))
                 n_leaves = sum(len(leaves_of(p)) for p in cands)
                 for text in sorted(set(NUMBER.findall(b["markdown"]))):
                     places = len(text.split(".")[1])

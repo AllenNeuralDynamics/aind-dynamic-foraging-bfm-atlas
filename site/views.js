@@ -21,8 +21,11 @@ document.addEventListener("atlas:ready", () => {
     const L = 250, R = 20, W = 1000, RH = 28, H = rows.length * RH + 40;
     const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
     const ticks = [];
-    for (let d = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1); d.getTime() <= t1; d.setMonth(d.getMonth() + 1)) {
-      if (d.getTime() >= t0) ticks.push(d.getTime());
+    // month ticks built in UTC, matching their toISOString() labels in any browser time zone
+    const s0 = new Date(t0);
+    for (let y = s0.getUTCFullYear(), m = s0.getUTCMonth(); Date.UTC(y, m, 1) <= t1; m++) {
+      if (m === 12) { m = 0; y++; }
+      if (Date.UTC(y, m, 1) >= t0) ticks.push(Date.UTC(y, m, 1));
     }
     const undated = rows.reduce((n, x) => n + [...x.s.variants.flatMap((v) => v.launch_records), ...(x.s.root_launch_records || [])]
       .filter((r) => r.format === "json" && isNaN(Date.parse(r.time))).length, 0);
@@ -57,12 +60,15 @@ document.addEventListener("atlas:ready", () => {
     }));
     const style = { upstream: "stroke:var(--accent);stroke-width:2", corrects: "stroke:var(--error);stroke-width:2",
                     citation: "stroke:var(--muted);stroke-width:1.2;stroke-dasharray:5 4" };
+    // Each kind bends to its own side, so parallel edges between one pair stay visible.
+    const bend = { upstream: 0, corrects: 26, citation: -26 };
     const line = (e) => {
       const a = pos[e.from], b = pos[e.to];
       const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, pad = 30;
       const x1 = a.x + (dx / len) * pad, y1 = a.y + (dy / len) * pad, x2 = b.x - (dx / len) * pad, y2 = b.y - (dy / len) * pad;
-      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="${style[e.kind]}" marker-end="url(#arr-${e.kind})">
-        <title>${esc(e.from)} → ${esc(e.to)} (${e.kind}) via ${esc([...e.reports].map((r) => r.split("/").pop()).join(", "))}</title></line>`;
+      const cx = (x1 + x2) / 2 - (dy / len) * bend[e.kind], cy = (y1 + y2) / 2 + (dx / len) * bend[e.kind];
+      return `<path d="M${x1},${y1} Q${cx},${cy} ${x2},${y2}" fill="none" style="${style[e.kind]}" marker-end="url(#arr-${e.kind})">
+        <title>${esc(e.from)} → ${esc(e.to)} (${e.kind}) via ${esc([...e.reports].map((r) => r.split("/").pop()).join(", "))}</title></path>`;
     };
     const list = Object.values(edges);
     main().innerHTML = `<h1>Study dependencies</h1>
@@ -158,7 +164,8 @@ document.addEventListener("atlas:ready", () => {
   };
 
   // ------------------------------------------------------------ click-a-number
-  const NUMBER = /(?<![\w.])([-−]?\d+\.\d{2,})(?![\w.])/g;
+  // same token rule as NUMBER in catalog.py
+  const NUMBER = /(?<![\w.,])([-−]?\d+\.\d{2,})(?!\w|[.,]\d)/g;
   window.Atlas.linkNumbers = (div, r, name) => {
     const block = r.result_blocks.find((b) => b.name === name);
     const links = Object.fromEntries((block?.number_links || []).map((l) => [l.text, l]));

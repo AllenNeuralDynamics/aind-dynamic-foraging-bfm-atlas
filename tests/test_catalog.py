@@ -312,3 +312,17 @@ def test_history_limit_counts_versions_not_commits(studies, monkeypatch):
 def test_root_scalar_pointer_is_empty(tmp_path):
     from bfm_atlas.catalog import _leaves
     assert _leaves(0.7174) == [("", 0.7174)]
+
+
+def test_number_tokens():
+    from bfm_atlas.catalog import NUMBER
+    assert NUMBER.findall("best 0.7101. Then 1,234.5678 and v0.71.3 and (0.7154, −0.0118)") == \
+        ["0.7101", "0.7154", "−0.0118"]
+
+
+def test_artifact_cited_twice_is_one_candidate(studies):
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("  data: analysis/summary.json", "  data: analysis/summary.json\n  summary: analysis/summary.json"))
+    _commit(studies)
+    texts = {l["text"] for l in by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["result_blocks"][0]["number_links"]}
+    assert {"0.7101", "0.7154"} <= texts
