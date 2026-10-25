@@ -136,22 +136,42 @@ def _revisions(d: dict) -> dict[str, str]:
 
 
 def _note(d: dict) -> str | None:
-    """Why the launch exists: the launcher --note, a legacy `purpose`, or a trigger symptom."""
-    for key in ("note", "purpose"):
-        if isinstance(d.get(key), str):
-            return d[key]
+    """Why the launch exists: the launcher --note (top level, or a legacy record's nested
+    `launch.note`), a legacy `purpose`, and only then an intervention's trigger symptom."""
+    launch = d.get("launch") if isinstance(d.get("launch"), dict) else {}
+    for v in (d.get("note"), launch.get("note"), d.get("purpose")):
+        if isinstance(v, str):
+            return v
     t = d.get("trigger")
     if isinstance(t, dict) and isinstance(t.get("symptom"), str):
         return t["symptom"]
     return t if isinstance(t, str) else None
 
 
-def _launch_record(path: Path, root: Path, variant: str) -> dict:
+def _wandb_project(d: Any) -> dict | None:
+    """{entity, project} a record or W&B sweep manifest names for its runs, if any."""
+    if not isinstance(d, dict):
+        return None
+    launch = d.get("launch") if isinstance(d.get("launch"), dict) else {}
+    nested = launch.get("wandb") if isinstance(launch.get("wandb"), dict) else {}
+    for ent, proj in ((d.get("wandb_entity"), d.get("wandb_project")), (nested.get("entity"), nested.get("project")),
+                      (d.get("entity"), d.get("project"))):
+        if isinstance(ent, str) and isinstance(proj, str):
+            return {"entity": ent, "project": proj}
+    return None
+
+
+def _launch_record(path: Path, root: Path, variant: str | None) -> dict:
     rel = _rel(path, root)
     if path.suffix != ".json":
         text = path.read_text(errors="replace")
+        try:
+            parsed = yaml.safe_load(text)
+        except yaml.YAMLError:
+            parsed = None
         return {"path": rel, "format": path.suffix.lstrip("."), "schema_version": None,
-                "wandb_groups": sorted(set(GROUP.findall(text))), "sha256": _sha256(path)}
+                "wandb_groups": sorted(set(GROUP.findall(text))), "wandb": _wandb_project(parsed),
+                "sha256": _sha256(path)}
     d, err = _load_json(path)
     if err or not isinstance(d, dict):
         return {"path": rel, "format": "json", "schema_version": None,
@@ -169,6 +189,7 @@ def _launch_record(path: Path, root: Path, variant: str) -> dict:
         "platform": d.get("platform") or ("beaker" if "experiment_id" in d else None),
         "wandb_groups": groups,
         "own_group": any(g.split("@")[0] == variant for g in groups),
+        "wandb": _wandb_project(d),
         "label": d.get("label"),
         "note": _note(d),
         "job_refs": [r for r in job_refs if isinstance(r, dict)],
@@ -279,7 +300,11 @@ def _artifact(path: Path, root: Path) -> dict:
         groups = [meta["wandb_group"]]
     entry["meta"] = {
         "schema_version": 2 if meta.get("schema_version") == 2 else 1,
-        "kind": meta.get("kind") or "producer",
+        # v1 _meta has no kind; recognise a freeze by its producer's name as the checker does,
+        # and otherwise leave it unknown rather than guess "producer"
+        "kind": meta.get("kind") if meta.get("kind") in ("producer", "freeze") else (
+            "freeze" if str(meta.get("produced_by") or meta.get("producer") or "").split("/")[-1].startswith("freeze")
+            else None),
         "produced_by": meta.get("produced_by") or meta.get("producer"),
         "produced_at_pt": meta.get("produced_at_pt") or meta.get("recorded_at_pt"),
         "studies_git_sha": meta.get("studies_git_sha") or meta.get("dispatcher_git_sha"),
@@ -336,6 +361,24 @@ class _Tracked:
             return False
         return self.paths is None or _rel(p, self.root) in self.paths
 
+    def has_under(self, d: Path) -> bool:
+        """Whether a directory holds any tracked file (an ignored directory does not)."""
+        if self.paths is None:
+            return d.is_dir()
+        prefix = _rel(d, self.root) + "/"
+        return any(x.startswith(prefix) for x in self.paths)
+
+
+RECORD_KEYS = {"experiment_id", "dispatcher_commit", "sweep_id", "mode", "wandb_group", "job_refs"}
+
+
+def _is_root_record(p: Path) -> bool:
+    """A legacy launch record committed at a study root (study 01 has several)."""
+    if p.suffix == ".json":
+        d, err = _load_json(p)
+        return not err and isinstance(d, dict) and "_meta" not in d and bool(RECORD_KEYS & d.keys())
+    return p.suffix in (".yaml", ".yml") and bool(GROUP.search(p.read_text(errors="replace")))
+
 
 def _study(study_dir: Path, root: Path, study_ids: set[str], ok: _Tracked) -> dict:
     m = STUDY_DIR.match(study_dir.name)
@@ -345,7 +388,8 @@ def _study(study_dir: Path, root: Path, study_ids: set[str], ok: _Tracked) -> di
     h1 = H1.search(body)
 
     variants = []
-    for vdir in sorted(p for p in (study_dir / "variants").glob("*") if p.is_dir() and p.name != "__pycache__"):
+    for vdir in sorted(p for p in (study_dir / "variants").glob("*")
+                       if p.is_dir() and p.name != "__pycache__" and ok.has_under(p)):
         notes = vdir / "notes.md"
         files = sorted(p for d in vdir.glob("launch_record*") if d.is_dir() for p in d.rglob("*")
                        if ok(p) and p.suffix in (".json", ".yaml", ".yml"))
@@ -365,8 +409,21 @@ def _study(study_dir: Path, root: Path, study_ids: set[str], ok: _Tracked) -> di
     reports = [_report(p, study_dir, root, study_ids, ok) for p in sorted(rdir.glob("*.md"), key=_report_order)
                if p.name != "INDEX.md" and ok(p)] if rdir.is_dir() else []
     index = rdir / "INDEX.md"
-    analysis = study_dir / "analysis"
-    artifacts = [_artifact(p, root) for p in sorted(analysis.rglob("*.json")) if ok(p)] if analysis.is_dir() else []
+    # Legacy launch records misplaced at the study root still record launches; keep them, with
+    # no variant, rather than lose their groups, Beaker IDs and commits.
+    root_records = [_launch_record(p, root, None) for p in sorted(study_dir.iterdir())
+                    if ok(p) and p.suffix in (".json", ".yaml", ".yml") and _is_root_record(p)]
+    root_paths = {r["path"] for r in root_records}
+    # Analysis artifacts: every tracked JSON under analysis/, plus tracked JSON elsewhere in the
+    # study that carries a `_meta` block (e.g. reference/ inputs), never a launch record.
+    artifacts = []
+    for p in sorted(study_dir.rglob("*.json")):
+        rel_parts = p.relative_to(study_dir).parts
+        if not ok(p) or _rel(p, root) in root_paths or any(x.startswith("launch_record") for x in rel_parts):
+            continue
+        a = _artifact(p, root)
+        if rel_parts[0] == "analysis" or a["meta"] is not None:
+            artifacts.append(a)
 
     return {
         "id": study_dir.name,
@@ -380,6 +437,7 @@ def _study(study_dir: Path, root: Path, study_ids: set[str], ok: _Tracked) -> di
         "reports_index": index.read_text(errors="replace") if ok(index) else None,
         "makefile_targets": _makefile_targets(study_dir / "Makefile") if ok(study_dir / "Makefile") else [],
         "variants": variants,
+        "root_launch_records": root_records,
         "reports": reports,
         "artifacts": artifacts,
         "cites": sorted({s for s in (_study_of(t, study_ids) for t in _link_targets(body, readme_path, root)) if s}
@@ -444,24 +502,39 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         return groups.setdefault(g, {"group": g, "study": None, "variant": None, "url": None,
                                      "launch_records": [], "reports": [], "artifacts": []})
 
+    records: dict[str, dict] = {}
     for s in studies:
-        for v in s["variants"]:
-            for r in v["launch_records"]:
-                for g in r["wandb_groups"]:
-                    e = entry(g)
-                    e["launch_records"].append(r["path"])
-                    if g.split("@")[0] == v["name"] or e["variant"] is None:
-                        e["study"], e["variant"] = s["id"], v["name"]
+        owned = [(v["name"], r) for v in s["variants"] for r in v["launch_records"]]
+        owned += [(None, r) for r in s["root_launch_records"]]
+        for variant, r in owned:
+            records[r["path"]] = r
+            for g in r["wandb_groups"]:
+                e = entry(g)
+                e["launch_records"].append(r["path"])
+                if e["study"] is None or (variant is not None and (g.split("@")[0] == variant or e["variant"] is None)):
+                    e["study"], e["variant"] = s["id"], variant
         for r in s["reports"]:
             for g in r["wandb_groups"]:
                 entry(g)["reports"].append(r["path"])
         for a in s["artifacts"]:
             for g in (a["meta"] or {}).get("wandb_groups", []):
                 entry(g)["artifacts"].append(a["path"])
+
+    def project_for(e: dict) -> dict | None:
+        """The W&B project a launch used: its own records, then a sweep manifest beside them
+        (a smoke launch may log to another project), and only then the study's cover."""
+        named = [records[p] for p in e["launch_records"]]
+        dirs = {p.rsplit("/", 1)[0] for p in e["launch_records"]}
+        beside = [r for r in records.values() if r["path"].rsplit("/", 1)[0] in dirs]
+        for r in named + beside:
+            if r.get("wandb"):
+                return r["wandb"]
+        return wandb.get(e["study"]) if e["study"] else None
+
     for g, e in groups.items():
         for k in ("launch_records", "reports", "artifacts"):
             e[k] = sorted(set(e[k]))
-        w = wandb.get(e["study"]) if e["study"] else None
+        w = project_for(e)
         if w and w.get("entity") and w.get("project"):
             e["url"] = f"https://wandb.ai/{w['entity']}/{w['project']}/groups/{g}"
 
