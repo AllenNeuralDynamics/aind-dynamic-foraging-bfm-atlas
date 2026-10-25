@@ -315,9 +315,14 @@ document.addEventListener("atlas:ready", () => {
     const freezes = inputs.map((p) => S.artifactByPath[p]).filter((a) => a?.meta?.kind === "freeze");
     const items = inputs.map((p) => {
       const st = studyOfPath(p), cross = st && st !== r._study, art = S.artifactByPath[p];
-      const up = cross && r.upstream.find((u) => u.study === st && u.report);
-      if (cross) return { text: base(p), sub: `study ${st.slice(0, 2)}`, xref: true,
-        href: up ? reportHref(`${st}/${up.report}`) : `#/study/${st}` };
+      if (cross) {
+        // the upstream report whose inputs name this file; ambiguous or unknown -> the study page
+        const ups = r.upstream.filter((u) => u.study === st && u.report).map((u) => S.reportByKey[`${st}/${u.report}`]).filter(Boolean);
+        const named = ups.filter((u) => u.inputs.some((i) => i.path === p));
+        const to = named.length === 1 ? named[0] : ups.length === 1 && !named.length ? ups[0] : null;
+        return { text: base(p), sub: `study ${st.slice(0, 2)}`, xref: true,
+          href: to ? `#/report/${to._study}/${to.id}` : `#/study/${st}` };
+      }
       return { text: base(p), sub: art?.meta?.kind === "freeze" ? "freeze" : "committed input", link: srcLink(p, base(p)) };
     });
     const plain = inputs.filter((p) => studyOfPath(p) === r._study && S.artifactByPath[p]?.meta?.kind !== "freeze");
@@ -350,8 +355,14 @@ document.addEventListener("atlas:ready", () => {
     recs.forEach((x) => { (byVariant[`${x._study}/${x._variant}`] ||= []).push(x); });
     let snapshotted = 0;
     const expItems = Object.values(byVariant).flatMap((xs) => {
-      const recorded = uniq(xs.filter((x) => x.format === "json").flatMap((x) => (x.manifests || []).map((m) => resolve(x, m))));
-      if (recorded.length) { snapshotted++; return recorded.map((m) => ({ text: base(m), link: srcLink(m, base(m)) })); }
+      // a manifest as submitted is the file at the launch's recorded studies revision
+      const recorded = uniq(xs.filter((x) => x.format === "json").flatMap((x) =>
+        (x.manifests || []).map((m) => `${resolve(x, m)}@${x.revisions?.studies || ""}`)));
+      if (recorded.length) {
+        snapshotted++;
+        return recorded.map((k) => { const [m, sha] = k.split("@");
+          return { text: base(m), sub: sha ? `at ${short(sha)}` : "revision not recorded", link: srcLink(m, base(m), sha || undefined) }; });
+      }
       return (variantOf(xs[0])?.manifests || []).map((m) => ({ text: base(m), sub: "current file", link: srcLink(m, base(m)) }));
     });
     const nVariants = Object.keys(byVariant).length;
@@ -406,10 +417,11 @@ document.addEventListener("atlas:ready", () => {
       const k = li.dataset.hop, hop = L.hops[k], meta = HOPS.find((h) => h[0] === k);
       const html = k === "decision" ? "<b>Decision</b><div>A later report amends or replaces this one.</div>"
         : `<b>${esc(meta[1])}</b> · ${esc(STATE[hop.state])}<div>${esc(meta[2])}</div><div class="tip-v">${esc(hop.why)}</div>`;
-      li.addEventListener("pointerenter", () => tip.show(li, html));
-      li.addEventListener("pointerleave", () => tip.hide());
+      li.addEventListener("pointerenter", (ev) => { if (ev.pointerType !== "touch") tip.show(li, html); });
+      li.addEventListener("pointerleave", (ev) => { if (ev.pointerType !== "touch") tip.hide(); });
       li.addEventListener("focus", () => tip.show(li, html));
       li.addEventListener("blur", () => tip.hide());
+      li.addEventListener("click", (ev) => { if (!ev.target.closest("a, button")) tip.show(li, html); });
       li.querySelector(".more")?.addEventListener("click", (ev) => {
         ev.target.hidden = true; ev.target.nextElementSibling.hidden = false;
       });
@@ -436,6 +448,9 @@ document.addEventListener("atlas:ready", () => {
     // drawn off-screen so computed styles resolve, then removed
     svg.style.position = "absolute"; svg.style.left = "-10000px"; svg.style.width = `${W}px`;
     document.body.append(svg);
+    // widen to the longest row so no provenance label is clipped
+    const right = Math.max(...[...svg.querySelectorAll("text")].map((t) => t.getBBox().x + t.getComputedTextLength()));
+    if (right + 24 > W) { svg.setAttribute("viewBox", `0 0 ${Math.ceil(right + 24)} ${H}`); svg.style.width = `${Math.ceil(right + 24)}px`; }
     setTimeout(() => svg.remove(), 0);
     return svg;
   }
