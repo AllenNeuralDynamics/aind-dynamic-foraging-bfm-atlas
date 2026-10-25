@@ -274,6 +274,7 @@ function viewReport(sid, rid) {
     </details>
     <div class="prose" id="body"></div>`;
   const body = renderMarkdown(r.markdown, r.path);
+  body.querySelector("h1")?.remove();      // the page heading already shows the report title
   for (const div of body.querySelectorAll(".result-block")) {
     const name = div.dataset.block;
     const head = document.createElement("div");

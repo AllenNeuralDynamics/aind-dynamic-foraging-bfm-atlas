@@ -114,6 +114,7 @@ svg .axis { stroke: var(--line); }
 .diff-ins { background: var(--ok-soft); }
 
 @media (max-width: 640px) {
+  .top { position: static; }
   .pin { margin-left: 0; width: 100%; }
   .prose { padding: 4px 12px 12px; }
   .cards { grid-template-columns: 1fr; }

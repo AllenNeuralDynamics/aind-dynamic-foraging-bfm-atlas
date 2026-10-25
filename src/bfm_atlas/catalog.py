@@ -515,13 +515,14 @@ def copy_figures(catalog: dict, studies_root: Path | str, dest: Path | str) -> i
     import shutil
 
     root, dest = Path(studies_root).resolve(), Path(dest)
+    ok = _Tracked(root)
     paths = {f["path"] for s in catalog["studies"] for r in s["reports"] for f in r["figures"] if f["exists"]}
     paths |= {o["path"] for s in catalog["studies"] for a in s["artifacts"] if a["meta"]
               for o in a["meta"]["outputs"] if o["path"].lower().endswith(IMAGE_SUFFIXES)}
     n = 0
     for p in sorted(paths):
         src = root / p
-        if src.is_file():
+        if ok(src):
             (dest / p).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest / p)
             n += 1
