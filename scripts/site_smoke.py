@@ -1,8 +1,9 @@
 """Render the built site in Chromium and fail on JS errors or broken key views.
 
     python scripts/site_smoke.py site screenshots/
+    python scripts/site_smoke.py https://allenneuraldynamics.github.io/aind-dynamic-foraging-bfm-atlas/ shots/
 
-Serves <site> on a local port, opens the main views, saves a screenshot of each, and checks
+Serves <site> on a local port (or uses a deployed URL), opens the main views, saves a screenshot of each, and checks
 that a report's result-block "Provenance" button opens the drawer and that nothing scrolls
 sideways at phone width.
 """
@@ -11,6 +12,7 @@ import http.server
 import json
 import sys
 import threading
+import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -19,14 +21,20 @@ OPTIONAL_VIEWS = ("timeline", "graph", "leaderboard")   # visited when the nav s
 
 
 def main(site: str, out: str) -> int:
-    site, out = Path(site).resolve(), Path(out)
+    out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{httpd.server_port}/"
-
-    cat = json.loads((site / "data" / "catalog.json").read_text())
+    httpd = None
+    if site.startswith(("http://", "https://")):
+        base = site if site.endswith("/") else site + "/"
+        with urllib.request.urlopen(base + "data/catalog.json") as r:
+            cat = json.loads(r.read())
+    else:
+        root = Path(site).resolve()
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+        httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{httpd.server_port}/"
+        cat = json.loads((root / "data" / "catalog.json").read_text())
     # prefer a report with click-a-number links, so that path is exercised too
     pairs = [(s, r) for s in cat["studies"] for r in s["reports"] if r["result_blocks"]]
     study, report = next(((s, r) for s, r in pairs
@@ -90,7 +98,8 @@ def main(site: str, out: str) -> int:
             if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"):
                 failures.append(f"{name}: horizontal scroll at phone width")
         browser.close()
-    httpd.shutdown()
+    if httpd:
+        httpd.shutdown()
     for e in errors + failures:
         print("FAIL:", e)
     print(f"{len(views)} views rendered; {len(errors)} JS errors; {len(failures)} failures")
