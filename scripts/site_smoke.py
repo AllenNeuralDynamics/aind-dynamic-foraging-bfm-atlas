@@ -15,7 +15,6 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-OPTIONAL_VIEWS = ("timeline", "graph", "leaderboard")   # registered by later modules
 
 
 def main(site: str, out: str) -> int:
@@ -27,13 +26,16 @@ def main(site: str, out: str) -> int:
     base = f"http://127.0.0.1:{httpd.server_port}/"
 
     cat = json.loads((site / "data" / "catalog.json").read_text())
-    study = next(s for s in cat["studies"] if any(r["result_blocks"] for r in s["reports"]))
-    report = next(r for r in study["reports"] if r["result_blocks"])
+    # prefer a report with click-a-number links, so that path is exercised too
+    pairs = [(s, r) for s in cat["studies"] for r in s["reports"] if r["result_blocks"]]
+    study, report = next(((s, r) for s, r in pairs
+                          if any(b.get("number_links") for b in r["result_blocks"])), pairs[0])
     group = next(iter(cat["wandb_groups"]))
     views = {"landing": "#/", "study": f"#/study/{study['id']}",
              "report": f"#/report/{study['id']}/{report['id']}", "health": "#/health",
              "group": f"#/group/{group}"}
-    views.update({k: f"#/{k}" for k in OPTIONAL_VIEWS})
+    views.update({k: f"#/{k}" for k in ("timeline", "graph", "leaderboard")})
+    views["history"] = f"#/history/{study['id']}/{report['id']}"
 
     errors, failures = [], []
     with sync_playwright() as pw:
@@ -44,7 +46,7 @@ def main(site: str, out: str) -> int:
         for name, hash_ in views.items():
             page.goto(base + hash_)
             page.wait_for_timeout(800)
-            if name not in OPTIONAL_VIEWS and page.locator("h1", has_text="Not found").count():
+            if page.locator("h1", has_text="Not found").count():
                 failures.append(f"{name}: rendered 'Not found'")
             page.screenshot(path=str(out / f"{name}.png"))
         page.goto(base + views["report"])
@@ -54,6 +56,13 @@ def main(site: str, out: str) -> int:
         if page.locator("#drawer").is_hidden():
             failures.append("drawer did not open")
         page.screenshot(path=str(out / "drawer.png"))
+        if any(b.get("number_links") for b in report["result_blocks"]):
+            page.locator("#drawer .drawer-close").click()
+            page.locator(".num-link").first.click()
+            page.wait_for_timeout(300)
+            if not page.locator("#drawer", has_text="Matched by value").count():
+                failures.append("number link did not open its drawer")
+            page.screenshot(path=str(out / "number.png"))
         page.set_viewport_size({"width": 390, "height": 844})
         for name in ("landing", "report"):
             page.goto(base + views[name])

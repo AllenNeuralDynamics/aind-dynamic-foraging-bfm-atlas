@@ -392,6 +392,113 @@ def _report_order(p: Path) -> tuple:
     return (int(m.group(1)), p.name) if m else (10**6, p.name)
 
 
+# --- report history -----------------------------------------------------------------------------
+HISTORY_LIMIT = 20
+
+
+def _report_history(root: Path, rel: str) -> list[dict]:
+    """Versions of a report's result blocks, newest first, one entry per commit that changed them.
+
+    Built from `git log --follow`, so it needs a full-history checkout; a shallow clone just
+    yields fewer entries.
+    """
+    log = _git(root, "log", "--follow", "--format=%H%x1f%cI%x1f%s", "-n", str(HISTORY_LIMIT * 3), "--", rel)
+    out: list[dict] = []
+    path = rel
+    for line in (log or "").splitlines():
+        sha, date, subject = line.split("\x1f", 2)
+        text = _git(root, "show", f"{sha}:{path}")
+        if text is None:     # renamed: find the path this commit knew it by
+            names = _git(root, "show", "--name-only", "--format=", "-M", sha) or ""
+            path = next((n for n in names.splitlines() if n.endswith(Path(rel).name)), path)
+            text = _git(root, "show", f"{sha}:{path}")
+        if text is None:
+            continue
+        blocks = {n: b.strip("\n") for n, b in RESULT_BLOCK.findall(text)}
+        if out and out[-1]["blocks"] == blocks:
+            out[-1].update(sha=sha, date=date, subject=subject)   # keep the commit that introduced it
+            continue
+        out.append({"sha": sha, "date": date, "subject": subject, "blocks": blocks})
+        if len(out) >= HISTORY_LIMIT:
+            break
+    return out
+
+
+# --- number links (click-a-number) -------------------------------------------------------------
+# A displayed decimal ("−" is the typographic minus) is linked to a JSON leaf only when exactly
+# one leaf, across the JSON artifacts the block can be traced to, rounds to it at the displayed
+# precision, and when that uniqueness is unlikely to be chance: the number must show at least
+# MIN_SIG significant digits, and the searched leaves must be few next to 10**digits (a 2-digit
+# "0.53" is unique in a 20k-leaf file by accident; a 4-digit "0.7174" in a 300-leaf summary is not).
+MIN_SIG = 3
+CHANCE = 0.05     # max expected chance matches: leaves / 10**significant_digits
+NUMBER = re.compile(r"(?<![\w.])([-−]?\d+\.\d{2,})(?![\w.])")
+
+
+def _leaves(obj: Any, pointer: str = "") -> list[tuple[str, float]]:
+    """(JSON pointer, value) for every numeric leaf, skipping `_meta`."""
+    if isinstance(obj, bool):
+        return []
+    if isinstance(obj, (int, float)):
+        return [(pointer or "/", float(obj))]
+    if isinstance(obj, dict):
+        return [x for k, v in obj.items() if k != "_meta"
+                for x in _leaves(v, f"{pointer}/{str(k).replace('~', '~0').replace('/', '~1')}")]
+    if isinstance(obj, list):
+        return [x for i, v in enumerate(obj) for x in _leaves(v, f"{pointer}/{i}")]
+    return []
+
+
+def _number_links(studies: list[dict], root: Path) -> None:
+    """Attach `number_links` to every result block: displayed number -> the unique JSON leaf."""
+    artifacts = {a["path"]: a for s in studies for a in s["artifacts"]}
+    declared: dict[str, list[str]] = {}
+    for a in artifacts.values():
+        for o in (a["meta"] or {}).get("outputs", []):
+            if "#" in o["path"]:
+                declared.setdefault(o["path"], []).append(a["path"])
+    leaf_cache: dict[str, list[tuple[str, float]]] = {}
+    rounded: dict[tuple[str, int], dict[float, list[tuple[str, float]]]] = {}
+
+    def leaves_of(p: str) -> list[tuple[str, float]]:
+        if p not in leaf_cache:
+            d, err = _load_json(root / p)
+            leaf_cache[p] = [] if err else _leaves(d)
+        return leaf_cache[p]
+
+    def by_rounded(p: str, places: int) -> dict[float, list[tuple[str, float]]]:
+        """Leaves of artifact p indexed by their value rounded to `places` (built once)."""
+        key = (p, places)
+        if key not in rounded:
+            idx: dict[float, list[tuple[str, float]]] = {}
+            for ptr, v in leaves_of(p):
+                if v == v and abs(v) != float("inf"):          # skip NaN / inf
+                    idx.setdefault(round(v, places), []).append((ptr, v))
+            rounded[key] = idx
+        return rounded[key]
+
+    for s in studies:
+        for r in s["reports"]:
+            inputs = [i["path"] for i in r["inputs"] if i["path"] in artifacts and i["path"].endswith(".json")]
+            for b in r["result_blocks"]:
+                sources = declared.get(f"{r['path']}#{b['name']}")
+                how = "declared" if sources else "inputs"
+                links = []
+                cands = sources or inputs
+                n_leaves = sum(len(leaves_of(p)) for p in cands)
+                for text in sorted(set(NUMBER.findall(b["markdown"]))):
+                    places = len(text.split(".")[1])
+                    sig = len(text.replace("−", "").replace("-", "").replace(".", "").lstrip("0"))
+                    if sig < MIN_SIG or n_leaves > CHANCE * 10 ** sig:
+                        continue
+                    want = float(text.replace("−", "-"))
+                    hits = [(p, ptr, v) for p in cands for ptr, v in by_rounded(p, places).get(want, [])]
+                    if len(hits) == 1:
+                        p, ptr, v = hits[0]
+                        links.append({"text": text, "artifact": p, "pointer": ptr, "value": v, "how": how})
+                b["number_links"] = links
+
+
 # --- validator ----------------------------------------------------------------------------------
 def run_validator(root: Path, python: str = sys.executable) -> dict:
     """The studies checker's findings at this checkout (scripts/check_provenance.py --format json)."""
@@ -436,6 +543,10 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
                   and (ok.paths is None or any(x.startswith(f"studies/{p.name}/") for x in ok.paths)))
     ids = {p.name for p in dirs}
     studies = [_study(p, root, ids, ok) for p in dirs]
+    for s in studies:
+        for r in s["reports"]:
+            r["history"] = _report_history(root, r["path"])
+    _number_links(studies, root)
     wandb = {s["id"]: s["cover"]["wandb"] for s in studies}
 
     groups: dict[str, dict] = {}

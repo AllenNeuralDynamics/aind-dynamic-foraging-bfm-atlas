@@ -128,3 +128,36 @@ def test_ignored_files_never_enter_the_catalog(studies):
     s = by_id(cat, "01-gru-alpha")
     assert [r["path"] for r in s["reports"]] == ["studies/01-gru-alpha/analysis/reports/r1-curve.md"]
     assert not any("drafts" in r["path"] for r in s["variants"][0]["launch_records"])
+
+
+def test_number_links_unique_matches_only(studies):
+    r = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]
+    links = {l["text"]: l for l in r["result_blocks"][0]["number_links"]}
+    assert links["0.7101"]["pointer"] == "/by_d/10"
+    assert links["0.7154"]["artifact"] == "studies/01-gru-alpha/analysis/summary.json"
+    assert links["0.7101"]["how"] == "inputs"
+
+
+def test_number_links_skip_ambiguous_and_low_precision(studies):
+    import json as _json, subprocess
+    p = studies / "studies/01-gru-alpha/analysis/summary.json"
+    d = _json.loads(p.read_text())
+    d["dup"] = 0.7101                       # two leaves now round to 0.7101
+    p.write_text(_json.dumps(d))
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("| alpha | 0.7101 | 0.7154 |", "| alpha | 0.7101 | 0.7154 | 0.71 |"))
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "x"], check=True)
+    texts = {l["text"] for l in by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["result_blocks"][0]["number_links"]}
+    assert texts == {"0.7154"}             # 0.7101 ambiguous, 0.71 has too few digits
+
+
+def test_history_records_each_block_change(studies):
+    import subprocess
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("0.7154", "0.7160"))
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "update r1"], check=True)
+    rep.write_text(rep.read_text().replace("# r1 — the curve", "# r1 — the curve, retitled"))   # prose only
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "prose"], check=True)
+    h = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["history"]
+    assert [v["subject"] for v in h] == ["update r1", "init"]
+    assert "0.7160" in h[0]["blocks"]["result-1"] and "0.7154" in h[1]["blocks"]["result-1"]
