@@ -11,7 +11,7 @@ document.addEventListener("atlas:ready", () => {
   // ------------------------------------------------------------ launch timeline
   VIEWS.timeline = () => {
     const rows = S.cat.studies.map((s) => ({
-      s, pts: s.variants.flatMap((v) => v.launch_records)
+      s, pts: [...s.variants.flatMap((v) => v.launch_records), ...(s.root_launch_records || [])]
         .filter((r) => r.format === "json")
         .map((r) => ({ r, t: Date.parse(r.time) })).filter((p) => !isNaN(p.t)),
     }));
@@ -24,7 +24,7 @@ document.addEventListener("atlas:ready", () => {
     for (let d = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1); d.getTime() <= t1; d.setMonth(d.getMonth() + 1)) {
       if (d.getTime() >= t0) ticks.push(d.getTime());
     }
-    const undated = rows.reduce((n, x) => n + x.s.variants.flatMap((v) => v.launch_records)
+    const undated = rows.reduce((n, x) => n + [...x.s.variants.flatMap((v) => v.launch_records), ...(x.s.root_launch_records || [])]
       .filter((r) => r.format === "json" && isNaN(Date.parse(r.time))).length, 0);
     main().innerHTML = `<h1>Launch timeline</h1>
       <p class="muted">Every launch record with a time, by study. <span style="color:var(--accent)">●</span> initial launch,

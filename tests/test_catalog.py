@@ -130,6 +130,7 @@ def test_ignored_files_never_enter_the_catalog(studies):
     assert not any("drafts" in r["path"] for r in s["variants"][0]["launch_records"])
 
 
+<<<<<<< HEAD
 def test_number_links_unique_matches_only(studies):
     r = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]
     links = {l["text"]: l for l in r["result_blocks"][0]["number_links"]}
@@ -161,3 +162,67 @@ def test_history_records_each_block_change(studies):
     h = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["history"]
     assert [v["subject"] for v in h] == ["update r1", "init"]
     assert "0.7160" in h[0]["blocks"]["result-1"] and "0.7154" in h[1]["blocks"]["result-1"]
+=======
+def _commit(root, msg="x"):
+    import subprocess
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", msg], check=True)
+
+
+def test_nested_launch_note_beats_trigger_symptom(studies):
+    p = studies / "studies/02-disrnn-beta/variants/old/launch_record/hpc.json"
+    p.write_text(json.dumps({"kind": "rescue", "trigger": {"symptom": "wedged"},
+                             "launch": {"note": "the original purpose"}}))
+    _commit(studies)
+    recs = by_id(build_catalog(studies), "02-disrnn-beta")["variants"][0]["launch_records"]
+    assert next(r for r in recs if r["path"].endswith("hpc.json"))["note"] == "the original purpose"
+
+
+def test_legacy_kind_is_freeze_or_unknown(studies):
+    a = studies / "studies/02-disrnn-beta/analysis"
+    (a / "frozen.json").write_text(json.dumps({"_meta": {"produced_by": "analysis/freeze_runs.py"}}))
+    _commit(studies)
+    arts = {x["path"].split("/")[-1]: x["meta"]["kind"] for x in by_id(build_catalog(studies), "02-disrnn-beta")["artifacts"]}
+    assert arts["frozen.json"] == "freeze" and arts["old.json"] is None
+
+
+def test_ignored_variant_dirs_are_skipped(studies):
+    (studies / ".gitignore").write_text("scratch/\n")
+    _commit(studies)
+    (studies / "studies/01-gru-alpha/variants/scratch").mkdir()
+    (studies / "studies/01-gru-alpha/variants/scratch/notes.md").write_text("# x\n")
+    assert [v["name"] for v in by_id(build_catalog(studies), "01-gru-alpha")["variants"]] == ["base"]
+
+
+def test_root_launch_records_are_kept(studies):
+    (studies / "studies/02-disrnn-beta/heldout_rerun.json").write_text(json.dumps({
+        "wandb_group": "rerun@20260623-004601", "experiment_id": "01KROOT", "dispatcher_commit": "e" * 40}))
+    _commit(studies)
+    cat = build_catalog(studies)
+    root = by_id(cat, "02-disrnn-beta")["root_launch_records"]
+    assert root[0]["revisions"] == {"dispatcher": "e" * 40}
+    g = cat["wandb_groups"]["rerun@20260623-004601"]
+    assert (g["study"], g["variant"]) == ("02-disrnn-beta", None)
+    assert not any(a["path"].endswith("heldout_rerun.json") for a in by_id(cat, "02-disrnn-beta")["artifacts"])
+
+
+def test_meta_json_outside_analysis_is_an_artifact(studies):
+    (studies / "studies/02-disrnn-beta/reference").mkdir()
+    (studies / "studies/02-disrnn-beta/reference/trained.json").write_text(json.dumps({"_meta": {"produced_by": "x.py"}}))
+    (studies / "studies/02-disrnn-beta/reference/plain.json").write_text("{}")
+    _commit(studies)
+    paths = {a["path"] for a in by_id(build_catalog(studies), "02-disrnn-beta")["artifacts"]}
+    assert "studies/02-disrnn-beta/reference/trained.json" in paths
+    assert "studies/02-disrnn-beta/reference/plain.json" not in paths
+
+
+def test_group_url_uses_the_launch_project(studies):
+    d = studies / "studies/01-gru-alpha/variants/base/launch_record/smoke"
+    d.mkdir()
+    (d / "sweep_smoke.yaml").write_text("entity: AIND-disRNN\nproject: test\n")
+    (d / "experiment_submitted.yaml").write_text("description: base@20261101-000000 smoke\n")
+    _commit(studies)
+    groups = build_catalog(studies)["wandb_groups"]
+    assert groups["base@20261101-000000"]["url"] == "https://wandb.ai/AIND-disRNN/test/groups/base@20261101-000000"
+    assert groups[GROUP]["url"].startswith("https://wandb.ai/AIND-disRNN/alpha/")
+>>>>>>> feat/1-app

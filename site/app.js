@@ -121,6 +121,7 @@ function index(cat) {
     for (const v of s.variants) {
       for (const r of v.launch_records) { r._study = s.id; r._variant = v.name; S.recordByPath[r.path] = r; }
     }
+    for (const r of s.root_launch_records || []) { r._study = s.id; r._variant = null; S.recordByPath[r.path] = r; }
   }
 }
 
@@ -193,8 +194,12 @@ function viewStudy(id) {
       <td>${healthBadges(r.path, { exact: true })}</td></tr>`).join("") || `<tr><td colspan="5" class="muted">No reports.</td></tr>`}
     </tbody></table></div>
     <h2>Variants and launches</h2>
-    ${launchTimeline(s.variants.flatMap((v) => v.launch_records.filter((r) => r.format === "json")))}
+    ${launchTimeline([...s.variants.flatMap((v) => v.launch_records), ...(s.root_launch_records || [])]
+      .filter((r) => r.format === "json"))}
     ${s.variants.map((v) => variantBlock(s, v)).join("")}
+    ${(s.root_launch_records || []).length ? variantBlock(s, { name: "(study root, no variant)", path: s.path,
+      launch_records: s.root_launch_records, wandb_groups: [...new Set(s.root_launch_records.flatMap((r) => r.wandb_groups))],
+      notes: null }) : ""}
     <h2>Provenance findings</h2>
     ${findingList(findingsFor(s.path))}
     <details><summary>README</summary><div class="prose" id="readme"></div></details>`;
@@ -226,7 +231,7 @@ function launchTimeline(records) {
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Launch timeline">
     <line class="axis" x1="${pad}" x2="${W - pad}" y1="20" y2="20" stroke-width="2"/>
     ${pts.map((p) => `<circle cx="${x(p.t)}" cy="20" r="5" fill="${p.r.kind === "initial" ? "var(--accent)" : "var(--warn)"}">
-      <title>${esc(p.r._variant)} · ${esc(p.r.kind || "")} · ${esc(p.r.time)}</title></circle>`).join("")}
+      <title>${esc(p.r._variant || "study root")} · ${esc(p.r.kind || "")} · ${esc(p.r.time)}</title></circle>`).join("")}
     <text x="${pad}" y="42">${fmt(t0)}</text><text x="${W - pad}" y="42" text-anchor="end">${fmt(t1)}</text>
   </svg>`;
 }
