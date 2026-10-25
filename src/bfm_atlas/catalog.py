@@ -483,3 +483,27 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         "dependencies": dependencies,
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},
     }
+
+
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+
+
+def copy_figures(catalog: dict, studies_root: Path | str, dest: Path | str) -> int:
+    """Copy every figure a report embeds (and every image a v2 producer declares) to dest/<path>.
+
+    The site serves them from data/files/<repo path>, so report markdown renders unchanged.
+    """
+    import shutil
+
+    root, dest = Path(studies_root).resolve(), Path(dest)
+    paths = {f["path"] for s in catalog["studies"] for r in s["reports"] for f in r["figures"] if f["exists"]}
+    paths |= {o["path"] for s in catalog["studies"] for a in s["artifacts"] if a["meta"]
+              for o in a["meta"]["outputs"] if o["path"].lower().endswith(IMAGE_SUFFIXES)}
+    n = 0
+    for p in sorted(paths):
+        src = root / p
+        if src.is_file():
+            (dest / p).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest / p)
+            n += 1
+    return n

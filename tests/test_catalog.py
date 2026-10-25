@@ -99,6 +99,10 @@ def test_relative_studies_path(studies, monkeypatch):
     assert build_catalog(studies.name)["health"]["ran"]
 
 
+def test_cli_copies_figures(studies, tmp_path):
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    assert (tmp_path / "data" / "files" / "studies/01-gru-alpha/analysis/fig.png").read_text() == "png"
 def test_dirty_checkout_is_refused_unless_allowed(studies):
     (studies / "studies/01-gru-alpha/analysis/reports/r2-new.md").write_text("# r2\n")
     with pytest.raises(DirtyCheckoutError):

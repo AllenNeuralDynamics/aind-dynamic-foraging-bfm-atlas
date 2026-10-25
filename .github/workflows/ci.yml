@@ -42,3 +42,16 @@ jobs:
           assert not errors, "\n".join(errors[:20])
           assert catalog["health"]["ran"], catalog["health"]["error"]
           PY
+
+      - name: Render the site in Chromium (JS errors, key views, provenance drawer, phone width)
+        run: |
+          python -m pip install playwright==1.47.0
+          python -m playwright install --with-deps chromium
+          bfm-atlas build --studies studies --out site/data/catalog.json
+          python scripts/site_smoke.py site screenshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/
