@@ -172,7 +172,7 @@ svg .axis { stroke: var(--line); }
 /* ---------------- tooltips (map and lineage) */
 .tip-host { position: relative; }
 .tip { position: absolute; z-index: 6; width: 290px; max-width: calc(100% - 8px); background: var(--text); color: var(--surface);
-  border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; line-height: 1.4; pointer-events: none;
+  border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; line-height: 1.4;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
 .tip ul { margin: 4px 0 0; padding-left: 16px; }
 .tip .tip-v { opacity: 0.8; margin-top: 4px; }

@@ -27,9 +27,15 @@ document.addEventListener("atlas:ready", () => {
     tip.setAttribute("role", "tooltip");
     tip.id = `tip-${++tipCount}`;
     host.append(tip);
-    let current = null;
+    let current = null, timer = null;
+    const hideNow = () => { clearTimeout(timer); tip.hidden = true; current?.removeAttribute("aria-describedby"); current = null; };
+    // the pointer may move from the trigger onto the explanation without losing it; Escape dismisses
+    tip.addEventListener("pointerenter", () => clearTimeout(timer));
+    tip.addEventListener("pointerleave", () => { timer = setTimeout(hideNow, 150); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !tip.hidden) hideNow(); });
     return {
       show(target, html) {
+        clearTimeout(timer);
         tip.innerHTML = html;
         tip.hidden = false;
         if (current && current !== target) current.removeAttribute("aria-describedby");
@@ -42,7 +48,7 @@ document.addEventListener("atlas:ready", () => {
         tip.style.left = `${left}px`;
         tip.style.top = `${above > 0 ? above : b.bottom - h.top + 8}px`;
       },
-      hide() { tip.hidden = true; current?.removeAttribute("aria-describedby"); current = null; },
+      hide() { clearTimeout(timer); timer = setTimeout(hideNow, 150); },
     };
   }
 
@@ -113,12 +119,15 @@ document.addEventListener("atlas:ready", () => {
     const pos = {};
     studies.forEach((s, i) => { pos[s.id] = { x: L + i * step, y: TOP + laneOf(s) * LH + 98 }; });
     // aggregate per (from, to, kind); a motivation to an issue gets a small node left of its study
-    const edges = {};
+    const edges = {}, issuesOf = {};
     for (const d of S.cat.dependencies) {
       if (d.from === d.to || !pos[d.from]) continue;
       if (!pos[d.to]) {
         if (!d.to.startsWith("issue:")) continue;
-        pos[d.to] = { x: pos[d.from].x - step * 0.55, y: pos[d.from].y - 34, issue: d.to.slice(6) };
+        // left of the study, stacked upward per issue, kept inside the drawing
+        const k = (issuesOf[d.from] = (issuesOf[d.from] || 0) + 1) - 1;
+        pos[d.to] = { x: Math.max(40, pos[d.from].x - step * 0.55), y: Math.max(TOP + 14, pos[d.from].y - 34 - 24 * k),
+                      issue: d.to.slice(6) };
       }
       (edges[`${d.from}|${d.to}|${d.kind}`] ||= { from: d.from, to: d.to, kind: d.kind, items: [] }).items.push(d);
     }
@@ -328,7 +337,7 @@ document.addEventListener("atlas:ready", () => {
       }
       return { text: base(p), sub: art?.meta?.kind === "freeze" ? "freeze" : "committed input", link: srcLink(p, base(p), readAt[p]) };
     });
-    const plain = inputs.filter((p) => studyOfPath(p) === r._study && S.artifactByPath[p]?.meta?.kind !== "freeze");
+    const plain = inputs.filter((p) => (!studyOfPath(p) || studyOfPath(p) === r._study) && S.artifactByPath[p]?.meta?.kind !== "freeze");
     set("query", !inputs.length ? "gap" : plain.length ? "partial" : "ok", items,
       !inputs.length ? (v2.length ? "The producer recorded no inputs." : "_meta v1 records no input digests.")
         : plain.length ? `${plain.length} input${plain.length > 1 ? "s are" : " is"} a committed file whose freeze is not recorded (studies#25).`
