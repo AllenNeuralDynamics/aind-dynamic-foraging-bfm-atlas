@@ -7,7 +7,7 @@ import pytest
 
 from bfm_atlas.catalog import DirtyCheckoutError, build_catalog
 from bfm_atlas.cli import main
-from conftest import GROUP, SHA, make_studies
+from conftest import GROUP, SHA, git, make_studies
 
 SCHEMA = json.loads((Path(__file__).parents[1] / "schema" / "catalog.schema.json").read_text())
 
@@ -69,11 +69,41 @@ def test_artifact_meta_v2(studies):
     assert a["outputs"][0]["path"].endswith("summary.json")
 
 
-def test_dependencies_upstream_corrects_citation(studies):
+def test_dependencies_are_relationships_not_citations(studies):
     deps = {(d["from"], d["to"], d["kind"]) for d in build_catalog(studies)["dependencies"]}
     assert ("02-disrnn-beta", "01-gru-alpha", "upstream") in deps
     assert ("02-disrnn-beta", "01-gru-alpha", "corrects") in deps
-    assert ("02-disrnn-beta", "01-gru-alpha", "citation") in deps
+    # 02's README links to 01, but a citation is not a relationship (studies ADR 0002)
+    assert not any(k == "citation" for _, _, k in deps)
+
+
+def test_motivation_edges_from_the_study_cover(studies):
+    readme = studies / "studies/03-gru-gamma/README.md"
+    readme.parent.mkdir(parents=True)
+    readme.write_text("""---
+schema_version: 1
+id: 03-gru-gamma
+question: Does gamma follow from alpha and beta?
+status: planned
+wandb: {entity: AIND-disRNN, project: gamma}
+motivated_by:
+  - {study: 01-gru-alpha, report: r1, note: alpha saturates by D=100}
+  - {study: 02-disrnn-beta, note: beta's verdict as a whole}
+  - {issue: 23, note: a roadmap item asked for it}
+---
+# Study: gamma
+""")
+    git(studies, "add", "-A")
+    git(studies, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "gamma")   # tracked files only
+    cat = build_catalog(studies, validate=False)
+    assert by_id(cat, "01-gru-alpha")["cover"]["motivated_by"] is None        # not declared
+    mot = [d for d in cat["dependencies"] if d["kind"] == "motivation"]
+    assert {(d["to"], d["to_report"], d["note"]) for d in mot} == {
+        ("01-gru-alpha", "01-gru-alpha/r1", "alpha saturates by D=100"),
+        ("02-disrnn-beta", None, "beta's verdict as a whole"),
+        ("issue:23", None, "a roadmap item asked for it")}
+    assert all(d["from"] == "03-gru-gamma" and d["report"] is None for d in mot)
+    assert not list(Draft202012Validator(SCHEMA).iter_errors(cat))
 
 
 def test_validator_output_is_embedded(studies):

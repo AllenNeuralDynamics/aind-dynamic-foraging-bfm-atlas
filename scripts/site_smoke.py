@@ -17,7 +17,20 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-OPTIONAL_VIEWS = ("timeline", "graph")   # visited when the nav shows them
+OPTIONAL_VIEWS = ("timeline",)   # visited when the nav shows them
+
+
+def check_export(page, button, what, path, failures, sha):
+    """Export SVG downloads a self-contained drawing stamped with the studies commit."""
+    try:
+        with page.expect_download(timeout=10000) as dl:
+            page.locator(button).first.click()
+        dl.value.save_as(str(path))
+        svg = path.read_text()
+        if not svg.startswith("<svg") or "var(--" in svg or f"studies {(sha or '')[:8]}" not in svg:
+            failures.append(f"{what} export: not a self-contained SVG with the studies stamp")
+    except Exception as e:
+        failures.append(f"{what} export: no download ({type(e).__name__})")
 
 
 def main(site: str, out: str) -> int:
@@ -40,9 +53,14 @@ def main(site: str, out: str) -> int:
     study, report = next(((s, r) for s, r in pairs
                           if any(b.get("number_links") for b in r["result_blocks"])), pairs[0])
     group = next(iter(cat["wandb_groups"]))
+    # a lineage permalink for a block some producer declares (so most hops are filled), else any block
+    declared = {o["path"] for s in cat["studies"] for a in s["artifacts"] for o in (a["meta"] or {}).get("outputs", [])}
+    lin = next(((s, r, b["name"]) for s, r in pairs for b in r["result_blocks"] if f'{r["path"]}#{b["name"]}' in declared),
+               (study, report, report["result_blocks"][0]["name"]))
     views = {"landing": "#/", "study": f"#/study/{study['id']}",
              "report": f"#/report/{study['id']}/{report['id']}", "health": "#/health",
-             "group": f"#/group/{group}", "history": f"#/history/{study['id']}/{report['id']}"}
+             "group": f"#/group/{group}", "history": f"#/history/{study['id']}/{report['id']}",
+             "lineage": f"#/lineage/{lin[0]['id']}/{lin[1]['id']}/{lin[2]}"}
     # Navigation to optional views is shown only once a module registers them; visit those.
 
     errors, failures = [], []
@@ -68,6 +86,28 @@ def main(site: str, out: str) -> int:
                 if page.locator("h1", has_text=bad).count():
                     failures.append(f"{name}: rendered '{bad}'")
             page.screenshot(path=str(out / f"{name}.png"))
+        # study map: one node per study, a layer toggles its edges, selecting a study fills the panel
+        page.goto(base + "#/")
+        page.wait_for_selector("#study-map .node", timeout=20000)
+        if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
+            failures.append("study map: not one node per study")
+        up = page.locator('.layer[data-kind="upstream"]')
+        before = up.get_attribute("aria-pressed")
+        up.click()
+        if up.get_attribute("aria-pressed") == before:
+            failures.append("study map: the upstream layer did not toggle")
+        up.click()
+        page.locator("#study-map .node[data-id]:not(.issue)").first.click()
+        if not page.locator("#map-panel", has_text="Motivated by").count():
+            failures.append("study map: selecting a study did not fill the panel")
+        page.screenshot(path=str(out / "map.png"))
+        check_export(page, "#map-export", "study map", out / "map.svg", failures, sha=cat["_meta"]["studies_git_sha"])
+        page.locator("#map-panel .panel-close").click()
+        page.goto(base + views["lineage"])
+        page.wait_for_selector(".lineage .slot", timeout=20000)
+        if page.locator(".lineage .slot").count() < 8:
+            failures.append("lineage: fewer than eight hops rendered")
+        check_export(page, ".lin-export", "lineage", out / "lineage.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.goto(base + views["report"])
         page.wait_for_selector(".result-block button", timeout=20000)
         page.locator(".result-block button").first.click()
@@ -76,6 +116,8 @@ def main(site: str, out: str) -> int:
             failures.append("drawer did not open")
         elif not page.evaluate("document.activeElement && document.activeElement.id === 'drawer'"):
             failures.append("opening the drawer did not move focus into it")
+        if not page.locator("#drawer .lineage .slot").count():
+            failures.append("drawer: no lineage")
         page.screenshot(path=str(out / "drawer.png"))
         page.keyboard.press("Escape")
         if not page.evaluate("document.activeElement && document.activeElement.matches('.result-block button')"):

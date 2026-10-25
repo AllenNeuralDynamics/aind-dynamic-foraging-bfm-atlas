@@ -349,13 +349,16 @@ def _cover(fm: dict | None, readme: str) -> dict:
     """Study cover from README frontmatter (schemas/study-frontmatter.v1), else parsed prose."""
     if fm is not None:
         w = fm.get("wandb") if isinstance(fm.get("wandb"), dict) else None
+        motivated = fm.get("motivated_by") if isinstance(fm.get("motivated_by"), list) else None
         return {"source": "frontmatter", "question": fm.get("question"), "status": fm.get("status"),
                 "verdict": fm.get("verdict"), "superseded_by": fm.get("superseded_by"),
                 "issues": fm.get("issues") or [],
+                # None: not declared (a pre-Motivation study); []: a root study
+                "motivated_by": None if motivated is None else [m for m in motivated if isinstance(m, dict)],
                 "wandb": {"entity": w.get("entity"), "project": w.get("project")} if w else None}
     q, proj = QUESTION.search(readme), WANDB_PROJECT.search(readme)
     return {"source": "readme", "question": " ".join(q.group(1).split()) if q else None,
-            "status": None, "verdict": None, "superseded_by": None, "issues": [],
+            "status": None, "verdict": None, "superseded_by": None, "issues": [], "motivated_by": None,
             "wandb": {"entity": proj.group(1), "project": proj.group(2)} if proj else None}
 
 
@@ -695,23 +698,34 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         if w and w.get("entity") and w.get("project"):
             e["url"] = f"https://wandb.ai/{w['entity']}/{w['project']}/groups/{g}"
 
-    # Study dependencies: report `upstream` (solid) and plain links (citations, dashed).
+    # Relationships between studies (studies ADR 0002): motivation (why a study exists, from its
+    # cover), upstream (a report uses another study's results), corrects and supersedes. A citation,
+    # a plain link, is not a relationship and is not an edge. `report` is the declaring report (None
+    # for a study's motivation); `to_report` is the target report key, `<study>/rN`, when named.
     deps = []
+    edge = lambda f, t, kind, report, to_report=None, note=None: {
+        "from": f, "to": t, "kind": kind, "report": report, "to_report": to_report, "note": note}
     for s in studies:
+        for m in s["cover"].get("motivated_by") or []:
+            if m.get("study") in ids:
+                to = f"{m['study']}/{m['report']}" if m.get("report") else None
+                deps.append(edge(s["id"], m["study"], "motivation", None, to, m.get("note")))
+            elif "issue" in m:
+                deps.append(edge(s["id"], f"issue:{m['issue']}", "motivation", None, None, m.get("note")))
         for r in s["reports"]:
             for u in r["upstream"]:
                 if u.get("study") in ids and u["study"] != s["id"]:
-                    deps.append({"from": s["id"], "to": u["study"], "kind": "upstream", "report": r["path"]})
+                    to = f"{u['study']}/{u['report']}" if u.get("report") else None
+                    deps.append(edge(s["id"], u["study"], "upstream", r["path"], to, u.get("note") or u.get("wandb_group")))
             for c in r["corrects"]:
                 if c.get("study") in ids:
-                    deps.append({"from": s["id"], "to": c["study"], "kind": "corrects", "report": r["path"]})
-            for t in r["cites"]:
-                deps.append({"from": s["id"], "to": t, "kind": "citation", "report": r["path"]})
-        for t in s["cites"]:
-            deps.append({"from": s["id"], "to": t, "kind": "citation", "report": None})
+                    deps.append(edge(s["id"], c["study"], "corrects", r["path"], f"{c['study']}/{c.get('report')}", c.get("note")))
+            sb = r.get("superseded_by")
+            if sb and sb.get("study") in ids:
+                deps.append(edge(sb["study"], s["id"], "supersedes", None, f"{s['id']}/{r['id']}"))
     seen, dependencies = set(), []
     for d in deps:
-        key = (d["from"], d["to"], d["kind"], d["report"])
+        key = (d["from"], d["to"], d["kind"], d["report"], d["to_report"])
         if key not in seen:
             seen.add(key)
             dependencies.append(d)

@@ -1,4 +1,4 @@
-/* Cross-study views (timeline, dependencies), report history, and
+/* Launch timeline, report history, and
  * click-a-number. Registers into app.js through window.Atlas once the catalog is loaded.
  */
 "use strict";
@@ -42,57 +42,6 @@ document.addEventListener("atlas:ready", () => {
               fill-opacity="${p.r.schema_version === 2 ? 1 : 0.65}">
             <title>${esc(s.id)} · ${esc(p.r.path.split("/variants/")[1] || p.r.path)}\n${esc(p.r.kind || "")} · ${esc(p.r.time)}\n${esc(p.r.note || "")}</title></circle></a>`).join("")}`).join("")}
       </svg></div>`;
-  };
-
-  // ------------------------------------------------------------ dependency graph
-  VIEWS.graph = () => {
-    const ids = S.cat.studies.map((s) => s.id);
-    const edges = {};
-    for (const d of S.cat.dependencies) {
-      if (d.from === d.to) continue;
-      const k = `${d.from}|${d.to}|${d.kind}`;
-      (edges[k] ||= { ...d, reports: new Set() }).reports.add(d.report || "README");
-    }
-    const W = 760, H = 640, cx = W / 2, cy = H / 2, rad = 240;
-    const pos = Object.fromEntries(ids.map((id, i) => {
-      const a = -Math.PI / 2 + (2 * Math.PI * i) / ids.length;
-      return [id, { x: cx + rad * Math.cos(a), y: cy + rad * Math.sin(a) }];
-    }));
-    const style = { upstream: "stroke:var(--accent);stroke-width:2", corrects: "stroke:var(--error);stroke-width:2",
-                    citation: "stroke:var(--muted);stroke-width:1.2;stroke-dasharray:5 4" };
-    // Each kind bends to its own side, so parallel edges between one pair stay visible.
-    const bend = { upstream: 0, corrects: 26, citation: -26 };
-    const line = (e) => {
-      const a = pos[e.from], b = pos[e.to];
-      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, pad = 30;
-      const x1 = a.x + (dx / len) * pad, y1 = a.y + (dy / len) * pad, x2 = b.x - (dx / len) * pad, y2 = b.y - (dy / len) * pad;
-      const cx = (x1 + x2) / 2 - (dy / len) * bend[e.kind], cy = (y1 + y2) / 2 + (dx / len) * bend[e.kind];
-      return `<path d="M${x1},${y1} Q${cx},${cy} ${x2},${y2}" fill="none" style="${style[e.kind]}" marker-end="url(#arr-${e.kind})">
-        <title>${esc(e.from)} → ${esc(e.to)} (${e.kind}) via ${esc([...e.reports].map((r) => r.split("/").pop()).join(", "))}</title></path>`;
-    };
-    const list = Object.values(edges);
-    main().innerHTML = `<h1>Study dependencies</h1>
-      <p class="muted"><span style="color:var(--accent)">━</span> upstream: a report uses another study's results (report <code>upstream</code>).
-        <span style="color:var(--error)">━</span> corrects: a report amends another's conclusion (<code>corrects</code>).
-        <span>┅</span> citation: a plain link. Arrows point from the study that depends to the one it depends on.</p>
-      <div class="table-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;min-width:520px" role="img" aria-label="Study dependency graph">
-        <defs>${Object.keys(style).map((k) => `<marker id="arr-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" style="fill:${k === "upstream" ? "var(--accent)" : k === "corrects" ? "var(--error)" : "var(--muted)"}"/></marker>`).join("")}</defs>
-        ${list.filter((e) => e.kind === "citation").map(line).join("")}
-        ${list.filter((e) => e.kind !== "citation").map(line).join("")}
-        ${ids.map((id) => `<a href="#/study/${esc(id)}"><circle cx="${pos[id].x}" cy="${pos[id].y}" r="24"
-            style="fill:var(--surface);stroke:var(--accent);stroke-width:1.5"/><text x="${pos[id].x}" y="${pos[id].y + 4}"
-            text-anchor="middle" style="font-weight:600">${esc(id.slice(0, 2))}</text>
-          <text x="${pos[id].x}" y="${pos[id].y + (pos[id].y > cy ? 42 : -32)}" text-anchor="middle" class="muted">${esc(id.slice(3, 28))}</text></a>`).join("")}
-      </svg></div>
-      <h2>Edges</h2>
-      <div class="table-wrap"><table><thead><tr><th>From</th><th>To</th><th>Kind</th><th>Via</th></tr></thead><tbody>
-        ${list.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to)).map((e) => `<tr>
-          <td><a href="#/study/${esc(e.from)}">${esc(e.from)}</a></td><td><a href="#/study/${esc(e.to)}">${esc(e.to)}</a></td>
-          <td>${chip(e.kind)}</td><td>${[...e.reports].map((p) => {
-            const r = S.reportByPath[p]; return r ? `<a href="#/report/${r._study}/${r.id}">${esc(r.id)}</a>` : esc(p);
-          }).join(", ")}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">No dependencies.</td></tr>`}
-      </tbody></table></div>`;
   };
 
   // ------------------------------------------------------------ report history

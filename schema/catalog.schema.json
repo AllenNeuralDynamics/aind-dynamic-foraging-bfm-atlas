@@ -93,20 +93,51 @@
     },
     "dependencies": {
       "type": "array",
+      "description": "Relationships between studies (studies ADR 0002). A citation is not a relationship and is not listed.",
       "items": {
         "type": "object",
         "required": [
           "from",
           "to",
           "kind",
-          "report"
+          "report",
+          "to_report",
+          "note"
         ],
         "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string",
+            "description": "A study id, or issue:<ref> for a motivation that is an issue."
+          },
           "kind": {
             "enum": [
+              "motivation",
               "upstream",
               "corrects",
-              "citation"
+              "supersedes"
+            ]
+          },
+          "report": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The declaring report's path; null for a study's motivation or a supersession."
+          },
+          "to_report": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The target report as <study>/rN, when named."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
             ]
           }
         }
@@ -194,6 +225,16 @@
                 "superseded",
                 null
               ]
+            },
+            "motivated_by": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "Why the study exists: null when the study does not declare it, [] for a root study.",
+              "items": {
+                "type": "object"
+              }
             }
           }
         },
