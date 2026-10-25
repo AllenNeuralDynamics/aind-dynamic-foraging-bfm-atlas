@@ -338,13 +338,6 @@
               }
             }
           }
-        },
-        "metric": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Optional; groups comparable reports on the leaderboard once the studies schema allows it."
         }
       }
     },

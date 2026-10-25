@@ -1,4 +1,4 @@
-/* Cross-study views (timeline, dependencies, leaderboard), report history, and
+/* Cross-study views (timeline, dependencies), report history, and
  * click-a-number. Registers into app.js through window.Atlas once the catalog is loaded.
  */
 "use strict";
@@ -93,28 +93,6 @@ document.addEventListener("atlas:ready", () => {
             const r = S.reportByPath[p]; return r ? `<a href="#/report/${r._study}/${r.id}">${esc(r.id)}</a>` : esc(p);
           }).join(", ")}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">No dependencies.</td></tr>`}
       </tbody></table></div>`;
-  };
-
-  // ------------------------------------------------------------ leaderboard
-  VIEWS.leaderboard = () => {
-    const tagged = S.cat.studies.flatMap((s) => s.reports.filter((r) => r.metric));
-    const byMetric = {};
-    for (const r of tagged) (byMetric[r.metric] ||= []).push(r);
-    main().innerHTML = `<h1>Leaderboard</h1>
-      <p class="muted">Results are compared only when a report declares that they measure the same thing, so no comparison
-        is guessed from table headers.</p>
-      ${tagged.length ? Object.entries(byMetric).sort().map(([m, rs]) => `<h2><code>${esc(m)}</code></h2>
-        <div class="table-wrap"><table><thead><tr><th>Study</th><th>Report</th><th>Status</th><th>Result blocks</th></tr></thead><tbody>
-        ${rs.map((r) => `<tr><td><a href="#/study/${esc(r._study)}">${esc(r._study)}</a></td>
-          <td><a href="#/report/${esc(r._study)}/${esc(r.id)}">${esc(r.title)}</a></td><td>${statusChip(r.status)}</td>
-          <td>${r.result_blocks.map((b) => `<code>${esc(b.name)}</code>`).join(" ")}</td></tr>`).join("")}
-        </tbody></table></div>`).join("")
-      : `<div class="empty"><b>No report declares a metric yet.</b><br>
-        A report joins the leaderboard when its frontmatter names the metric its result blocks measure, e.g.
-        <pre>metric: heldout_eval_likelihood   # same held-out cohort, same definition</pre>
-        Reports with the same <code>metric</code> are then listed together. This needs a <code>metric</code> field in the studies repo's
-        <code>schemas/report-frontmatter.v1.schema.json</code> (it does not allow unknown keys), with the allowed metric names defined there,
-        so that two reports cannot claim to be comparable by spelling a name the same way by accident.</div>`}`;
   };
 
   // ------------------------------------------------------------ report history
