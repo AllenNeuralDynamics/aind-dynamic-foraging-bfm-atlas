@@ -4,102 +4,341 @@
   "title": "bfm-atlas catalog",
   "description": "Output of `bfm-atlas build`: one studies checkout, assembled. Field names follow the studies repo's schemas/ and CONTEXT.md.",
   "type": "object",
-  "required": ["_meta", "studies", "wandb_groups", "dependencies", "health"],
+  "required": [
+    "_meta",
+    "studies",
+    "wandb_groups",
+    "dependencies",
+    "health"
+  ],
   "properties": {
     "_meta": {
       "type": "object",
-      "required": ["schema_version", "built_at_pt", "studies_git_sha"],
+      "required": [
+        "schema_version",
+        "built_at_pt",
+        "studies_git_sha"
+      ],
       "properties": {
-        "schema_version": {"const": 1},
-        "built_at_pt": {"type": "string"},
-        "studies_git_sha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
-        "studies_git_dirty": {"type": ["boolean", "null"]},
-        "studies_commit_time": {"type": ["string", "null"]},
-        "studies_remote": {"type": ["string", "null"]}
+        "schema_version": {
+          "const": 1
+        },
+        "built_at_pt": {
+          "type": "string"
+        },
+        "studies_git_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "studies_git_dirty": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "studies_commit_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "studies_remote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
-    "studies": {"type": "array", "items": {"$ref": "#/$defs/study"}},
+    "studies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/study"
+      }
+    },
     "wandb_groups": {
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["group", "study", "variant", "url", "launch_records", "reports", "artifacts"],
+        "required": [
+          "group",
+          "study",
+          "variant",
+          "url",
+          "launch_records",
+          "reports",
+          "artifacts"
+        ],
         "properties": {
-          "url": {"type": ["string", "null"]},
-          "launch_records": {"$ref": "#/$defs/paths"},
-          "reports": {"$ref": "#/$defs/paths"},
-          "artifacts": {"$ref": "#/$defs/paths"}
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "launch_records": {
+            "$ref": "#/$defs/paths"
+          },
+          "reports": {
+            "$ref": "#/$defs/paths"
+          },
+          "artifacts": {
+            "$ref": "#/$defs/paths"
+          }
         }
       }
     },
     "dependencies": {
       "type": "array",
       "items": {
-        "type": "object", "required": ["from", "to", "kind", "report"],
-        "properties": {"kind": {"enum": ["upstream", "corrects", "citation"]}}
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "kind",
+          "report"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "upstream",
+              "corrects",
+              "citation"
+            ]
+          }
+        }
       }
     },
     "health": {
-      "type": "object", "required": ["ran", "error", "findings"],
+      "type": "object",
+      "required": [
+        "ran",
+        "error",
+        "findings"
+      ],
       "properties": {
-        "ran": {"type": "boolean"},
+        "ran": {
+          "type": "boolean"
+        },
         "findings": {
           "type": "array",
-          "items": {"type": "object", "required": ["level", "check", "path", "message"],
-                    "properties": {"level": {"enum": ["error", "warn", "info"]}}}
+          "items": {
+            "type": "object",
+            "required": [
+              "level",
+              "check",
+              "path",
+              "message"
+            ],
+            "properties": {
+              "level": {
+                "enum": [
+                  "error",
+                  "warn",
+                  "info"
+                ]
+              }
+            }
+          }
         }
       }
     }
   },
   "$defs": {
-    "paths": {"type": "array", "items": {"type": "string"}},
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "study": {
       "type": "object",
-      "required": ["id", "number", "model", "path", "title", "cover", "variants", "reports", "artifacts", "cites"],
+      "required": [
+        "id",
+        "number",
+        "model",
+        "path",
+        "title",
+        "cover",
+        "variants",
+        "reports",
+        "artifacts",
+        "cites",
+        "root_launch_records"
+      ],
       "properties": {
         "cover": {
-          "type": "object", "required": ["source", "question", "status", "verdict", "wandb"],
+          "type": "object",
+          "required": [
+            "source",
+            "question",
+            "status",
+            "verdict",
+            "wandb"
+          ],
           "properties": {
-            "source": {"enum": ["frontmatter", "readme"]},
-            "status": {"enum": ["planned", "active", "complete", "superseded", null]}
+            "source": {
+              "enum": [
+                "frontmatter",
+                "readme"
+              ]
+            },
+            "status": {
+              "enum": [
+                "planned",
+                "active",
+                "complete",
+                "superseded",
+                null
+              ]
+            }
           }
         },
         "variants": {
           "type": "array",
           "items": {
-            "type": "object", "required": ["name", "path", "launch_records", "wandb_groups"],
-            "properties": {"launch_records": {"type": "array", "items": {"$ref": "#/$defs/record"}}}
+            "type": "object",
+            "required": [
+              "name",
+              "path",
+              "launch_records",
+              "wandb_groups"
+            ],
+            "properties": {
+              "launch_records": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/record"
+                }
+              }
+            }
           }
         },
-        "reports": {"type": "array", "items": {"$ref": "#/$defs/report"}},
-        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}}
+        "reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/report"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "root_launch_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          },
+          "description": "Legacy launch records committed at the study root; they belong to no variant."
+        }
       }
     },
     "record": {
-      "type": "object", "required": ["path", "format", "schema_version", "wandb_groups", "sha256"],
-      "properties": {"schema_version": {"enum": [1, 2, null]}}
+      "type": "object",
+      "required": [
+        "path",
+        "format",
+        "schema_version",
+        "wandb_groups",
+        "sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "enum": [
+            1,
+            2,
+            null
+          ]
+        }
+      }
     },
     "report": {
       "type": "object",
-      "required": ["path", "id", "title", "status", "has_frontmatter", "wandb_groups", "inputs",
-                   "upstream", "corrects", "figures", "result_blocks", "markdown", "sha256"],
+      "required": [
+        "path",
+        "id",
+        "title",
+        "status",
+        "has_frontmatter",
+        "wandb_groups",
+        "inputs",
+        "upstream",
+        "corrects",
+        "figures",
+        "result_blocks",
+        "markdown",
+        "sha256"
+      ],
       "properties": {
-        "status": {"enum": ["draft", "live", "superseded", "retracted", null]},
+        "status": {
+          "enum": [
+            "draft",
+            "live",
+            "superseded",
+            "retracted",
+            null
+          ]
+        },
         "result_blocks": {
           "type": "array",
-          "items": {"type": "object", "required": ["name", "markdown"]}
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "markdown"
+            ]
+          }
         }
       }
     },
     "artifact": {
-      "type": "object", "required": ["path", "sha256", "bytes", "parse_error", "meta"],
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "bytes",
+        "parse_error",
+        "meta"
+      ],
       "properties": {
         "meta": {
           "oneOf": [
-            {"type": "null"},
-            {"type": "object",
-             "required": ["schema_version", "kind", "produced_by", "wandb_groups", "code", "inputs", "outputs"],
-             "properties": {"schema_version": {"enum": [1, 2]}, "kind": {"enum": ["producer", "freeze"]}}}
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "schema_version",
+                "kind",
+                "produced_by",
+                "wandb_groups",
+                "code",
+                "inputs",
+                "outputs"
+              ],
+              "properties": {
+                "schema_version": {
+                  "enum": [
+                    1,
+                    2
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "producer",
+                    "freeze",
+                    null
+                  ],
+                  "description": "null for v1 _meta whose kind cannot be told"
+                }
+              }
+            }
           ]
         }
       }
