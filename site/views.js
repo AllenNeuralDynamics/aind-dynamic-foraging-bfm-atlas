@@ -178,8 +178,11 @@ document.addEventListener("atlas:ready", () => {
         frag.append(text.slice(last, m.index));
         const span = document.createElement("span");
         span.className = "num-link";
+        span.tabIndex = 0;
+        span.setAttribute("role", "button");
         span.textContent = m[1];
         span.title = `${l.artifact.split("/").pop()} ${l.pointer}`;
+        span.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); span.click(); } });
         span.addEventListener("click", () => openDrawer(r, name, `
           <div class="banner" style="border-color:var(--block-line);background:var(--block)">
             <b class="mono">${esc(l.text)}</b> is <code>${esc(l.pointer)}</code> in ${srcLink(l.artifact, l.artifact.split("/").pop())}

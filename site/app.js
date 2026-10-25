@@ -330,21 +330,38 @@ function openDrawer(r, block, extra = "") {
       showing the report's JSON inputs instead.</p>` : ""}
     ${list.length ? list.map(artifactChain).join("<hr>") : `<div class="empty">No analysis JSON is linked to this block:
       the report's inputs name no JSON artifact and no producer declares it.</div>`}`;
-  document.getElementById("drawer").hidden = false;
+  const drawer = document.getElementById("drawer");
+  if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
+  drawer.hidden = false;
+  drawer.focus();
+}
+
+function closeDrawer() {
+  const drawer = document.getElementById("drawer");
+  if (drawer.hidden) return;
+  drawer.hidden = true;
+  if (S.drawerOpener?.isConnected) S.drawerOpener.focus();
+  S.drawerOpener = null;
 }
 
 function artifactChain(a) {
   const m = a.meta;
   if (!m) return `<p>${srcLink(a.path)} has no <code>_meta</code> block, so the chain stops here.</p>`;
   const groups = m.wandb_groups.map((g) => S.cat.wandb_groups[g] || { group: g, launch_records: [], url: null });
-  const at = m.studies_git_sha;     // the producer's own revision, not the catalog's
+  // Pin source links to the producer's own studies revision; a pre-split producer recorded only
+  // its dispatcher checkout, which is a different repository, so those links stay on the catalog commit.
+  const at = m.studies_git_sha || null;
+  const revision = m.studies_git_sha ? `at studies ${commitLink("studies", m.studies_git_sha)}`
+    : m.dispatcher_git_sha ? `at dispatcher ${commitLink("dispatcher", m.dispatcher_git_sha)}
+        <span class="muted">(pre-split checkout; source links show the catalog's commit)</span>`
+    : `<span class="muted">at an unrecorded revision (source links show the catalog's commit)</span>`;
   const digestList = (xs) => xs.length ? `<ul>${xs.map((d) => `<li>${srcLink(d.path, d.path.replace(/^studies\/[^/]+\//, ""), at)}
       <span class="muted mono">${esc(short(d.sha256))}</span></li>`).join("")}</ul>` : `<span class="muted">not recorded (_meta v${m.schema_version})</span>`;
   return `<ol class="chain">
     <li><div class="k">${m.kind === "freeze" ? "Freeze" : "Analysis artifact"}</div>${srcLink(a.path)}
       <span class="muted mono">sha256 ${esc(short(a.sha256))}</span></li>
     <li><div class="k">Producer</div>${m.produced_by ? srcLink(`${S.study[a._study].path}/${m.produced_by}`, m.produced_by, at) : "—"}
-      at studies ${commitLink("studies", m.studies_git_sha)} <span class="muted">${esc(m.produced_at_pt || "")}</span>
+      ${revision} <span class="muted">${esc(m.produced_at_pt || "")}</span>
       ${m.schema_version === 2 ? `<div class="k" style="margin-top:6px">Code</div>${digestList(m.code)}
         <div class="k">Inputs</div>${digestList(m.inputs)}` : `<div class="muted">_meta v1: no code or input digests.</div>`}
       ${m.sources.length ? `<div class="k">Sources</div><ul>${m.sources.map((x) => `<li>${esc(x.type)} <code>${esc(x.id)}</code>${x.step != null ? ` step ${esc(x.step)}` : ""}</li>`).join("")}</ul>` : ""}
@@ -453,8 +470,8 @@ function syncNav() {
   for (const a of document.querySelectorAll(".top nav a[data-view]")) a.hidden = !VIEWS[a.dataset.view];
 }
 
-document.querySelector(".drawer-close").addEventListener("click", () => { document.getElementById("drawer").hidden = true; });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.getElementById("drawer").hidden = true; });
+document.querySelector(".drawer-close").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 
 fetch("data/catalog.json")
   .then((r) => { if (!r.ok) throw new Error(`catalog.json: HTTP ${r.status}`); return r.json(); })
