@@ -18,17 +18,23 @@ document.addEventListener("atlas:ready", () => {
 
   // ------------------------------------------------------------ shared: tooltip
   // Hover, keyboard focus and tap all show it (phones have no hover); a tap elsewhere hides it.
+  let tipCount = 0;
   function tooltip(host) {
     host.classList.add("tip-host");
     const tip = document.createElement("div");
     tip.className = "tip";
     tip.hidden = true;
     tip.setAttribute("role", "tooltip");
+    tip.id = `tip-${++tipCount}`;
     host.append(tip);
+    let current = null;
     return {
       show(target, html) {
         tip.innerHTML = html;
         tip.hidden = false;
+        if (current && current !== target) current.removeAttribute("aria-describedby");
+        current = target;
+        target.setAttribute("aria-describedby", tip.id);   // read out as the step's description
         const h = host.getBoundingClientRect(), b = target.getBoundingClientRect();
         const left = Math.min(Math.max(b.left - h.left + b.width / 2 - tip.offsetWidth / 2, 4),
                               Math.max(4, host.clientWidth - tip.offsetWidth - 4));
@@ -36,7 +42,7 @@ document.addEventListener("atlas:ready", () => {
         tip.style.left = `${left}px`;
         tip.style.top = `${above > 0 ? above : b.bottom - h.top + 8}px`;
       },
-      hide() { tip.hidden = true; },
+      hide() { tip.hidden = true; current?.removeAttribute("aria-describedby"); current = null; },
     };
   }
 
@@ -323,25 +329,36 @@ document.addEventListener("atlas:ready", () => {
     set("tracking", groups.length ? "ok" : "gap",
       groups.map((g) => ({ text: g, href: `#/group/${encodeURIComponent(g)}` })),
       groups.length ? "Pinned by exact name; one launch mints one group (ADR 0001)." : "No W&B group is recorded for this result.");
-    const recs = uniq(groups.flatMap((g) => S.cat.wandb_groups[g]?.launch_records || [])).map((p) => S.recordByPath[p]).filter(Boolean);
+    const recsOf = (g) => (S.cat.wandb_groups[g]?.launch_records || []).map((p) => S.recordByPath[p]).filter(Boolean);
+    const recs = uniq(groups.flatMap(recsOf));
     const json = recs.filter((x) => x.format === "json");
     const kinds = uniq(json.map((x) => x.kind || "launch"));
     const older = recs.length - json.length;
-    set("compute", !recs.length ? "gap" : json.length && groups.every((g) => (S.cat.wandb_groups[g]?.launch_records || []).length) ? "ok" : "partial",
+    // fully recorded only when every group has a JSON launch record (older YAML copies carry no
+    // kind, jobs or commits)
+    set("compute", !recs.length ? "gap" : groups.every((g) => recsOf(g).some((x) => x.format === "json")) ? "ok" : "partial",
       [...(json.length ? [{ text: `${json.length} launch record${json.length > 1 ? "s" : ""}`, sub: kinds.join(", ") }] : []),
        ...(older ? [{ text: `${older} older record file${older > 1 ? "s" : ""}`, sub: "pre-JSON manifests" }] : [])],
       !recs.length ? (groups.length ? "No launch record names these groups." : "No W&B group, so no launch to find.")
         : json.length ? "Every launch and intervention writes a launch record." : "Only older record files (copied manifests), without the launch's kind, jobs or commits.");
-    const manifests = uniq(json.flatMap((x) => x.manifests || []));
-    // older records snapshot nothing: fall back to the variant's manifests as they are now
-    const current = manifests.length ? [] : uniq(recs.flatMap((x) =>
-      (S.study[x._study]?.variants.find((v) => v.name === x._variant)?.manifests) || []));
-    set("experiment", manifests.length ? "ok" : current.length ? "partial" : "gap",
-      manifests.length ? manifests.map((m) => ({ text: base(m), link: srcLink(m, base(m)) }))
-        : current.map((m) => ({ text: base(m), sub: "current file", link: srcLink(m, base(m)) })),
-      manifests.length ? "Manifests as submitted, copied into the launch record."
-        : current.length ? "The launch records do not snapshot their manifests; these are the variant's files as they are now, which may have changed since."
-        : "No launch record to read manifests from.");
+    // Per variant: the manifests its launch records snapshot (named relative to the variant, as the
+    // studies launchers write them), or else the variant's files as they are now, marked so.
+    const variantOf = (x) => S.study[x._study]?.variants.find((v) => v.name === x._variant);
+    const resolve = (x, m) => (m.startsWith("studies/") ? m
+      : `${variantOf(x)?.path || S.study[x._study]?.path}/${m.replace(/^\.\//, "")}`);
+    const byVariant = {};
+    recs.forEach((x) => { (byVariant[`${x._study}/${x._variant}`] ||= []).push(x); });
+    let snapshotted = 0;
+    const expItems = Object.values(byVariant).flatMap((xs) => {
+      const recorded = uniq(xs.filter((x) => x.format === "json").flatMap((x) => (x.manifests || []).map((m) => resolve(x, m))));
+      if (recorded.length) { snapshotted++; return recorded.map((m) => ({ text: base(m), link: srcLink(m, base(m)) })); }
+      return (variantOf(xs[0])?.manifests || []).map((m) => ({ text: base(m), sub: "current file", link: srcLink(m, base(m)) }));
+    });
+    const nVariants = Object.keys(byVariant).length;
+    set("experiment", !nVariants ? "gap" : snapshotted === nVariants ? "ok" : expItems.length ? "partial" : "gap", expItems,
+      !nVariants ? "No launch record to read manifests from."
+        : snapshotted === nVariants ? "Manifests as submitted, copied into the launch record."
+        : "Some launches did not snapshot their manifests; those show the variant's files as they are now, which may have changed since.");
     const revs = {};
     json.forEach((x) => Object.entries(x.revisions || {}).forEach(([k, v]) => { (revs[k] ||= new Set()).add(v); }));
     set("model", Object.keys(revs).length ? "partial" : "gap",

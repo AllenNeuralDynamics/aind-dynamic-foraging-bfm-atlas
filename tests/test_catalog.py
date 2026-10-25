@@ -94,7 +94,7 @@ motivated_by:
 # Study: gamma
 """)
     git(studies, "add", "-A")
-    git(studies, "commit", "-qm", "gamma")                 # the catalog reads tracked files only
+    git(studies, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "gamma")   # tracked files only
     cat = build_catalog(studies, validate=False)
     assert by_id(cat, "01-gru-alpha")["cover"]["motivated_by"] is None        # not declared
     mot = [d for d in cat["dependencies"] if d["kind"] == "motivation"]
