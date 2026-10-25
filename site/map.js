@@ -312,6 +312,9 @@ document.addEventListener("atlas:ready", () => {
       !arts.length ? "No analysis JSON is linked to this block." : how === "inputs"
         ? "Found through the report's declared inputs, not through _meta.outputs." : "Code digests are checked in CI: an edited producer marks this stale.");
     const inputs = uniq(arts.flatMap((a) => (a.meta?.inputs || []).map((i) => i.path)));
+    // an input is linked at the revision of the producer that read it (as in the detail list)
+    const readAt = {};
+    arts.forEach((a) => (a.meta?.inputs || []).forEach((i) => { readAt[i.path] ||= a.meta?.studies_git_sha || undefined; }));
     const freezes = inputs.map((p) => S.artifactByPath[p]).filter((a) => a?.meta?.kind === "freeze");
     const items = inputs.map((p) => {
       const st = studyOfPath(p), cross = st && st !== r._study, art = S.artifactByPath[p];
@@ -323,7 +326,7 @@ document.addEventListener("atlas:ready", () => {
         return { text: base(p), sub: `study ${st.slice(0, 2)}`, xref: true,
           href: to ? `#/report/${to._study}/${to.id}` : `#/study/${st}` };
       }
-      return { text: base(p), sub: art?.meta?.kind === "freeze" ? "freeze" : "committed input", link: srcLink(p, base(p)) };
+      return { text: base(p), sub: art?.meta?.kind === "freeze" ? "freeze" : "committed input", link: srcLink(p, base(p), readAt[p]) };
     });
     const plain = inputs.filter((p) => studyOfPath(p) === r._study && S.artifactByPath[p]?.meta?.kind !== "freeze");
     set("query", !inputs.length ? "gap" : plain.length ? "partial" : "ok", items,
@@ -358,11 +361,15 @@ document.addEventListener("atlas:ready", () => {
       // a manifest as submitted is the file at the launch's recorded studies revision
       const recorded = uniq(xs.filter((x) => x.format === "json").flatMap((x) =>
         (x.manifests || []).map((m) => `${resolve(x, m)}@${x.revisions?.studies || ""}`)));
-      if (recorded.length) {
+      // a snapshot needs the revision it was submitted at; without one the link shows today's file
+      if (recorded.length && recorded.every((k) => k.split("@")[1])) {
         snapshotted++;
         return recorded.map((k) => { const [m, sha] = k.split("@");
-          return { text: base(m), sub: sha ? `at ${short(sha)}` : "revision not recorded", link: srcLink(m, base(m), sha || undefined) }; });
+          return { text: base(m), sub: `at ${short(sha)}`, link: srcLink(m, base(m), sha) }; });
       }
+      if (recorded.length) return recorded.map((k) => { const [m, sha] = k.split("@");
+        return sha ? { text: base(m), sub: `at ${short(sha)}`, link: srcLink(m, base(m), sha) }
+                   : { text: base(m), sub: "current file", link: srcLink(m, base(m)) }; });
       return (variantOf(xs[0])?.manifests || []).map((m) => ({ text: base(m), sub: "current file", link: srcLink(m, base(m)) }));
     });
     const nVariants = Object.keys(byVariant).length;
