@@ -291,8 +291,60 @@
             "required": [
               "name",
               "markdown"
-            ]
+            ],
+            "properties": {
+              "number_links": {
+                "type": "array",
+                "description": "Displayed numbers matched to the unique JSON leaf that rounds to them.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "text",
+                    "artifact",
+                    "pointer",
+                    "value",
+                    "how"
+                  ],
+                  "properties": {
+                    "how": {
+                      "enum": [
+                        "declared",
+                        "inputs"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
+        },
+        "history": {
+          "type": "array",
+          "description": "Result-block versions, newest first, one per commit that changed them (git log --follow).",
+          "items": {
+            "type": "object",
+            "required": [
+              "sha",
+              "date",
+              "subject",
+              "blocks"
+            ],
+            "properties": {
+              "blocks": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "metric": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional; groups comparable reports on the leaderboard once the studies schema allows it."
         }
       }
     },

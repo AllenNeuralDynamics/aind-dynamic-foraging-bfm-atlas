@@ -130,6 +130,37 @@ def test_ignored_files_never_enter_the_catalog(studies):
     assert not any("drafts" in r["path"] for r in s["variants"][0]["launch_records"])
 
 
+def test_number_links_unique_matches_only(studies):
+    r = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]
+    links = {l["text"]: l for l in r["result_blocks"][0]["number_links"]}
+    assert links["0.7101"]["pointer"] == "/by_d/10"
+    assert links["0.7154"]["artifact"] == "studies/01-gru-alpha/analysis/summary.json"
+    assert links["0.7101"]["how"] == "inputs"
+
+
+def test_number_links_skip_ambiguous_and_low_precision(studies):
+    import json as _json, subprocess
+    p = studies / "studies/01-gru-alpha/analysis/summary.json"
+    d = _json.loads(p.read_text())
+    d["dup"] = 0.7101                       # two leaves now round to 0.7101
+    p.write_text(_json.dumps(d))
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("| alpha | 0.7101 | 0.7154 |", "| alpha | 0.7101 | 0.7154 | 0.71 |"))
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "x"], check=True)
+    texts = {l["text"] for l in by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["result_blocks"][0]["number_links"]}
+    assert texts == {"0.7154"}             # 0.7101 ambiguous, 0.71 has too few digits
+
+
+def test_history_records_each_block_change(studies):
+    import subprocess
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("0.7154", "0.7160"))
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "update r1"], check=True)
+    rep.write_text(rep.read_text().replace("# r1 — the curve", "# r1 — the curve, retitled"))   # prose only
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "prose"], check=True)
+    h = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["history"]
+    assert [v["subject"] for v in h] == ["update r1", "init"]
+    assert "0.7160" in h[0]["blocks"]["result-1"] and "0.7154" in h[1]["blocks"]["result-1"]
 def _commit(root, msg="x"):
     import subprocess
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
@@ -248,3 +279,55 @@ def test_titled_images_are_found_and_copied(studies, tmp_path):
     out = tmp_path / "data" / "catalog.json"
     main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
     assert (tmp_path / "data/files/studies/01-gru-alpha/analysis/titled.png").exists()
+
+
+def test_history_follows_a_basename_rename(studies):
+    import subprocess
+    d = studies / "studies/01-gru-alpha/analysis/reports"
+    subprocess.run(["git", "-C", str(studies), "mv", str(d / "r1-curve.md"), str(d / "r1-scaling.md")], check=True)
+    (d / "INDEX.md").write_text("[r1](r1-scaling.md)\n")
+    _commit(studies, "rename r1")
+    rep = d / "r1-scaling.md"
+    rep.write_text(rep.read_text().replace("0.7154", "0.7160"))
+    _commit(studies, "update r1")
+    r = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]
+    assert [v["subject"] for v in r["history"]] == ["update r1", "init"]
+
+
+def test_history_limit_counts_versions_not_commits(studies, monkeypatch):
+    import bfm_atlas.catalog as cat_mod
+    monkeypatch.setattr(cat_mod, "HISTORY_LIMIT", 2)
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("0.7154", "0.7160"))
+    _commit(studies, "v2")
+    for i in range(5):                                   # prose-only commits
+        rep.write_text(rep.read_text() + f"\nnote {i}\n")
+        _commit(studies, f"prose {i}")
+    rep.write_text(rep.read_text().replace("0.7160", "0.7170"))
+    _commit(studies, "v3")
+    h = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["history"]
+    assert [v["subject"] for v in h] == ["v3", "v2"]      # v2 attributed to its own commit
+
+
+def test_root_scalar_pointer_is_empty(tmp_path):
+    from bfm_atlas.catalog import _leaves
+    assert _leaves(0.7174) == [("", 0.7174)]
+
+
+def test_number_tokens():
+    from bfm_atlas.catalog import NUMBER
+    assert NUMBER.findall("best 0.7101. Then 1,234.5678 and v0.71.3 and (0.7154, −0.0118)") == \
+        ["0.7101", "0.7154", "−0.0118"]
+
+
+def test_artifact_cited_twice_is_one_candidate(studies):
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("  data: analysis/summary.json", "  data: analysis/summary.json\n  summary: analysis/summary.json"))
+    _commit(studies)
+    texts = {l["text"] for l in by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["result_blocks"][0]["number_links"]}
+    assert {"0.7101", "0.7154"} <= texts
+
+
+def test_one_decimal_values_are_tokens():
+    from bfm_atlas.catalog import NUMBER
+    assert NUMBER.findall("cost 123.4 s") == ["123.4"]

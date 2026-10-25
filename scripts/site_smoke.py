@@ -1,8 +1,9 @@
 """Render the built site in Chromium and fail on JS errors or broken key views.
 
     python scripts/site_smoke.py site screenshots/
+    python scripts/site_smoke.py https://allenneuraldynamics.github.io/aind-dynamic-foraging-bfm-atlas/ shots/
 
-Serves <site> on a local port, opens the main views, saves a screenshot of each, and checks
+Serves <site> on a local port (or uses a deployed URL), opens the main views, saves a screenshot of each, and checks
 that a report's result-block "Provenance" button opens the drawer and that nothing scrolls
 sideways at phone width.
 """
@@ -11,6 +12,7 @@ import http.server
 import json
 import sys
 import threading
+import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -19,20 +21,28 @@ OPTIONAL_VIEWS = ("timeline", "graph", "leaderboard")   # visited when the nav s
 
 
 def main(site: str, out: str) -> int:
-    site, out = Path(site).resolve(), Path(out)
+    out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{httpd.server_port}/"
-
-    cat = json.loads((site / "data" / "catalog.json").read_text())
-    study = next(s for s in cat["studies"] if any(r["result_blocks"] for r in s["reports"]))
-    report = next(r for r in study["reports"] if r["result_blocks"])
+    httpd = None
+    if site.startswith(("http://", "https://")):
+        base = site if site.endswith("/") else site + "/"
+        with urllib.request.urlopen(base + "data/catalog.json") as r:
+            cat = json.loads(r.read())
+    else:
+        root = Path(site).resolve()
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+        httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{httpd.server_port}/"
+        cat = json.loads((root / "data" / "catalog.json").read_text())
+    # prefer a report with click-a-number links, so that path is exercised too
+    pairs = [(s, r) for s in cat["studies"] for r in s["reports"] if r["result_blocks"]]
+    study, report = next(((s, r) for s, r in pairs
+                          if any(b.get("number_links") for b in r["result_blocks"])), pairs[0])
     group = next(iter(cat["wandb_groups"]))
     views = {"landing": "#/", "study": f"#/study/{study['id']}",
              "report": f"#/report/{study['id']}/{report['id']}", "health": "#/health",
-             "group": f"#/group/{group}"}
+             "group": f"#/group/{group}", "history": f"#/history/{study['id']}/{report['id']}"}
     # Navigation to optional views is shown only once a module registers them; visit those.
 
     errors, failures = [], []
@@ -70,7 +80,28 @@ def main(site: str, out: str) -> int:
         page.keyboard.press("Escape")
         if not page.evaluate("document.activeElement && document.activeElement.matches('.result-block button')"):
             failures.append("closing the drawer did not return focus to its button")
-        page.locator(".result-block button").first.click()
+        page.keyboard.press("Escape")
+        # A catalog match may sit in inline code or a link, which the page leaves undecorated, so
+        # look for a report that actually renders a number link; if the catalog has matches but
+        # no report renders one, decoration is broken.
+        linked = [(s, r) for s, r in pairs if any(b.get("number_links") for b in r["result_blocks"])]
+        rendered = False
+        for s, r in linked[:15]:
+            page.goto(base + f"#/report/{s['id']}/{r['id']}")
+            page.wait_for_selector("#main h1", timeout=20000)
+            if page.locator(".num-link").count():
+                rendered = True
+                page.locator(".num-link").first.click()
+                page.wait_for_timeout(300)
+                if not page.locator("#drawer", has_text="Matched by value").count():
+                    failures.append("number link did not open its drawer")
+                page.screenshot(path=str(out / "number.png"))
+                break
+        if linked and not rendered:
+            failures.append("the catalog has number links but no report page renders one")
+        for view in OPTIONAL_VIEWS:
+            if view not in views:
+                failures.append(f"{view}: navigation link hidden, so its view is not registered")
         page.set_viewport_size({"width": 390, "height": 844})
         for name in ("landing", "report"):
             page.goto(base + views[name])
@@ -79,7 +110,8 @@ def main(site: str, out: str) -> int:
             if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"):
                 failures.append(f"{name}: horizontal scroll at phone width")
         browser.close()
-    httpd.shutdown()
+    if httpd:
+        httpd.shutdown()
     for e in errors + failures:
         print("FAIL:", e)
     print(f"{len(views)} views rendered; {len(errors)} JS errors; {len(failures)} failures")
