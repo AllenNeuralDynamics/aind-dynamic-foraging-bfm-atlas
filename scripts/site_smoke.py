@@ -81,12 +81,24 @@ def main(site: str, out: str) -> int:
         if not page.evaluate("document.activeElement && document.activeElement.matches('.result-block button')"):
             failures.append("closing the drawer did not return focus to its button")
         page.keyboard.press("Escape")
-        if any(b.get("number_links") for b in report["result_blocks"]):
-            page.locator(".num-link").first.click()
-            page.wait_for_timeout(300)
-            if not page.locator("#drawer", has_text="Matched by value").count():
-                failures.append("number link did not open its drawer")
-            page.screenshot(path=str(out / "number.png"))
+        # A catalog match may sit in inline code or a link, which the page leaves undecorated, so
+        # look for a report that actually renders a number link; if the catalog has matches but
+        # no report renders one, decoration is broken.
+        linked = [(s, r) for s, r in pairs if any(b.get("number_links") for b in r["result_blocks"])]
+        rendered = False
+        for s, r in linked[:15]:
+            page.goto(base + f"#/report/{s['id']}/{r['id']}")
+            page.wait_for_selector("#main h1", timeout=20000)
+            if page.locator(".num-link").count():
+                rendered = True
+                page.locator(".num-link").first.click()
+                page.wait_for_timeout(300)
+                if not page.locator("#drawer", has_text="Matched by value").count():
+                    failures.append("number link did not open its drawer")
+                page.screenshot(path=str(out / "number.png"))
+                break
+        if linked and not rendered:
+            failures.append("the catalog has number links but no report page renders one")
         for view in OPTIONAL_VIEWS:
             if view not in views:
                 failures.append(f"{view}: navigation link hidden, so its view is not registered")
