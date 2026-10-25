@@ -386,13 +386,64 @@ document.addEventListener("atlas:ready", () => {
       !nVariants ? "No launch record to read manifests from."
         : snapshotted === nVariants ? "Manifests as submitted, copied into the launch record."
         : "Some launches did not snapshot their manifests; those show the variant's files as they are now, which may have changed since.");
-    const revs = {};
-    json.forEach((x) => Object.entries(x.revisions || {}).forEach(([k, v]) => { (revs[k] ||= new Set()).add(v); }));
-    set("model", Object.keys(revs).length ? "partial" : "gap",
-      Object.entries(revs).map(([k, v]) => ({ text: `${k} ${[...v].map(short).join(", ")}` })),
-      Object.keys(revs).length ? "Repository commits are recorded; the container image digest is not yet (studies#25)."
-        : "No commits recorded for the launch (older launch records).");
-    set("data", "gap", [], "The data snapshot is pinned in the sweep config but not recorded with a digest yet (studies#25).");
+    // Model & image and Data: what the launch recorded (studies#25), else what a provenance
+    // freeze recovered from W&B runs and Beaker jobs (studies#28), else not recorded.
+    const recovered = (g) => S.cat.wandb_groups[g]?.recovered || null;
+    const when = (rv) => `recovered ${String(rv.recovered_at_pt || "").slice(0, 10)}`;
+    const recordsOf = (g) => recsOf(g).filter((x) => x.format === "json");
+    const imageOf = (g) => {
+      const atLaunch = recordsOf(g).map((x) => x.image).filter((i) => i && (i.id || i.lock_sha256));
+      if (atLaunch.length) return atLaunch.map((i) => ({ id: i.id || i.lock_sha256, how: "at launch" }));
+      const rv = recovered(g);
+      return (rv?.image || []).filter((i) => i.id).map((i) => ({ id: i.id, how: when(rv) }));
+    };
+    const revsOf = (g) => {
+      const atLaunch = {};
+      recordsOf(g).forEach((x) => Object.entries(x.revisions || {}).forEach(([k, v]) => { (atLaunch[k] ||= new Set()).add(v); }));
+      if (Object.keys(atLaunch).length) return { revs: atLaunch, how: "at launch" };
+      const rv = recovered(g);
+      const rec = {};
+      Object.entries(rv?.revisions || {}).forEach(([k, shas]) => { rec[k] = new Set(Object.keys(shas)); });
+      return { revs: rec, how: rv && Object.keys(rec).length ? when(rv) : null };
+    };
+    const modelItems = [], modelHas = groups.map((g) => {
+      const img = imageOf(g), { revs, how } = revsOf(g);
+      Object.entries(revs).forEach(([k, v]) => modelItems.push({ text: `${k} ${[...v].map(short).join(", ")}`, sub: how }));
+      img.forEach((i) => modelItems.push({ text: `image ${short(i.id)}`, sub: i.how }));
+      return { image: img.length > 0, code: Object.keys(revs).length > 0 };
+    });
+    const modelUniq = uniq(modelItems.map((i) => JSON.stringify(i))).map((s) => JSON.parse(s));
+    set("model", !groups.length || !modelHas.some((h) => h.image || h.code) ? "gap"
+        : modelHas.every((h) => h.image && h.code) ? "ok" : "partial", modelUniq,
+      !groups.length ? "No W&B group, so no launch to read commits or an image from."
+        : modelHas.every((h) => h.image && h.code)
+          ? "Code commits and the exact image id are known for every group (at launch, or recovered from W&B and Beaker)."
+          : modelHas.some((h) => h.image || h.code)
+            ? "Known for some groups only; the rest predate recording and have no recovery (studies#25, #28)."
+            : "Not recorded at launch and not recovered (studies#25, #28).");
+    const dataOf = (g) => {
+      const atLaunch = recordsOf(g).map((x) => x.data).filter(Boolean);
+      if (atLaunch.length) return atLaunch.map((d) => ({ ...d, how: "at launch" }));
+      const rv = recovered(g);
+      return (rv?.data || []).map((d) => ({ ...d, how: when(rv) }));
+    };
+    const dataItems = [], dataState = groups.map((g) => {
+      const ds = dataOf(g);
+      ds.forEach((d) => dataItems.push(d.source === "snapshot"
+        ? { text: `snapshot ${d.snapshot}`, sub: `${d.manifest_sha256 ? `manifest ${short(d.manifest_sha256)}, ` : ""}${d.how}` }
+        : { text: d.source === "live" ? "live database" : d.source === "generated" ? "generated" : "not logged",
+            sub: d.how }));
+      if (!ds.length) return "none";
+      return ds.every((d) => (d.source === "snapshot" && d.manifest_sha256) || d.source === "generated") ? "pinned" : "partial";
+    });
+    set("data", !groups.length || dataState.every((s) => s === "none") ? "gap"
+        : dataState.every((s) => s === "pinned") ? "ok" : "partial",
+      uniq(dataItems.map((i) => JSON.stringify(i))).map((s) => JSON.parse(s)),
+      !groups.length || dataState.every((s) => s === "none") ? "Not recorded at launch and not recovered (studies#25, #28)."
+        : dataState.every((s) => s === "pinned") ? "A dated database snapshot, identified by the digest of its manifest."
+        : dataItems.some((i) => i.text === "live database")
+          ? "Some runs read the live database (before snapshots existed), so their exact data cannot be fetched again."
+          : "Known for some groups only, or logged without a snapshot.");
     out.decisions = [
       ...(S.correctedBy[`${r._study}/${r.id}`] || []).map((c) => ({ text: `corrected by ${c.report._study.slice(0, 2)} ${c.report.id}`,
         href: `#/report/${c.report._study}/${c.report.id}`, note: c.note })),

@@ -361,3 +361,32 @@ def test_artifact_cited_twice_is_one_candidate(studies):
 def test_one_decimal_values_are_tokens():
     from bfm_atlas.catalog import NUMBER
     assert NUMBER.findall("cost 123.4 s") == ["123.4"]
+
+
+def test_launch_data_image_and_recovered_provenance(studies):
+    """Launch records pass `data`/`image` through; a run-provenance freeze attaches to its groups."""
+    rec_path = next((studies / "studies/01-gru-alpha/variants/base/launch_record").glob("*.json"))
+    rec = json.loads(rec_path.read_text())
+    rec["data"] = {"source": "snapshot", "config": "mice_snapshot", "snapshot": "20260603",
+                   "uri": "s3://x/snapshots/20260603/", "manifest_sha256": "e" * 64}
+    rec["image"] = {"platform": "beaker", "name": "img", "id": "01KIMAGE"}
+    rec_path.write_text(json.dumps(rec))
+    freeze = studies / "studies/01-gru-alpha/analysis/provenance/run_provenance.json"
+    freeze.parent.mkdir(parents=True)
+    freeze.write_text(json.dumps({
+        "_meta": {"schema_version": 2, "kind": "freeze", "produced_by": "../util/freeze_run_provenance.py",
+                  "wandb_groups": [GROUP], "sources": [{"type": "wandb_run", "id": "e/p/r1"}]},
+        "recovered_at_pt": "2026-10-25T16:20:00-07:00",
+        "groups": {GROUP: {"project": "e/p", "n_runs": 3, "revisions": {"wrapper": {"a" * 40: 3}},
+                           "data": [{"source": "live", "snapshot": None, "n_runs": 3}],
+                           "image": [{"platform": "beaker", "id": "01KOLD", "n_runs": 3}], "unrecovered": {}}}}))
+    git(studies, "add", "-A")
+    git(studies, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "provenance")
+    cat = build_catalog(studies, validate=False)
+    r = next(x for s in cat["studies"] for v in s["variants"] for x in v["launch_records"] if x["path"].endswith(rec_path.name))
+    assert (r["data"]["snapshot"], r["image"]["id"]) == ("20260603", "01KIMAGE")
+    got = cat["wandb_groups"][GROUP]["recovered"]
+    assert got["artifact"].endswith("analysis/provenance/run_provenance.json")
+    assert (got["n_runs"], got["data"][0]["source"], got["image"][0]["id"]) == (3, "live", "01KOLD")
+    assert not list(Draft202012Validator(SCHEMA).iter_errors(cat))
+

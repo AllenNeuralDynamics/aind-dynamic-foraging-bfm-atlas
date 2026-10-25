@@ -167,6 +167,9 @@ def _wandb_project(d: Any) -> dict | None:
     return None
 
 
+RUN_PROVENANCE = "/analysis/provenance/run_provenance.json"   # studies/util/freeze_run_provenance.py
+
+
 def _launch_record(path: Path, root: Path, variant: str | None) -> dict:
     rel = _rel(path, root)
     if path.suffix != ".json":
@@ -212,6 +215,9 @@ def _launch_record(path: Path, root: Path, variant: str | None) -> dict:
         "n_tasks": d.get("n_tasks") if isinstance(d.get("n_tasks"), int) else None,
         "supersedes": d.get("supersedes") if isinstance(d.get("supersedes"), list) else [],
         "deviations": d.get("deviations") if isinstance(d.get("deviations"), dict) else {},
+        # what the runs trained on and ran in, recorded at launch (studies#25)
+        "data": d.get("data") if isinstance(d.get("data"), dict) else None,
+        "image": d.get("image") if isinstance(d.get("image"), dict) else None,
         "sha256": _sha256(path),
     }
 
@@ -635,7 +641,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
 
     def entry(g: str) -> dict:
         return groups.setdefault(g, {"group": g, "study": None, "variant": None, "url": None,
-                                     "launch_records": [], "reports": [], "artifacts": []})
+                                     "launch_records": [], "reports": [], "artifacts": [], "recovered": None})
 
     records: dict[str, dict] = {}
     for s in studies:
@@ -654,6 +660,15 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         for a in s["artifacts"]:
             for g in (a["meta"] or {}).get("wandb_groups", []):
                 entry(g)["artifacts"].append(a["path"])
+            # a run-provenance freeze recovers, after the fact, what a group's launches trained on
+            # and ran in (studies#28); it stands in for launch records that predate those fields
+            if a["path"].endswith(RUN_PROVENANCE) and (a["meta"] or {}).get("kind") == "freeze":
+                body, err = _load_json(root / a["path"])
+                for g, rec in ((body or {}).get("groups") or {}).items() if not err and isinstance(body, dict) else []:
+                    if isinstance(rec, dict):
+                        entry(g)["recovered"] = {"artifact": a["path"], "recovered_at_pt": body.get("recovered_at_pt"),
+                                                 **{k: rec.get(k) for k in ("project", "n_runs", "data", "revisions",
+                                                                            "image", "unrecovered")}}
 
     def manifest_project(r: dict) -> dict | None:
         """Project named by a v2 record's `manifests` (variant- or record-relative, tracked only)."""
