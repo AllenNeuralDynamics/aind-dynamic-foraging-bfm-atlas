@@ -6,6 +6,8 @@ every study, report and number, traced back through the producer that computed i
 inputs it read, the W&B group and launch record that produced them, and the exact
 studies / dispatcher / wrapper commits.
 
+**Live site: <https://allenneuraldynamics.github.io/aind-dynamic-foraging-bfm-atlas/>** (rebuilt on every push to `main` and daily at 06:17 PT from studies `main`).
+
 ## How it works
 
 ```
