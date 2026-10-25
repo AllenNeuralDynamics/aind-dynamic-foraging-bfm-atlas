@@ -188,3 +188,26 @@ def test_group_url_uses_the_launch_project(studies):
     groups = build_catalog(studies)["wandb_groups"]
     assert groups["base@20261101-000000"]["url"] == "https://wandb.ai/AIND-disRNN/test/groups/base@20261101-000000"
     assert groups[GROUP]["url"].startswith("https://wandb.ai/AIND-disRNN/alpha/")
+
+
+def test_legacy_wrapper_ref_group_suffix_and_slurm(studies):
+    p = studies / "studies/02-disrnn-beta/variants/old/launch_record/slurm_job.json"
+    p.write_text(json.dumps({"wandb_group": "old@20261024-060709-hpc", "slurm_job_id": 12345,
+                             "wrapper_ref": "f" * 40, "dispatcher_ref": "main"}))
+    _commit(studies)
+    r = next(x for x in by_id(build_catalog(studies), "02-disrnn-beta")["variants"][0]["launch_records"]
+             if x["path"].endswith("slurm_job.json"))
+    assert r["wandb_groups"] == ["old@20261024-060709-hpc"]
+    assert r["revisions"] == {"wrapper": "f" * 40}          # a branch ref stays unpinned
+    assert r["job_refs"] == [{"type": "slurm_job", "id": "12345"}] and r["platform"] == "hpc"
+
+
+def test_group_url_from_record_manifests(studies):
+    v = studies / "studies/01-gru-alpha/variants/base"
+    (v / "sweep_smoke.yaml").write_text("entity: AIND-disRNN\nproject: test\n")
+    rec = json.loads((v / "launch_record/beaker.json").read_text())
+    rec.update(wandb_group="base@20261102-000000", manifests=["sweep_smoke.yaml"])
+    (v / "launch_record/smoke.json").write_text(json.dumps(rec))
+    _commit(studies)
+    url = build_catalog(studies)["wandb_groups"]["base@20261102-000000"]["url"]
+    assert url == "https://wandb.ai/AIND-disRNN/test/groups/base@20261102-000000"

@@ -37,7 +37,8 @@ PT = ZoneInfo("America/Los_Angeles")
 STUDY_DIR = re.compile(r"^(\d{2})-([a-z0-9]+)-(.+)$")
 REPORT_FILE = re.compile(r"^r(\d+)-([a-z0-9-]+)\.md$")
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
-GROUP = re.compile(r"\b([A-Za-z0-9][\w.-]*@\d{8}-\d{6})\b")
+# <variant>@<launch_id>; some legacy groups carry a suffix after the launch id ("...-hpc").
+GROUP = re.compile(r"\b([A-Za-z0-9][\w.-]*@\d{8}-\d{6}(?:-[A-Za-z0-9]+)*)\b")
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 RESULT_BLOCK = re.compile(r"<!-- BEGIN ([\w.-]+) -->\n?(.*?)<!-- END \1 -->", re.S)
 MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
@@ -132,6 +133,10 @@ def _revisions(d: dict) -> dict[str, str]:
             v = d.get(a)
             if isinstance(v, str):
                 out.setdefault(repo, v)
+        # `<repo>_ref` may be a branch; only a full SHA pins the code
+        ref = d.get(f"{repo}_ref")
+        if isinstance(ref, str) and FULL_SHA.fullmatch(ref):
+            out.setdefault(repo, ref)
     return out
 
 
@@ -178,15 +183,22 @@ def _launch_record(path: Path, root: Path, variant: str | None) -> dict:
                 "error": err or "top level is not an object", "wandb_groups": [], "sha256": _sha256(path)}
     meta = d.get("_meta") if isinstance(d.get("_meta"), dict) else {}
     v2 = meta.get("schema_version") == 2
-    groups = [d["wandb_group"]] if v2 and isinstance(d.get("wandb_group"), str) else sorted(_groups_in(d))
+    # an explicit group name wins; scanning the record is the fallback for older shapes
+    groups = [d["wandb_group"]] if isinstance(d.get("wandb_group"), str) else sorted(_groups_in(d))
     job_refs = d.get("job_refs") if isinstance(d.get("job_refs"), list) else []
-    if not job_refs and isinstance(d.get("experiment_id"), str):
-        job_refs = [{"type": "beaker_experiment", "id": d["experiment_id"]}]
+    if not job_refs:
+        for key, kind in (("experiment_id", "beaker_experiment"), ("sweep_id", "wandb_sweep"),
+                          ("slurm_array_job_id", "slurm_array_job"), ("slurm_job_id", "slurm_job")):
+            if isinstance(d.get(key), (str, int)) and not isinstance(d.get(key), bool):
+                job_refs.append({"type": kind, "id": str(d[key])})
+    platform = d.get("platform") or ("beaker" if "experiment_id" in d else
+                                     "hpc" if {"slurm_job_id", "slurm_array_job_id", "sweep_id"} & d.keys() else None)
     return {
         "path": rel, "format": "json",
         "schema_version": 2 if v2 else 1,
         "kind": d.get("kind") or ("initial" if d.get("mode") else None),
-        "platform": d.get("platform") or ("beaker" if "experiment_id" in d else None),
+        "platform": platform,
+        "manifests": [m for m in d.get("manifests") or [] if isinstance(m, str)],
         "wandb_groups": groups,
         "own_group": any(g.split("@")[0] == variant for g in groups),
         "wandb": _wandb_project(d),
@@ -520,13 +532,38 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
             for g in (a["meta"] or {}).get("wandb_groups", []):
                 entry(g)["artifacts"].append(a["path"])
 
+    def manifest_project(r: dict) -> dict | None:
+        """Project named by a v2 record's `manifests` (variant- or record-relative, tracked only)."""
+        rec_dir = root / r["path"].rsplit("/", 1)[0]
+        variant_dir = rec_dir
+        while variant_dir.name and not variant_dir.name.startswith("launch_record"):
+            variant_dir = variant_dir.parent
+        for m in r.get("manifests") or []:
+            for base in (variant_dir.parent, rec_dir):
+                f = base / m
+                if ok(f) and f.suffix in (".yaml", ".yml"):
+                    try:
+                        w = _wandb_project(yaml.safe_load(f.read_text()))
+                    except yaml.YAMLError:
+                        w = None
+                    if w:
+                        return w
+        return None
+
     def project_for(e: dict) -> dict | None:
-        """The W&B project a launch used: its own records, then a sweep manifest beside them
-        (a smoke launch may log to another project), and only then the study's cover."""
+        """The W&B project a launch used: its records, the manifests they name, a sweep manifest
+        beside them (a smoke launch may log to another project), and only then the study cover."""
         named = [records[p] for p in e["launch_records"]]
         dirs = {p.rsplit("/", 1)[0] for p in e["launch_records"]}
         beside = [r for r in records.values() if r["path"].rsplit("/", 1)[0] in dirs]
-        for r in named + beside:
+        for r in named:
+            if r.get("wandb"):
+                return r["wandb"]
+        for r in named:
+            w = manifest_project(r)
+            if w:
+                return w
+        for r in beside:
             if r.get("wandb"):
                 return r["wandb"]
         return wandb.get(e["study"]) if e["study"] else None
