@@ -15,6 +15,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+OPTIONAL_VIEWS = ("timeline", "graph", "leaderboard")   # visited when the nav shows them
 
 
 def main(site: str, out: str) -> int:
@@ -33,9 +34,8 @@ def main(site: str, out: str) -> int:
     group = next(iter(cat["wandb_groups"]))
     views = {"landing": "#/", "study": f"#/study/{study['id']}",
              "report": f"#/report/{study['id']}/{report['id']}", "health": "#/health",
-             "group": f"#/group/{group}"}
-    views.update({k: f"#/{k}" for k in ("timeline", "graph", "leaderboard")})
-    views["history"] = f"#/history/{study['id']}/{report['id']}"
+             "group": f"#/group/{group}", "history": f"#/history/{study['id']}/{report['id']}"}
+    # Navigation to optional views is shown only once a module registers them; visit those.
 
     errors, failures = [], []
     with sync_playwright() as pw:
@@ -43,11 +43,17 @@ def main(site: str, out: str) -> int:
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.goto(base)
+        page.wait_for_timeout(800)
+        for view in OPTIONAL_VIEWS:
+            if page.locator(f'.top nav a[data-view="{view}"]').is_visible():
+                views[view] = f"#/{view}"
         for name, hash_ in views.items():
             page.goto(base + hash_)
             page.wait_for_timeout(800)
-            if page.locator("h1", has_text="Not found").count():
-                failures.append(f"{name}: rendered 'Not found'")
+            for bad in ("Not found", "Could not load the catalog", "Rendering failed"):
+                if page.locator("h1", has_text=bad).count():
+                    failures.append(f"{name}: rendered '{bad}'")
             page.screenshot(path=str(out / f"{name}.png"))
         page.goto(base + views["report"])
         page.wait_for_timeout(800)
@@ -63,6 +69,9 @@ def main(site: str, out: str) -> int:
             if not page.locator("#drawer", has_text="Matched by value").count():
                 failures.append("number link did not open its drawer")
             page.screenshot(path=str(out / "number.png"))
+        for view in OPTIONAL_VIEWS:
+            if view not in views:
+                failures.append(f"{view}: navigation link hidden, so its view is not registered")
         page.set_viewport_size({"width": 390, "height": 844})
         for name in ("landing", "report"):
             page.goto(base + views[name])

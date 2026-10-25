@@ -21,12 +21,15 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const short = (sha) => (sha ? String(sha).slice(0, 8) : "—");
 const $main = () => document.getElementById("main");
-const blob = (path) => `${STUDIES_REPO}/blob/${S.sha}/${path.split("#")[0]}`;
+// Source links pin a commit: the catalog's by default, or the one a producer recorded.
+const blob = (path, sha = S.sha) => `${STUDIES_REPO}/blob/${sha || S.sha}/${path.split("#")[0]}`;
 const commitLink = (repo, sha) => sha
   ? `<a class="mono" href="${REPO_URLS[repo] || "#"}/commit/${esc(sha)}" target="_blank" rel="noopener">${esc(short(sha))}</a>`
   : `<span class="muted">—</span>`;
-const srcLink = (path, label) =>
-  `<a class="mono" href="${esc(blob(path))}" target="_blank" rel="noopener">${esc(label ?? path)}</a>`;
+const srcLink = (path, label, sha) =>
+  `<a class="mono" href="${esc(blob(path, sha))}" target="_blank" rel="noopener">${esc(label ?? path)}</a>`;
+// GitHub-style heading slug, so in-document links (#summary-verdict-2026-06-24) resolve.
+const slug = (s) => s.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s/g, "-");
 const chip = (text, cls = "") => `<span class="chip ${cls}">${esc(text)}</span>`;
 const statusChip = (s) => (s ? chip(s, `status-${s}`) : "");
 
@@ -68,9 +71,21 @@ function renderMarkdown(md, basePath) {
     if (!/^[a-z]+:/.test(src)) img.src = `data/files/${resolvePath(basePath, src)}`;
     img.loading = "lazy";
   }
+  const seen = {};
+  for (const h of div.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+    const base = slug(h.textContent);
+    h.id = seen[base] ? `${base}-${seen[base]}` : base;
+    seen[base] = (seen[base] || 0) + 1;
+  }
   for (const a of div.querySelectorAll("a[href]")) {
     const href = a.getAttribute("href");
-    if (/^[a-z]+:/.test(href) || href.startsWith("#")) continue;
+    if (href.startsWith("#")) {
+      // An in-document anchor must not replace the hash route: scroll instead (see below).
+      a.dataset.anchor = decodeURIComponent(href.slice(1));
+      a.setAttribute("href", location.hash || "#/");
+      continue;
+    }
+    if (/^[a-z]+:/.test(href)) continue;
     const target = resolvePath(basePath, href.split("#")[0]);
     const route = routeForPath(target);
     if (route) a.setAttribute("href", route);
@@ -129,8 +144,8 @@ function index(cat) {
 function viewStudies() {
   const c = S.cat;
   const reports = c.studies.reduce((n, s) => n + s.reports.length, 0);
-  const launches = c.studies.reduce((n, s) => n + s.variants.reduce((m, v) =>
-    m + v.launch_records.filter((r) => r.format === "json").length, 0), 0);
+  const launches = c.studies.reduce((n, s) => n + [...s.variants.flatMap((v) => v.launch_records),
+    ...(s.root_launch_records || [])].filter((r) => r.format === "json").length, 0);
   const err = S.findings.filter((f) => f.level === "error").length;
   const warn = S.findings.filter((f) => f.level === "warn").length;
   $main().innerHTML = `
@@ -322,12 +337,13 @@ function artifactChain(a) {
   const m = a.meta;
   if (!m) return `<p>${srcLink(a.path)} has no <code>_meta</code> block, so the chain stops here.</p>`;
   const groups = m.wandb_groups.map((g) => S.cat.wandb_groups[g] || { group: g, launch_records: [], url: null });
-  const digestList = (xs) => xs.length ? `<ul>${xs.map((d) => `<li>${srcLink(d.path, d.path.replace(/^studies\/[^/]+\//, ""))}
+  const at = m.studies_git_sha;     // the producer's own revision, not the catalog's
+  const digestList = (xs) => xs.length ? `<ul>${xs.map((d) => `<li>${srcLink(d.path, d.path.replace(/^studies\/[^/]+\//, ""), at)}
       <span class="muted mono">${esc(short(d.sha256))}</span></li>`).join("")}</ul>` : `<span class="muted">not recorded (_meta v${m.schema_version})</span>`;
   return `<ol class="chain">
     <li><div class="k">${m.kind === "freeze" ? "Freeze" : "Analysis artifact"}</div>${srcLink(a.path)}
       <span class="muted mono">sha256 ${esc(short(a.sha256))}</span></li>
-    <li><div class="k">Producer</div>${m.produced_by ? srcLink(`${S.study[a._study].path}/${m.produced_by}`, m.produced_by) : "—"}
+    <li><div class="k">Producer</div>${m.produced_by ? srcLink(`${S.study[a._study].path}/${m.produced_by}`, m.produced_by, at) : "—"}
       at studies ${commitLink("studies", m.studies_git_sha)} <span class="muted">${esc(m.produced_at_pt || "")}</span>
       ${m.schema_version === 2 ? `<div class="k" style="margin-top:6px">Code</div>${digestList(m.code)}
         <div class="k">Inputs</div>${digestList(m.inputs)}` : `<div class="muted">_meta v1: no code or input digests.</div>`}
@@ -395,6 +411,13 @@ function notFound(what) {
 const VIEWS = {};
 
 function route() {
+  try { return routeInner(); } catch (err) {
+    console.error(err);            // surfaces to the smoke test and devtools
+    $main().innerHTML = `<h1>Rendering failed</h1><p class="lvl-error">${esc(err.message)}</p>`;
+  }
+}
+
+function routeInner() {
   document.getElementById("drawer").hidden = true;
   const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   const [view, a, b] = parts;
@@ -417,6 +440,19 @@ document.addEventListener("toggle", (ev) => {
   }
 }, true);
 
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.("a[data-anchor]");
+  if (!a) return;
+  e.preventDefault();
+  const el = document.getElementById(a.dataset.anchor);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+// Hide navigation to views no module registered.
+function syncNav() {
+  for (const a of document.querySelectorAll(".top nav a[data-view]")) a.hidden = !VIEWS[a.dataset.view];
+}
+
 document.querySelector(".drawer-close").addEventListener("click", () => { document.getElementById("drawer").hidden = true; });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.getElementById("drawer").hidden = true; });
 
@@ -430,7 +466,11 @@ fetch("data/catalog.json")
     window.Atlas = Object.assign(window.Atlas || {}, { S, VIEWS, esc, chip, srcLink, commitLink, short, openDrawer,
       renderMarkdown, findingsFor, statusChip, route, STUDIES_REPO });
     document.dispatchEvent(new Event("atlas:ready"));
+    syncNav();
     window.addEventListener("hashchange", route);
     route();
   })
-  .catch((err) => { $main().innerHTML = `<h1>Could not load the catalog</h1><p class="lvl-error">${esc(err.message)}</p>`; });
+  .catch((err) => {
+    console.error(err);
+    $main().innerHTML = `<h1>Could not load the catalog</h1><p class="lvl-error">${esc(err.message)}</p>`;
+  });

@@ -738,6 +738,16 @@ def copy_figures(catalog: dict, studies_root: Path | str, dest: Path | str) -> i
     root, dest = Path(studies_root).resolve(), Path(dest)
     ok = _Tracked(root)
     paths = {f["path"] for s in catalog["studies"] for r in s["reports"] for f in r["figures"] if f["exists"]}
+    # the app also renders study READMEs and variant notes, so their images ship too
+    docs = [(f"{s['path']}/README.md", s["readme"]) for s in catalog["studies"]]
+    docs += [(f"{v['path']}/notes.md", v["notes"]) for s in catalog["studies"] for v in s["variants"] if v["notes"]]
+    for doc, text in docs:
+        for _, src in MD_IMAGE.findall(text or ""):
+            if "://" not in src:
+                try:
+                    paths.add(((root / doc).parent / src).resolve().relative_to(root).as_posix())
+                except ValueError:
+                    pass
     paths |= {o["path"] for s in catalog["studies"] for a in s["artifacts"] if a["meta"]
               for o in a["meta"]["outputs"] if o["path"].lower().endswith(IMAGE_SUFFIXES)}
     n = 0

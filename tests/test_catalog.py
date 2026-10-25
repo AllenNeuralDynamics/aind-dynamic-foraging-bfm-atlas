@@ -246,3 +246,17 @@ def test_group_url_from_record_manifests(studies):
     _commit(studies)
     url = build_catalog(studies)["wandb_groups"]["base@20261102-000000"]["url"]
     assert url == "https://wandb.ai/AIND-disRNN/test/groups/base@20261102-000000"
+
+
+def test_cli_copies_readme_and_notes_images(studies, tmp_path):
+    (studies / "studies/01-gru-alpha/schematic.png").write_text("s")
+    readme = studies / "studies/01-gru-alpha/README.md"
+    readme.write_text(readme.read_text() + "\n![schematic](schematic.png)\n")
+    notes = studies / "studies/01-gru-alpha/variants/base/notes.md"
+    (studies / "studies/01-gru-alpha/variants/base/n.png").write_text("n")
+    notes.write_text("# base\n![n](n.png)\n")
+    _commit(studies)
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    files = tmp_path / "data" / "files" / "studies/01-gru-alpha"
+    assert (files / "schematic.png").exists() and (files / "variants/base/n.png").exists()
