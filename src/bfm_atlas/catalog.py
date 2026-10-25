@@ -286,7 +286,6 @@ def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str], ok: "_
         "corrects": [c for c in f.get("corrects") or [] if isinstance(c, dict)],
         "superseded_by": f.get("superseded_by") if isinstance(f.get("superseded_by"), dict) else None,
         "reproduce": f.get("reproduce") if isinstance(f.get("reproduce"), str) else None,
-        "metric": f.get("metric") if isinstance(f.get("metric"), str) else None,
         "figures": figures,
         "result_blocks": [{"name": n, "markdown": b.strip("\n")} for n, b in RESULT_BLOCK.findall(body)],
         "cites": sorted({s for s in (_study_of(t, study_ids) for t in links) if s} - {study_dir.name}),

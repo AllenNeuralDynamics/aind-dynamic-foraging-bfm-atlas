@@ -17,7 +17,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-OPTIONAL_VIEWS = ("timeline", "graph", "leaderboard")   # visited when the nav shows them
+OPTIONAL_VIEWS = ("timeline", "graph")   # visited when the nav shows them
 
 
 def main(site: str, out: str) -> int:
