@@ -501,7 +501,7 @@ def _report_history(root: Path, rel: str) -> list[dict]:
 
 
 # --- number links (click-a-number) -------------------------------------------------------------
-# A displayed decimal ("−" is the typographic minus) is linked to a JSON leaf only when exactly
+# A displayed decimal (any number of places; "−" is the typographic minus) is linked to a JSON leaf only when exactly
 # one leaf, across the JSON artifacts the block can be traced to, rounds to it at the displayed
 # precision, and when that uniqueness is unlikely to be chance: the number must show at least
 # MIN_SIG significant digits, and the searched leaves must be few next to 10**digits (a 2-digit
@@ -510,7 +510,7 @@ MIN_SIG = 3
 CHANCE = 0.05     # max expected chance matches: leaves / 10**significant_digits
 # A whole decimal token: not the tail of a grouped number (1,234.5678) or of a dotted id, and
 # allowed to end a sentence ("0.7101."). views.js uses the same pattern.
-NUMBER = re.compile(r"(?<![\w.,])([-−]?\d+\.\d{2,})(?!\w|[.,]\d)")
+NUMBER = re.compile(r"(?<![\w.,])([-−]?\d+\.\d+)(?!\w|[.,]\d)")
 
 
 def _leaves(obj: Any, pointer: str = "") -> list[tuple[str, float]]:

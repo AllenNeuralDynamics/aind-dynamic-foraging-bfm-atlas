@@ -165,14 +165,14 @@ document.addEventListener("atlas:ready", () => {
 
   // ------------------------------------------------------------ click-a-number
   // same token rule as NUMBER in catalog.py
-  const NUMBER = /(?<![\w.,])([-−]?\d+\.\d{2,})(?!\w|[.,]\d)/g;
+  const NUMBER = /(?<![\w.,])([-−]?\d+\.\d+)(?!\w|[.,]\d)/g;
   window.Atlas.linkNumbers = (div, r, name) => {
     const block = r.result_blocks.find((b) => b.name === name);
     const links = Object.fromEntries((block?.number_links || []).map((l) => [l.text, l]));
     if (!Object.keys(links).length) return;
     const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT);
     const nodes = [];
-    while (walker.nextNode()) if (!walker.currentNode.parentElement.closest("code, pre, .rb-head")) nodes.push(walker.currentNode);
+    while (walker.nextNode()) if (!walker.currentNode.parentElement.closest("a, code, pre, .rb-head")) nodes.push(walker.currentNode);
     for (const node of nodes) {
       const text = node.nodeValue;
       if (!NUMBER.test(text)) continue;

@@ -326,3 +326,8 @@ def test_artifact_cited_twice_is_one_candidate(studies):
     _commit(studies)
     texts = {l["text"] for l in by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["result_blocks"][0]["number_links"]}
     assert {"0.7101", "0.7154"} <= texts
+
+
+def test_one_decimal_values_are_tokens():
+    from bfm_atlas.catalog import NUMBER
+    assert NUMBER.findall("cost 123.4 s") == ["123.4"]
