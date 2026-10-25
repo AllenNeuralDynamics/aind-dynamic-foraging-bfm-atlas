@@ -130,7 +130,6 @@ def test_ignored_files_never_enter_the_catalog(studies):
     assert not any("drafts" in r["path"] for r in s["variants"][0]["launch_records"])
 
 
-<<<<<<< HEAD
 def test_number_links_unique_matches_only(studies):
     r = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]
     links = {l["text"]: l for l in r["result_blocks"][0]["number_links"]}
@@ -162,7 +161,6 @@ def test_history_records_each_block_change(studies):
     h = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["history"]
     assert [v["subject"] for v in h] == ["update r1", "init"]
     assert "0.7160" in h[0]["blocks"]["result-1"] and "0.7154" in h[1]["blocks"]["result-1"]
-=======
 def _commit(root, msg="x"):
     import subprocess
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
@@ -225,4 +223,3 @@ def test_group_url_uses_the_launch_project(studies):
     groups = build_catalog(studies)["wandb_groups"]
     assert groups["base@20261101-000000"]["url"] == "https://wandb.ai/AIND-disRNN/test/groups/base@20261101-000000"
     assert groups[GROUP]["url"].startswith("https://wandb.ai/AIND-disRNN/alpha/")
->>>>>>> feat/1-app

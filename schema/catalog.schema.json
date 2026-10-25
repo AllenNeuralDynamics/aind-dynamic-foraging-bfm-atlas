@@ -166,12 +166,8 @@
         "variants",
         "reports",
         "artifacts",
-<<<<<<< HEAD
-        "cites"
-=======
         "cites",
         "root_launch_records"
->>>>>>> feat/1-app
       ],
       "properties": {
         "cover": {
@@ -232,8 +228,6 @@
           "items": {
             "$ref": "#/$defs/artifact"
           }
-<<<<<<< HEAD
-=======
         },
         "root_launch_records": {
           "type": "array",
@@ -241,7 +235,6 @@
             "$ref": "#/$defs/record"
           },
           "description": "Legacy launch records committed at the study root; they belong to no variant."
->>>>>>> feat/1-app
         }
       }
     },
@@ -298,7 +291,6 @@
             "required": [
               "name",
               "markdown"
-<<<<<<< HEAD
             ],
             "properties": {
               "number_links": {
@@ -353,10 +345,6 @@
             "null"
           ],
           "description": "Optional; groups comparable reports on the leaderboard once the studies schema allows it."
-=======
-            ]
-          }
->>>>>>> feat/1-app
         }
       }
     },
@@ -396,15 +384,10 @@
                 "kind": {
                   "enum": [
                     "producer",
-<<<<<<< HEAD
-                    "freeze"
-                  ]
-=======
                     "freeze",
                     null
                   ],
                   "description": "null for v1 _meta whose kind cannot be told"
->>>>>>> feat/1-app
                 }
               }
             }
