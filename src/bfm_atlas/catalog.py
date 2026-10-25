@@ -378,6 +378,7 @@ def _report_order(p: Path) -> tuple:
 # --- validator ----------------------------------------------------------------------------------
 def run_validator(root: Path, python: str = sys.executable) -> dict:
     """The studies checker's findings at this checkout (scripts/check_provenance.py --format json)."""
+    root = root.resolve()
     script = root / "scripts" / "check_provenance.py"
     if not script.exists():
         return {"ran": False, "error": "scripts/check_provenance.py is not in this studies checkout",
@@ -395,7 +396,7 @@ def run_validator(root: Path, python: str = sys.executable) -> dict:
 # --- assembly -----------------------------------------------------------------------------------
 def build_catalog(studies_root: Path | str, validate: bool = True) -> dict:
     """Catalog for a studies checkout (the repository root, containing ``studies/``)."""
-    root = Path(studies_root)
+    root = Path(studies_root).resolve()      # the checker runs with cwd=root
     dirs = sorted(p for p in (root / "studies").iterdir() if p.is_dir() and STUDY_DIR.match(p.name))
     ids = {p.name for p in dirs}
     studies = [_study(p, root, ids) for p in dirs]

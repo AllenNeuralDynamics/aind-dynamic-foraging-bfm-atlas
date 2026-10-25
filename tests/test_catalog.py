@@ -90,3 +90,8 @@ def test_cli_build(studies, tmp_path, capsys):
     assert main(["build", "--studies", str(studies), "--out", str(out)]) == 0
     assert json.loads(out.read_text())["_meta"]["schema_version"] == 1
     assert "2 studies" in capsys.readouterr().out
+
+
+def test_relative_studies_path(studies, monkeypatch):
+    monkeypatch.chdir(studies.parent)
+    assert build_catalog(studies.name)["health"]["ran"]
