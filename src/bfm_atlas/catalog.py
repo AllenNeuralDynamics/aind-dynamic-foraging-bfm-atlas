@@ -319,7 +319,10 @@ def _artifact(path: Path, root: Path) -> dict:
             else None),
         "produced_by": meta.get("produced_by") or meta.get("producer"),
         "produced_at_pt": meta.get("produced_at_pt") or meta.get("recorded_at_pt"),
-        "studies_git_sha": meta.get("studies_git_sha") or meta.get("dispatcher_git_sha"),
+        # Producers before the studies/dispatcher split recorded their checkout as
+        # dispatcher_git_sha: keep each SHA with its own repository, never relabel it.
+        "studies_git_sha": meta.get("studies_git_sha"),
+        "dispatcher_git_sha": meta.get("dispatcher_git_sha"),
         "wrapper_git_sha": meta.get("wrapper_git_sha"),
         "wandb_groups": groups,
         "source_git_shas": {repo: meta[f"source_{repo}_git_shas"] for repo in REPOS

@@ -42,24 +42,35 @@ def main(site: str, out: str) -> int:
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.goto(base)
-        page.wait_for_timeout(800)
+        page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
         for view in OPTIONAL_VIEWS:
             if page.locator(f'.top nav a[data-view="{view}"]').is_visible():
                 views[view] = f"#/{view}"
         for name, hash_ in views.items():
             page.goto(base + hash_)
-            page.wait_for_timeout(800)
+            # the view has rendered once #main shows a heading (it says "Loading catalog…" before)
+            try:
+                page.wait_for_selector("#main h1", timeout=20000)
+            except Exception:
+                failures.append(f"{name}: no heading rendered")
+            page.wait_for_timeout(300)
             for bad in ("Not found", "Could not load the catalog", "Rendering failed"):
                 if page.locator("h1", has_text=bad).count():
                     failures.append(f"{name}: rendered '{bad}'")
             page.screenshot(path=str(out / f"{name}.png"))
         page.goto(base + views["report"])
-        page.wait_for_timeout(800)
+        page.wait_for_selector(".result-block button", timeout=20000)
         page.locator(".result-block button").first.click()
         page.wait_for_timeout(300)
         if page.locator("#drawer").is_hidden():
             failures.append("drawer did not open")
+        elif not page.evaluate("document.activeElement && document.activeElement.id === 'drawer'"):
+            failures.append("opening the drawer did not move focus into it")
         page.screenshot(path=str(out / "drawer.png"))
+        page.keyboard.press("Escape")
+        if not page.evaluate("document.activeElement && document.activeElement.matches('.result-block button')"):
+            failures.append("closing the drawer did not return focus to its button")
+        page.locator(".result-block button").first.click()
         page.set_viewport_size({"width": 390, "height": 844})
         for name in ("landing", "report"):
             page.goto(base + views[name])

@@ -229,3 +229,12 @@ def test_cli_copies_readme_and_notes_images(studies, tmp_path):
     main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
     files = tmp_path / "data" / "files" / "studies/01-gru-alpha"
     assert (files / "schematic.png").exists() and (files / "variants/base/n.png").exists()
+
+
+def test_pre_split_dispatcher_sha_is_not_relabelled(studies):
+    a = studies / "studies/02-disrnn-beta/analysis/presplit.json"
+    a.write_text(json.dumps({"_meta": {"produced_by": "x.py", "dispatcher_git_sha": "9" * 40}}))
+    _commit(studies)
+    m = next(x for x in by_id(build_catalog(studies), "02-disrnn-beta")["artifacts"]
+             if x["path"].endswith("presplit.json"))["meta"]
+    assert m["studies_git_sha"] is None and m["dispatcher_git_sha"] == "9" * 40
