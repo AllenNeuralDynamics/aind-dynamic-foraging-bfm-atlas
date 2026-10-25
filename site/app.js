@@ -1,4 +1,4 @@
-/* BFM Studies Atlas: a static, hash-routed browser over data/catalog.json.
+/* Behavior Foundation Model Studies Atlas: a static, hash-routed browser over data/catalog.json.
  *
  * Vocabulary follows the studies repo's CONTEXT.md (Study, Variant, Launch, W&B group,
  * Intervention, Report, Correction, Upstream, Freeze). The catalog is built by
@@ -155,7 +155,7 @@ function viewStudies() {
   const warn = S.findings.filter((f) => f.level === "warn").length;
   $main().innerHTML = `
     <h1>Studies</h1>
-    <p class="muted">Every scientific question asked of dynamic-foraging-bfm, with each report traced to the
+    <p class="muted">Every scientific question asked of the dynamic foraging behavior foundation model, with each report traced to the
       producer, frozen inputs, W&amp;B group, launch record and commits behind it.</p>
     <div class="stats">
       <div class="stat"><b>${c.studies.length}</b><span>studies</span></div>
