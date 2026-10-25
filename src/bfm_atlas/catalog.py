@@ -389,14 +389,31 @@ def run_validator(root: Path, python: str = sys.executable) -> dict:
     except json.JSONDecodeError:
         return {"ran": False, "error": (r.stderr or r.stdout).strip()[-2000:] or f"exit {r.returncode}",
                 "findings": []}
-    return {"ran": True, "error": None, "findings": out.get("findings", []), "new": out.get("new", []),
-            "baseline_size": out.get("baseline_size")}
+    # keep the checker's whole verdict (new, fixed, baseline_grown, ...), not just findings
+    return {**out, "ran": True, "error": None, "exit_code": r.returncode,
+            "findings": out.get("findings", [])}
 
 
 # --- assembly -----------------------------------------------------------------------------------
-def build_catalog(studies_root: Path | str, validate: bool = True) -> dict:
-    """Catalog for a studies checkout (the repository root, containing ``studies/``)."""
+class DirtyCheckoutError(RuntimeError):
+    """The checkout differs from the commit the catalog would be labelled with."""
+
+
+def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: bool = False) -> dict:
+    """Catalog for a studies checkout (the repository root, containing ``studies/``).
+
+    The catalog is labelled with the checkout's HEAD, so by default the checkout must be
+    clean: a modified or untracked file would put content in the catalog that the recorded
+    SHA does not contain. ``allow_dirty`` builds anyway and records ``studies_git_dirty``.
+    """
     root = Path(studies_root).resolve()      # the checker runs with cwd=root
+    if not allow_dirty:
+        if _git(root, "rev-parse", "HEAD") is None:
+            raise DirtyCheckoutError(f"{root} is not a git checkout; pass allow_dirty to build anyway")
+        status = _git(root, "status", "--porcelain", "--untracked-files=all")
+        if status:
+            raise DirtyCheckoutError(f"{root} has uncommitted or untracked files; commit or clean them "
+                                     f"(or pass allow_dirty):\n{status[:2000]}")
     dirs = sorted(p for p in (root / "studies").iterdir() if p.is_dir() and STUDY_DIR.match(p.name))
     ids = {p.name for p in dirs}
     studies = [_study(p, root, ids) for p in dirs]
@@ -456,7 +473,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True) -> dict:
             "schema_version": CATALOG_SCHEMA_VERSION,
             "built_at_pt": datetime.datetime.now(PT).isoformat(timespec="seconds"),
             "studies_git_sha": sha,
-            "studies_git_dirty": None if sha is None else bool(_git(root, "status", "--porcelain", "--", "studies")),
+            "studies_git_dirty": None if sha is None else bool(_git(root, "status", "--porcelain", "--untracked-files=all")),
             "studies_commit_time": _git(root, "log", "-1", "--format=%cI"),
             # never publish credentials embedded in a remote URL
             "studies_remote": re.sub(r"//[^@/]+@", "//", _git(root, "remote", "get-url", "origin") or "") or None,

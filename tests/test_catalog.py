@@ -3,7 +3,9 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from bfm_atlas.catalog import build_catalog
+import pytest
+
+from bfm_atlas.catalog import DirtyCheckoutError, build_catalog
 from bfm_atlas.cli import main
 from conftest import GROUP, SHA, make_studies
 
@@ -95,3 +97,16 @@ def test_cli_build(studies, tmp_path, capsys):
 def test_relative_studies_path(studies, monkeypatch):
     monkeypatch.chdir(studies.parent)
     assert build_catalog(studies.name)["health"]["ran"]
+
+
+def test_dirty_checkout_is_refused_unless_allowed(studies):
+    (studies / "studies/01-gru-alpha/analysis/reports/r2-new.md").write_text("# r2\n")
+    with pytest.raises(DirtyCheckoutError):
+        build_catalog(studies)
+    cat = build_catalog(studies, allow_dirty=True)
+    assert cat["_meta"]["studies_git_dirty"] is True
+
+
+def test_checker_verdict_is_kept_whole(studies):
+    h = build_catalog(studies)["health"]
+    assert h["fixed"] == [] and h["baseline_grown"] == [] and h["exit_code"] == 0

@@ -17,9 +17,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--out", type=Path, default=Path("site/data/catalog.json"))
     b.add_argument("--no-validate", action="store_true",
                    help="skip running the studies checker (findings are then absent)")
+    b.add_argument("--allow-dirty", action="store_true",
+                   help="build from a checkout with local changes (recorded as studies_git_dirty)")
     args = p.parse_args(argv)
 
-    catalog = build_catalog(args.studies, validate=not args.no_validate)
+    catalog = build_catalog(args.studies, validate=not args.no_validate, allow_dirty=args.allow_dirty)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")))
     h = catalog["health"]
