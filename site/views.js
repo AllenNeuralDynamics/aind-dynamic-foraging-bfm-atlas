@@ -34,7 +34,7 @@ document.addEventListener("atlas:ready", () => {
         ${ticks.map((t) => `<line class="axis" x1="${x(t)}" x2="${x(t)}" y1="10" y2="${H - 24}"/>
           <text x="${x(t)}" y="${H - 8}" text-anchor="middle">${new Date(t).toISOString().slice(0, 7)}</text>`).join("")}
         ${rows.map(({ s, pts }, i) => `<a href="#/study/${esc(s.id)}"><text x="4" y="${24 + i * RH}">${esc(studyLabel(s.id))}</text></a>
-          ${pts.map((p) => `<a href="#/group/${encodeURIComponent(p.r.wandb_groups[0] || "")}">
+          ${pts.map((p) => `<a href="${p.r.wandb_groups.length ? `#/group/${encodeURIComponent(p.r.wandb_groups[0])}` : `#/study/${esc(s.id)}`}">
             <circle cx="${x(p.t)}" cy="${20 + i * RH}" r="5" fill="${p.r.kind === "initial" || !p.r.kind ? "var(--accent)" : "var(--warn)"}"
               fill-opacity="${p.r.schema_version === 2 ? 1 : 0.65}">
             <title>${esc(s.id)} · ${esc(p.r.path.split("/variants/")[1] || p.r.path)}\n${esc(p.r.kind || "")} · ${esc(p.r.time)}\n${esc(p.r.note || "")}</title></circle></a>`).join("")}`).join("")}

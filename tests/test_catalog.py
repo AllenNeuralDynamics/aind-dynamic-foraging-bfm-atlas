@@ -279,3 +279,36 @@ def test_titled_images_are_found_and_copied(studies, tmp_path):
     out = tmp_path / "data" / "catalog.json"
     main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
     assert (tmp_path / "data/files/studies/01-gru-alpha/analysis/titled.png").exists()
+
+
+def test_history_follows_a_basename_rename(studies):
+    import subprocess
+    d = studies / "studies/01-gru-alpha/analysis/reports"
+    subprocess.run(["git", "-C", str(studies), "mv", str(d / "r1-curve.md"), str(d / "r1-scaling.md")], check=True)
+    (d / "INDEX.md").write_text("[r1](r1-scaling.md)\n")
+    _commit(studies, "rename r1")
+    rep = d / "r1-scaling.md"
+    rep.write_text(rep.read_text().replace("0.7154", "0.7160"))
+    _commit(studies, "update r1")
+    r = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]
+    assert [v["subject"] for v in r["history"]] == ["update r1", "init"]
+
+
+def test_history_limit_counts_versions_not_commits(studies, monkeypatch):
+    import bfm_atlas.catalog as cat_mod
+    monkeypatch.setattr(cat_mod, "HISTORY_LIMIT", 2)
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("0.7154", "0.7160"))
+    _commit(studies, "v2")
+    for i in range(5):                                   # prose-only commits
+        rep.write_text(rep.read_text() + f"\nnote {i}\n")
+        _commit(studies, f"prose {i}")
+    rep.write_text(rep.read_text().replace("0.7160", "0.7170"))
+    _commit(studies, "v3")
+    h = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["history"]
+    assert [v["subject"] for v in h] == ["v3", "v2"]      # v2 attributed to its own commit
+
+
+def test_root_scalar_pointer_is_empty(tmp_path):
+    from bfm_atlas.catalog import _leaves
+    assert _leaves(0.7174) == [("", 0.7174)]

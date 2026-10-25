@@ -473,28 +473,30 @@ HISTORY_LIMIT = 20
 def _report_history(root: Path, rel: str) -> list[dict]:
     """Versions of a report's result blocks, newest first, one entry per commit that changed them.
 
-    Built from `git log --follow`, so it needs a full-history checkout; a shallow clone just
-    yields fewer entries.
+    Built from `git log --follow --name-status`, which names the path each commit knew the file
+    by, so versions before a rename (even one that changes the basename) are read. Prose-only
+    commits are folded into the version they did not change, and the limit counts versions, so
+    each stored SHA is the commit that introduced that version. A shallow clone yields fewer.
     """
-    log = _git(root, "log", "--follow", "--format=%H%x1f%cI%x1f%s", "-n", str(HISTORY_LIMIT * 3), "--", rel)
+    log = _git(root, "log", "--follow", "--name-status", "--format=%x1e%H%x1f%cI%x1f%s", "--", rel)
     out: list[dict] = []
-    path = rel
-    for line in (log or "").splitlines():
-        sha, date, subject = line.split("\x1f", 2)
+    # _git() strips its output, and Python counts \x1e as whitespace, so the first separator may
+    # be gone: split and drop empty chunks rather than skipping the first
+    for chunk in (c for c in (log or "").split("\x1e") if c.strip()):
+        lines = [x for x in chunk.splitlines() if x.strip()]
+        sha, date, subject = lines[0].split("\x1f", 2)
+        # "M\tpath", "A\tpath" or "R100\told\tnew": the last field is the path at this commit
+        path = lines[1].split("\t")[-1] if len(lines) > 1 else rel
         text = _git(root, "show", f"{sha}:{path}")
-        if text is None:     # renamed: find the path this commit knew it by
-            names = _git(root, "show", "--name-only", "--format=", "-M", sha) or ""
-            path = next((n for n in names.splitlines() if n.endswith(Path(rel).name)), path)
-            text = _git(root, "show", f"{sha}:{path}")
         if text is None:
             continue
         blocks = {n: b.strip("\n") for n, b in RESULT_BLOCK.findall(text)}
         if out and out[-1]["blocks"] == blocks:
             out[-1].update(sha=sha, date=date, subject=subject)   # keep the commit that introduced it
             continue
-        out.append({"sha": sha, "date": date, "subject": subject, "blocks": blocks})
-        if len(out) >= HISTORY_LIMIT:
+        if len(out) == HISTORY_LIMIT:      # the oldest kept version is now complete
             break
+        out.append({"sha": sha, "date": date, "subject": subject, "blocks": blocks})
     return out
 
 
@@ -514,7 +516,7 @@ def _leaves(obj: Any, pointer: str = "") -> list[tuple[str, float]]:
     if isinstance(obj, bool):
         return []
     if isinstance(obj, (int, float)):
-        return [(pointer or "/", float(obj))]
+        return [(pointer, float(obj))]          # "" is the JSON Pointer to the document root
     if isinstance(obj, dict):
         return [x for k, v in obj.items() if k != "_meta"
                 for x in _leaves(v, f"{pointer}/{str(k).replace('~', '~0').replace('/', '~1')}")]
