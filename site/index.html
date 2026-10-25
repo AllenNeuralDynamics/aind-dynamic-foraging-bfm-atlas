@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BFM Studies Atlas</title>
+<meta name="description" content="Provenance-traced browser for the dynamic-foraging-bfm studies: every report and number traced to its producer, frozen inputs, W&B group, launch record and commits.">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#/">BFM Studies Atlas</a>
+  <nav>
+    <a href="#/">Studies</a>
+    <a href="#/timeline" data-view="timeline" hidden>Timeline</a>
+    <a href="#/graph" data-view="graph" hidden>Dependencies</a>
+    <a href="#/leaderboard" data-view="leaderboard" hidden>Leaderboard</a>
+    <a href="#/health">Health</a>
+  </nav>
+  <span class="pin" id="pin"></span>
+</header>
+<main id="main"><p class="muted">Loading catalog…</p></main>
+<aside id="drawer" class="drawer" role="dialog" aria-modal="false" aria-label="Provenance" tabindex="-1" hidden>
+  <button class="drawer-close" type="button" aria-label="Close provenance">×</button>
+  <div id="drawer-body"></div>
+</aside>
+<script src="app.js"></script>
+</body>
+</html>

@@ -99,6 +99,10 @@ def test_relative_studies_path(studies, monkeypatch):
     assert build_catalog(studies.name)["health"]["ran"]
 
 
+def test_cli_copies_figures(studies, tmp_path):
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    assert (tmp_path / "data" / "files" / "studies/01-gru-alpha/analysis/fig.png").read_text() == "png"
 def test_dirty_checkout_is_refused_unless_allowed(studies):
     (studies / "studies/01-gru-alpha/analysis/reports/r2-new.md").write_text("# r2\n")
     with pytest.raises(DirtyCheckoutError):
@@ -211,3 +215,36 @@ def test_group_url_from_record_manifests(studies):
     _commit(studies)
     url = build_catalog(studies)["wandb_groups"]["base@20261102-000000"]["url"]
     assert url == "https://wandb.ai/AIND-disRNN/test/groups/base@20261102-000000"
+
+
+def test_cli_copies_readme_and_notes_images(studies, tmp_path):
+    (studies / "studies/01-gru-alpha/schematic.png").write_text("s")
+    readme = studies / "studies/01-gru-alpha/README.md"
+    readme.write_text(readme.read_text() + "\n![schematic](schematic.png)\n")
+    notes = studies / "studies/01-gru-alpha/variants/base/notes.md"
+    (studies / "studies/01-gru-alpha/variants/base/n.png").write_text("n")
+    notes.write_text("# base\n![n](n.png)\n")
+    _commit(studies)
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    files = tmp_path / "data" / "files" / "studies/01-gru-alpha"
+    assert (files / "schematic.png").exists() and (files / "variants/base/n.png").exists()
+
+
+def test_pre_split_dispatcher_sha_is_not_relabelled(studies):
+    a = studies / "studies/02-disrnn-beta/analysis/presplit.json"
+    a.write_text(json.dumps({"_meta": {"produced_by": "x.py", "dispatcher_git_sha": "9" * 40}}))
+    _commit(studies)
+    m = next(x for x in by_id(build_catalog(studies), "02-disrnn-beta")["artifacts"]
+             if x["path"].endswith("presplit.json"))["meta"]
+    assert m["studies_git_sha"] is None and m["dispatcher_git_sha"] == "9" * 40
+
+
+def test_titled_images_are_found_and_copied(studies, tmp_path):
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    (studies / "studies/01-gru-alpha/analysis/titled.png").write_text("t")
+    rep.write_text(rep.read_text() + '\n![t](../titled.png "A title")\n')
+    _commit(studies)
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    assert (tmp_path / "data/files/studies/01-gru-alpha/analysis/titled.png").exists()

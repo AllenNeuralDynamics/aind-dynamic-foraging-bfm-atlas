@@ -41,7 +41,8 @@ FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 GROUP = re.compile(r"\b([A-Za-z0-9][\w.-]*@\d{8}-\d{6}(?:-[A-Za-z0-9]+)*)\b")
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 RESULT_BLOCK = re.compile(r"<!-- BEGIN ([\w.-]+) -->\n?(.*?)<!-- END \1 -->", re.S)
-MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+# ![alt](src) or ![alt](<src> "optional title")
+MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(<?([^)\s>]+)>?(?:\s+[\"'(][^)]*)?\)")
 MD_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s#]+)(?:#[^)]*)?\)")
 WANDB_PROJECT = re.compile(r"https://wandb\.ai/([\w.-]+)/([\w.-]+)")
 H1 = re.compile(r"^#\s+(.+?)\s*$", re.M)
@@ -319,7 +320,10 @@ def _artifact(path: Path, root: Path) -> dict:
             else None),
         "produced_by": meta.get("produced_by") or meta.get("producer"),
         "produced_at_pt": meta.get("produced_at_pt") or meta.get("recorded_at_pt"),
-        "studies_git_sha": meta.get("studies_git_sha") or meta.get("dispatcher_git_sha"),
+        # Producers before the studies/dispatcher split recorded their checkout as
+        # dispatcher_git_sha: keep each SHA with its own repository, never relabel it.
+        "studies_git_sha": meta.get("studies_git_sha"),
+        "dispatcher_git_sha": meta.get("dispatcher_git_sha"),
         "wrapper_git_sha": meta.get("wrapper_git_sha"),
         "wandb_groups": groups,
         "source_git_shas": {repo: meta[f"source_{repo}_git_shas"] for repo in REPOS
@@ -612,3 +616,38 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         "dependencies": dependencies,
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},
     }
+
+
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+
+
+def copy_figures(catalog: dict, studies_root: Path | str, dest: Path | str) -> int:
+    """Copy every figure a report embeds (and every image a v2 producer declares) to dest/<path>.
+
+    The site serves them from data/files/<repo path>, so report markdown renders unchanged.
+    """
+    import shutil
+
+    root, dest = Path(studies_root).resolve(), Path(dest)
+    ok = _Tracked(root)
+    paths = {f["path"] for s in catalog["studies"] for r in s["reports"] for f in r["figures"] if f["exists"]}
+    # the app also renders study READMEs and variant notes, so their images ship too
+    docs = [(f"{s['path']}/README.md", s["readme"]) for s in catalog["studies"]]
+    docs += [(f"{v['path']}/notes.md", v["notes"]) for s in catalog["studies"] for v in s["variants"] if v["notes"]]
+    for doc, text in docs:
+        for _, src in MD_IMAGE.findall(text or ""):
+            if "://" not in src:
+                try:
+                    paths.add(((root / doc).parent / src).resolve().relative_to(root).as_posix())
+                except ValueError:
+                    pass
+    paths |= {o["path"] for s in catalog["studies"] for a in s["artifacts"] if a["meta"]
+              for o in a["meta"]["outputs"] if o["path"].lower().endswith(IMAGE_SUFFIXES)}
+    n = 0
+    for p in sorted(paths):
+        src = root / p
+        if ok(src):
+            (dest / p).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest / p)
+            n += 1
+    return n
