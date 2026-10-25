@@ -15,7 +15,6 @@
   <nav>
     <a href="#/">Studies</a>
     <a href="#/timeline" data-view="timeline" hidden>Timeline</a>
-    <a href="#/graph" data-view="graph" hidden>Dependencies</a>
     <a href="#/health">Health</a>
   </nav>
   <span class="pin" id="pin"></span>
@@ -25,8 +24,9 @@
   <button class="drawer-close" type="button" aria-label="Close provenance">×</button>
   <div id="drawer-body"></div>
 </aside>
-<!-- views.js first: its atlas:ready listener must exist before app.js can fire the event -->
+<!-- views.js and map.js first: their atlas:ready listeners must exist before app.js fires the event -->
 <script src="views.js"></script>
+<script src="map.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

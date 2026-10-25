@@ -119,3 +119,95 @@ svg .axis { stroke: var(--line); }
   .prose { padding: 4px 12px 12px; }
   .cards { grid-template-columns: 1fr; }
 }
+
+/* ---------------- study map (map.js) */
+.map-tools { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 8px; }
+.layer, .export { font: 600 0.8rem var(--sans); border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  border-radius: 999px; padding: 4px 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.layer[aria-pressed="false"] { opacity: 0.5; }
+.layer[aria-pressed="false"] .swatch { background: var(--line) !important; }
+.layer .swatch { width: 16px; height: 3px; border-radius: 2px; }
+.layer-motivation .swatch { background: var(--accent); }
+.layer-upstream .swatch { background: var(--muted); }
+.layer-corrects .swatch { background: var(--error); }
+.layer-supersedes .swatch { background: var(--warn); }
+.map-tools .export { margin-left: auto; }
+.layer:focus-visible, .export:focus-visible, .more:focus-visible, .panel-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.map-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+#study-map { display: block; width: 100%; min-width: 900px; height: auto; }
+#study-map text { font-family: var(--sans); }
+.lane { fill: var(--block); opacity: 0.55; }
+.lane-label { fill: var(--muted); font-size: 13px; font-weight: 600; }
+.node { cursor: pointer; outline: none; }
+.node circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.node.st-active circle { fill: var(--accent-soft); }
+.node.st-planned circle { stroke-dasharray: 4 3; }
+.node.st-superseded { opacity: 0.45; }
+.node.st-unknown circle { stroke: var(--muted); }
+.node .nn { font-weight: 700; font-size: 14px; fill: var(--text); }
+.node .lbl { font-size: 11.5px; fill: var(--muted); }
+.node:focus-visible circle, .node.focused circle { stroke-width: 4; }
+.node.issue rect { fill: var(--surface); stroke: var(--muted); }
+.edge .line { fill: none; }
+.edge .hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; }
+.e-motivation .line { stroke: var(--accent); stroke-width: 2.2; }
+.e-upstream .line { stroke: var(--muted); stroke-width: 1.3; }
+.e-corrects .line { stroke: var(--error); stroke-width: 2; stroke-dasharray: 6 4; }
+.e-supersedes .line { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 2 4; }
+.mk-motivation { fill: var(--accent); } .mk-upstream { fill: var(--muted); }
+.mk-corrects { fill: var(--error); } .mk-supersedes { fill: var(--warn); }
+.edge.off { display: none; }
+.lighting .edge.off.lit { display: inline; }
+.lighting .edge:not(.lit) { opacity: 0.12; }
+.lighting .node:not(.lit):not(.nbr) { opacity: 0.35; }
+.edge.lit .line { stroke-width: 3; }
+.map-panel { margin-top: 10px; }
+.panel-head { display: flex; gap: 8px; align-items: center; }
+.panel-close { margin-left: auto; font-size: 1.2rem; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.rels { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 24px; }
+.rel { min-width: 0; }
+.rel .k { color: var(--muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; }
+.rel ul { margin: 2px 0 8px; padding-left: 18px; }
+
+/* ---------------- tooltips (map and lineage) */
+.tip-host { position: relative; }
+.tip { position: absolute; z-index: 6; width: 290px; max-width: calc(100% - 8px); background: var(--text); color: var(--surface);
+  border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; line-height: 1.4; pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+.tip ul { margin: 4px 0 0; padding-left: 16px; }
+.tip .tip-v { opacity: 0.8; margin-top: 4px; }
+
+/* ---------------- lineage (map.js) */
+.lineage { margin: 10px 0 4px; }
+.lin-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.lin-head .k { color: var(--muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; }
+.lin-head .export { margin-left: auto; }
+.lin { list-style: none; margin: 0; padding: 0; position: relative; }
+.lin::before { content: ""; position: absolute; left: 7px; top: 12px; bottom: 12px; width: 2px; background: var(--block-line); }
+.slot { position: relative; display: flex; gap: 12px; padding: 5px 0; outline: none; }
+.slot .dot { flex: 0 0 16px; height: 16px; border-radius: 50%; margin-top: 2px; border: 3px solid var(--accent);
+  background: var(--accent); z-index: 1; }
+.s-partial .dot { background: linear-gradient(90deg, var(--accent) 50%, var(--surface) 50%); }
+.s-gap .dot { background: var(--surface); border-color: var(--muted); border-style: dashed; }
+.s-decision .dot { border-color: var(--error); background: var(--error-soft); }
+.slot:focus-visible .slot-name { text-decoration: underline; }
+.slot-body { min-width: 0; }
+.slot-name { font-weight: 600; font-size: 0.88rem; }
+.slot-items { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 2px; }
+.lchip { font: 0.78rem var(--mono); background: var(--block); border: 1px solid var(--block-line); border-radius: 5px;
+  padding: 1px 6px; overflow-wrap: anywhere; color: var(--text); }
+a.lchip { color: var(--accent); }
+.lchip .sub { color: var(--muted); font-family: var(--sans); }
+.lchip.xref { border-style: dashed; }
+.more { font-size: 0.78rem; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; }
+.gap-text { font-size: 0.8rem; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.lin-svg .lin-title { font: 600 16px var(--sans); fill: var(--text); }
+.lin-svg .lin-rail { stroke: var(--block-line); stroke-width: 2; }
+.lin-svg .lin-dot { stroke-width: 3; }
+.lin-svg .d-ok { fill: var(--accent); stroke: var(--accent); }
+.lin-svg .d-partial { fill: var(--accent-soft); stroke: var(--accent); }
+.lin-svg .d-gap { fill: var(--surface); stroke: var(--muted); stroke-dasharray: 3 2; }
+.lin-svg .d-decision { fill: var(--error-soft); stroke: var(--error); }
+.lin-svg .lin-name { font: 600 14px var(--sans); fill: var(--text); }
+.lin-svg .lin-items { font: 12px var(--mono); fill: var(--muted); }

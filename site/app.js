@@ -165,8 +165,12 @@ function viewStudies() {
       <div class="stat"><b><a href="#/health">${S.healthRan ? `${err} / ${warn}` : "—"}</a></b>
         <span>provenance errors / warnings</span></div>
     </div>
+    <h2>How the studies connect</h2>
+    <section class="map" id="map" aria-label="Study map"></section>
+    <h2>All studies</h2>
     <input class="filter" id="filter" placeholder="Filter studies…" aria-label="Filter studies">
     <div class="cards" id="cards"></div>`;
+  if (window.Atlas?.drawMap) window.Atlas.drawMap(document.getElementById("map"));
   const draw = (q) => {
     q = q.toLowerCase();
     document.getElementById("cards").innerHTML = c.studies
@@ -331,10 +335,13 @@ function openDrawer(r, block, extra = "") {
     <div class="k muted">Provenance</div>
     <h2 style="margin-top:0">${esc(r._study)} ${esc(r.id)} · <code>${esc(block)}</code></h2>
     ${extra}
+    <div id="drawer-lineage"></div>
+    <div class="k muted" style="margin-top:14px">Details</div>
     ${how === "inputs" && list.length ? `<p class="muted">No producer declares this block in <code>_meta.outputs</code> (a v2 producer would);
       showing the report's JSON inputs instead.</p>` : ""}
     ${list.length ? list.map(artifactChain).join("<hr>") : `<div class="empty">No analysis JSON is linked to this block:
       the report's inputs name no JSON artifact and no producer declares it.</div>`}`;
+  if (window.Atlas?.mountLineage) window.Atlas.mountLineage(document.getElementById("drawer-lineage"), r, block);
   const drawer = document.getElementById("drawer");
   if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
   drawer.hidden = false;
@@ -492,7 +499,7 @@ fetch("data/catalog.json")
     document.getElementById("pin").innerHTML =
       `studies ${commitLink("studies", m.studies_git_sha)} · built ${esc((m.built_at_pt || "").slice(0, 16).replace("T", " "))} PT`;
     window.Atlas = Object.assign(window.Atlas || {}, { S, VIEWS, esc, chip, srcLink, commitLink, short, openDrawer,
-      renderMarkdown, findingsFor, statusChip, route, STUDIES_REPO });
+      renderMarkdown, findingsFor, statusChip, route, STUDIES_REPO, producersFor, artifactChain });
     document.dispatchEvent(new Event("atlas:ready"));
     syncNav();
     window.addEventListener("hashchange", route);
