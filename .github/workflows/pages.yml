@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 13 * * *"   # 06:17 PT
+    - cron: "17 13 * * *"   # 13:17 UTC = 06:17 PDT / 05:17 PST
   workflow_dispatch:
 
 permissions:
