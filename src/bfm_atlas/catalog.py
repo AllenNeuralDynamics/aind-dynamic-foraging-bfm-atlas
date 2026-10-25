@@ -183,10 +183,11 @@ def _launch_record(path: Path, root: Path, variant: str) -> dict:
 
 
 # --- reports ------------------------------------------------------------------------------------
-def _resolve(study_dir: Path, root: Path, item: str) -> tuple[str, bool]:
+def _resolve(study_dir: Path, root: Path, item: str, ok: "_Tracked") -> tuple[str, bool]:
     """A frontmatter path: repo-relative when it starts with studies/, else study-relative."""
     target = (root / item) if item.startswith("studies/") else (study_dir / item)
-    if target.exists():
+    if ok(target) or (target.is_dir() and ok.paths is not None
+                      and any(x.startswith(_rel(target, root) + "/") for x in ok.paths)):
         return _rel(target, root), True
     return (item if item.startswith("studies/") else f"{_rel(study_dir, root)}/{item}"), False
 
@@ -209,7 +210,7 @@ def _study_of(path: str, study_ids: set[str]) -> str | None:
     return parts[1] if len(parts) >= 2 and parts[0] == "studies" and parts[1] in study_ids else None
 
 
-def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str]) -> dict:
+def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str], ok: "_Tracked") -> dict:
     text = path.read_text(errors="replace")
     fm, body, fm_error = _frontmatter(text)
     f = fm or {}
@@ -221,8 +222,8 @@ def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str]) -> dic
                       enumerate(raw_inputs) if isinstance(raw_inputs, list) else []):
         for item in val if isinstance(val, list) else [val]:
             if isinstance(item, str):
-                p, ok = _resolve(study_dir, root, item)
-                inputs.append({"role": str(role), "path": p, "exists": ok})
+                p, exists = _resolve(study_dir, root, item, ok)
+                inputs.append({"role": str(role), "path": p, "exists": exists})
     figures = []
     for alt, src in MD_IMAGE.findall(body):
         if "://" in src:
@@ -230,7 +231,7 @@ def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str]) -> dic
         target = (path.parent / src).resolve()
         try:
             figures.append({"alt": alt, "src": src, "path": target.relative_to(root.resolve()).as_posix(),
-                            "exists": target.exists()})
+                            "exists": ok(target)})
         except ValueError:
             pass
     links = _link_targets(body, path, root)
@@ -318,10 +319,28 @@ def _cover(fm: dict | None, readme: str) -> dict:
             "wandb": {"entity": proj.group(1), "project": proj.group(2)} if proj else None}
 
 
-def _study(study_dir: Path, root: Path, study_ids: set[str]) -> dict:
+class _Tracked:
+    """Which files the catalog may read: those git tracks, or every file when there is no git.
+
+    An ignored file never shows up in `git status`, so the clean-checkout guard cannot see it;
+    reading only tracked paths keeps ignored drafts out of a catalog labelled with a commit.
+    """
+
+    def __init__(self, root: Path):
+        self.root = root
+        out = _git(root, "ls-files")
+        self.paths = set(out.splitlines()) if out is not None else None
+
+    def __call__(self, p: Path) -> bool:
+        if not p.is_file():
+            return False
+        return self.paths is None or _rel(p, self.root) in self.paths
+
+
+def _study(study_dir: Path, root: Path, study_ids: set[str], ok: _Tracked) -> dict:
     m = STUDY_DIR.match(study_dir.name)
     readme_path = study_dir / "README.md"
-    text = readme_path.read_text(errors="replace") if readme_path.exists() else ""
+    text = readme_path.read_text(errors="replace") if ok(readme_path) else ""
     fm, body, _ = _frontmatter(text)
     h1 = H1.search(body)
 
@@ -329,27 +348,25 @@ def _study(study_dir: Path, root: Path, study_ids: set[str]) -> dict:
     for vdir in sorted(p for p in (study_dir / "variants").glob("*") if p.is_dir() and p.name != "__pycache__"):
         notes = vdir / "notes.md"
         files = sorted(p for d in vdir.glob("launch_record*") if d.is_dir() for p in d.rglob("*")
-                       if p.is_file() and p.suffix in (".json", ".yaml", ".yml"))
+                       if ok(p) and p.suffix in (".json", ".yaml", ".yml"))
         records = [_launch_record(p, root, vdir.name) for p in files]
         own = sorted({g for r in records if r["format"] == "json" for g in r["wandb_groups"]
                       if g.split("@")[0] == vdir.name})
         variants.append({
             "name": vdir.name,
             "path": _rel(vdir, root),
-            "notes": notes.read_text(errors="replace") if notes.exists() else None,
-            "manifests": sorted(_rel(p, root) for p in vdir.glob("*.y*ml")),
+            "notes": notes.read_text(errors="replace") if ok(notes) else None,
+            "manifests": sorted(_rel(p, root) for p in vdir.glob("*.y*ml") if ok(p)),
             "launch_records": records,
             "wandb_groups": own or sorted({g for r in records for g in r["wandb_groups"]}),
         })
 
     rdir = study_dir / "analysis" / "reports"
-    reports = [_report(p, study_dir, root, study_ids) for p in sorted(rdir.glob("*.md"), key=_report_order)
-               if p.name != "INDEX.md"] if rdir.is_dir() else []
+    reports = [_report(p, study_dir, root, study_ids, ok) for p in sorted(rdir.glob("*.md"), key=_report_order)
+               if p.name != "INDEX.md" and ok(p)] if rdir.is_dir() else []
     index = rdir / "INDEX.md"
     analysis = study_dir / "analysis"
-    tracked = set((_git(root, "ls-files", "--", _rel(analysis, root)) or "").splitlines()) if analysis.is_dir() else set()
-    artifacts = [_artifact(p, root) for p in sorted(analysis.rglob("*.json"))
-                 if _rel(p, root) in tracked] if analysis.is_dir() else []
+    artifacts = [_artifact(p, root) for p in sorted(analysis.rglob("*.json")) if ok(p)] if analysis.is_dir() else []
 
     return {
         "id": study_dir.name,
@@ -360,8 +377,8 @@ def _study(study_dir: Path, root: Path, study_ids: set[str]) -> dict:
         "title": h1.group(1) if h1 else study_dir.name,
         "cover": _cover(fm, body),
         "readme": body,
-        "reports_index": index.read_text(errors="replace") if index.exists() else None,
-        "makefile_targets": _makefile_targets(study_dir / "Makefile"),
+        "reports_index": index.read_text(errors="replace") if ok(index) else None,
+        "makefile_targets": _makefile_targets(study_dir / "Makefile") if ok(study_dir / "Makefile") else [],
         "variants": variants,
         "reports": reports,
         "artifacts": artifacts,
@@ -414,9 +431,11 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         if status:
             raise DirtyCheckoutError(f"{root} has uncommitted or untracked files; commit or clean them "
                                      f"(or pass allow_dirty):\n{status[:2000]}")
-    dirs = sorted(p for p in (root / "studies").iterdir() if p.is_dir() and STUDY_DIR.match(p.name))
+    ok = _Tracked(root)
+    dirs = sorted(p for p in (root / "studies").iterdir() if p.is_dir() and STUDY_DIR.match(p.name)
+                  and (ok.paths is None or any(x.startswith(f"studies/{p.name}/") for x in ok.paths)))
     ids = {p.name for p in dirs}
-    studies = [_study(p, root, ids) for p in dirs]
+    studies = [_study(p, root, ids, ok) for p in dirs]
     wandb = {s["id"]: s["cover"]["wandb"] for s in studies}
 
     groups: dict[str, dict] = {}
