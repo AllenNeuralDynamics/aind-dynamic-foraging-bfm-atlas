@@ -110,3 +110,17 @@ def test_dirty_checkout_is_refused_unless_allowed(studies):
 def test_checker_verdict_is_kept_whole(studies):
     h = build_catalog(studies)["health"]
     assert h["fixed"] == [] and h["baseline_grown"] == [] and h["exit_code"] == 0
+
+
+def test_ignored_files_never_enter_the_catalog(studies):
+    (studies / ".gitignore").write_text("drafts/\n*.local.md\n")
+    import subprocess
+    subprocess.run(["git", "-C", str(studies), "add", ".gitignore"], check=True)
+    subprocess.run(["git", "-C", str(studies), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "ignore"], check=True)
+    (studies / "studies/01-gru-alpha/analysis/reports/r9-draft.local.md").write_text("# draft\n")
+    (studies / "studies/01-gru-alpha/variants/base/launch_record/drafts").mkdir()
+    (studies / "studies/01-gru-alpha/variants/base/launch_record/drafts/x.json").write_text("{}")
+    cat = build_catalog(studies)          # clean: ignored files do not show in git status
+    s = by_id(cat, "01-gru-alpha")
+    assert [r["path"] for r in s["reports"]] == ["studies/01-gru-alpha/analysis/reports/r1-curve.md"]
+    assert not any("drafts" in r["path"] for r in s["variants"][0]["launch_records"])
