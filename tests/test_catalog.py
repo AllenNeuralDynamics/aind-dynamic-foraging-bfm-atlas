@@ -238,3 +238,13 @@ def test_pre_split_dispatcher_sha_is_not_relabelled(studies):
     m = next(x for x in by_id(build_catalog(studies), "02-disrnn-beta")["artifacts"]
              if x["path"].endswith("presplit.json"))["meta"]
     assert m["studies_git_sha"] is None and m["dispatcher_git_sha"] == "9" * 40
+
+
+def test_titled_images_are_found_and_copied(studies, tmp_path):
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    (studies / "studies/01-gru-alpha/analysis/titled.png").write_text("t")
+    rep.write_text(rep.read_text() + '\n![t](../titled.png "A title")\n')
+    _commit(studies)
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    assert (tmp_path / "data/files/studies/01-gru-alpha/analysis/titled.png").exists()

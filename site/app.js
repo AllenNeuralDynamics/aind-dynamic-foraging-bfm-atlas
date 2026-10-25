@@ -86,10 +86,15 @@ function renderMarkdown(md, basePath) {
       continue;
     }
     if (/^[a-z]+:/.test(href)) continue;
-    const target = resolvePath(basePath, href.split("#")[0]);
+    const [file, fragment] = href.split("#");
+    const target = resolvePath(basePath, file);
     const route = routeForPath(target);
-    if (route) a.setAttribute("href", route);
-    else { a.setAttribute("href", blob(target)); a.target = "_blank"; a.rel = "noopener"; }
+    // a heading fragment rides along as "?<id>" in the hash route and is scrolled to after render
+    if (route) a.setAttribute("href", fragment ? `${route}?${fragment}` : route);
+    else {
+      a.setAttribute("href", blob(target) + (fragment ? `#${fragment}` : ""));
+      a.target = "_blank"; a.rel = "noopener";
+    }
   }
   return div;
 }
@@ -436,9 +441,15 @@ function route() {
 
 function routeInner() {
   document.getElementById("drawer").hidden = true;
-  const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
-  const [view, a, b] = parts;
+  const [path, anchor] = location.hash.replace(/^#\/?/, "").split("?");
+  const parts = path.split("/").map(decodeURIComponent);
   window.scrollTo(0, 0);
+  renderRoute(parts);
+  if (anchor) document.getElementById(decodeURIComponent(anchor))?.scrollIntoView({ block: "start" });
+}
+
+function renderRoute(parts) {
+  const [view, a, b] = parts;
   if (!view) return viewStudies();
   if (view === "study") return viewStudy(a);
   if (view === "report") return viewReport(a, b);
