@@ -489,7 +489,8 @@ document.addEventListener("atlas:ready", () => {
           return sha ? { text: base(m), sub: `at ${short(sha)}`, path: m, link: srcLink(m, base(m), sha) }
                      : { text: base(m), sub: "current file", path: m, link: srcLink(m, base(m)) }; })
         : (variantOf(xs[0])?.manifests || []).map((m) => ({ text: base(m), sub: "current file", path: m, link: srcLink(m, base(m)) }));
-      return { key, items: its };
+      // the variant's directory too, so its checker findings attach even when no manifest is found
+      return { key, items: its, dir: variantOf(xs[0]) ? `${variantOf(xs[0]).path}/` : null };
     });
     const expItems = expGroups.flatMap((g) => g.items);
     const nVariants = expGroups.length;
@@ -498,7 +499,7 @@ document.addEventListener("atlas:ready", () => {
         : snapshotted === nVariants ? "Manifests as submitted, copied into the launch record."
         : "Some launches did not snapshot their manifests; those show the variant's files as they are now, which may have changed since.",
       { count: expItems.length > 1 ? `${plural(expItems.length, "manifest")}${nVariants > 1 ? ` in ${nVariants} variants` : ""}` : null,
-        paths: expItems.map((i) => i.path),
+        paths: [...expItems.map((i) => i.path), ...expGroups.map((g) => g.dir).filter(Boolean)],
         detail: expGroups.map((g) => sub(`<span class="mono">${esc(g.key)}</span>`, g.items.length
           ? `<ul class="lin-list">${g.items.map((it) => `<li>${itemHtml(it)} <span class="muted">${esc(inStudy(it.path))}</span></li>`).join("")}</ul>`
           : `<span class="muted">no manifests recorded or found</span>`)).join("") });
@@ -620,7 +621,7 @@ document.addEventListener("atlas:ready", () => {
   }
   const badges = (fs) => ["error", "warn"].map((lvl) => { const n = fs.filter((f) => f.level === lvl).length;
     return n ? `<span class="badge ${lvl}" title="${plural(n, `checker ${lvl === "warn" ? "warning" : lvl}`)}">${n}<span class="sr">
-      ${plural(n, lvl === "warn" ? "warning" : lvl)}</span></span>` : ""; }).join("");
+      ${lvl === "warn" ? "warning" : lvl}${n === 1 ? "" : "s"}</span></span>` : ""; }).join("");
   const findingsHtml = (fs) => (fs.length ? `<div class="k">Checker findings</div><ul class="findings">${fs.map((f) =>
     `<li><span class="lvl-${esc(f.level)}">${esc(f.check)}</span> ${srcLink(f.path, f.path.replace(/^studies\//, ""))}: ${esc(f.message)}
       ${f.fix ? `<div class="muted">Fix: ${esc(f.fix)}</div>` : ""}</li>`).join("")}</ul>` : "");

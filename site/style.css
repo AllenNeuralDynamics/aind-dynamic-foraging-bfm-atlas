@@ -182,7 +182,6 @@ svg .axis { stroke: var(--line); }
 .lin-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 6px; }
 .lin-head .k { color: var(--muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; }
 .lin-head .lin-all { margin-left: auto; }
-.lin-head .export:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .lin { list-style: none; margin: 0; padding: 0; position: relative; }
 .lin::before { content: ""; position: absolute; left: 7px; top: 14px; bottom: 14px; width: 2px; background: var(--block-line); }
 .slot { position: relative; min-width: 0; }
