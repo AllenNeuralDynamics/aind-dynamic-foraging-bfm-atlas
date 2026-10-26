@@ -329,18 +329,13 @@ function producersFor(r, block) {
 }
 
 function openDrawer(r, block, extra = "") {
-  const { list, how } = producersFor(r, block);
+  // each lineage step opens to its own details (map.js), so the drawer carries no separate list
   const body = document.getElementById("drawer-body");
   body.innerHTML = `
     <div class="k muted">Provenance</div>
     <h2 style="margin-top:0">${esc(r._study)} ${esc(r.id)} · <code>${esc(block)}</code></h2>
     ${extra}
-    <div id="drawer-lineage"></div>
-    <div class="k muted" style="margin-top:14px">Details</div>
-    ${how === "inputs" && list.length ? `<p class="muted">No producer declares this block in <code>_meta.outputs</code> (a v2 producer would);
-      showing the report's JSON inputs instead.</p>` : ""}
-    ${list.length ? list.map(artifactChain).join("<hr>") : `<div class="empty">No analysis JSON is linked to this block:
-      the report's inputs name no JSON artifact and no producer declares it.</div>`}`;
+    <div id="drawer-lineage"></div>`;
   if (window.Atlas?.mountLineage) window.Atlas.mountLineage(document.getElementById("drawer-lineage"), r, block);
   const drawer = document.getElementById("drawer");
   if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
@@ -354,37 +349,6 @@ function closeDrawer() {
   drawer.hidden = true;
   if (S.drawerOpener?.isConnected) S.drawerOpener.focus();
   S.drawerOpener = null;
-}
-
-function artifactChain(a) {
-  const m = a.meta;
-  if (!m) return `<p>${srcLink(a.path)} has no <code>_meta</code> block, so the chain stops here.</p>`;
-  const groups = m.wandb_groups.map((g) => S.cat.wandb_groups[g] || { group: g, launch_records: [], url: null });
-  // Pin source links to the producer's own studies revision; a pre-split producer recorded only
-  // its dispatcher checkout, which is a different repository, so those links stay on the catalog commit.
-  const at = m.studies_git_sha || null;
-  const revision = m.studies_git_sha ? `at studies ${commitLink("studies", m.studies_git_sha)}`
-    : m.dispatcher_git_sha ? `at dispatcher ${commitLink("dispatcher", m.dispatcher_git_sha)}
-        <span class="muted">(pre-split checkout; source links show the catalog's commit)</span>`
-    : `<span class="muted">at an unrecorded revision (source links show the catalog's commit)</span>`;
-  const digestList = (xs) => xs.length ? `<ul>${xs.map((d) => `<li>${srcLink(d.path, d.path.replace(/^studies\/[^/]+\//, ""), at)}
-      <span class="muted mono">${esc(short(d.sha256))}</span></li>`).join("")}</ul>` : `<span class="muted">not recorded (_meta v${m.schema_version})</span>`;
-  return `<ol class="chain">
-    <li><div class="k">${m.kind === "freeze" ? "Freeze" : "Analysis artifact"}</div>${srcLink(a.path)}
-      <span class="muted mono">sha256 ${esc(short(a.sha256))}</span></li>
-    <li><div class="k">Producer</div>${m.produced_by ? srcLink(`${S.study[a._study].path}/${m.produced_by}`, m.produced_by, at) : "—"}
-      ${revision} <span class="muted">${esc(m.produced_at_pt || "")}</span>
-      ${m.schema_version === 2 ? `<div class="k" style="margin-top:6px">Code</div>${digestList(m.code)}
-        <div class="k">Inputs</div>${digestList(m.inputs)}` : `<div class="muted">_meta v1: no code or input digests.</div>`}
-      ${m.sources.length ? `<div class="k">Sources</div><ul>${m.sources.map((x) => `<li>${esc(x.type)} <code>${esc(x.id)}</code>${x.step != null ? ` step ${esc(x.step)}` : ""}</li>`).join("")}</ul>` : ""}
-      ${m.provenance_findings.length ? `<div class="k">Producer's own findings</div><ul>${m.provenance_findings.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</li>
-    ${groups.length ? groups.map((g) => `<li><div class="k">W&amp;B group</div>
-      <a class="mono" href="#/group/${encodeURIComponent(g.group)}">${esc(g.group)}</a>
-      ${g.url ? ` · <a href="${esc(g.url)}" target="_blank" rel="noopener">open in W&amp;B</a>` : ""}
-      ${g.launch_records.length ? g.launch_records.map((p) => recordSummary(S.recordByPath[p], p)).join("")
-        : `<div class="lvl-warn">No launch record names this group.</div>`}</li>`).join("")
-      : `<li><div class="k">W&amp;B</div><span class="muted">reads no W&amp;B group</span></li>`}
-  </ol>`;
 }
 
 function recordSummary(r, path) {
@@ -499,7 +463,7 @@ fetch("data/catalog.json")
     document.getElementById("pin").innerHTML =
       `studies ${commitLink("studies", m.studies_git_sha)} · built ${esc((m.built_at_pt || "").slice(0, 16).replace("T", " "))} PT`;
     window.Atlas = Object.assign(window.Atlas || {}, { S, VIEWS, esc, chip, srcLink, commitLink, short, openDrawer,
-      renderMarkdown, findingsFor, statusChip, route, STUDIES_REPO, producersFor, artifactChain });
+      renderMarkdown, findingsFor, statusChip, route, STUDIES_REPO, producersFor });
     document.dispatchEvent(new Event("atlas:ready"));
     syncNav();
     window.addEventListener("hashchange", route);
