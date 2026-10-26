@@ -103,6 +103,41 @@ def main(site: str, out: str) -> int:
         page.screenshot(path=str(out / "map.png"))
         check_export(page, "#map-export", "study map", out / "map.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.locator("#map-panel .panel-close").click()
+        # islands cycle through the tag facets and off; a tag chip fades the studies it does not match
+        btn = page.locator("#map-islands")
+        labels = []
+        for _ in range(len(cat.get("tags") or {"model": 0}) + 1):
+            btn.click()
+            labels.append(btn.inner_text())
+        if not any(t.endswith("off") for t in labels):
+            failures.append(f"study map: islands never turned off ({labels})")
+        chip = page.locator(".tag-chip").first
+        if chip.count():
+            facet, value = chip.get_attribute("data-f"), chip.get_attribute("data-v")
+            def carries(s):        # as the map does: study tags plus its reports', nested tags count for their parent,
+                own = s["cover"].get("tags")   # and an untagged study falls back to the model in its name
+                tags = ((own or {}).get(facet) or ([s["model"]] if own is None and facet == "model" and s.get("model") else [])) + [
+                    t for r in s["reports"] for t in ((r.get("tags") or {}).get(facet) or [])]
+                return any(t == value or t.startswith(value + "/") for t in tags)
+            chip.click()
+            page.wait_for_timeout(300)
+            want = sum(not carries(s) for s in cat["studies"])
+            got = page.locator("#study-map .node.dim:not(.issue)").count()
+            if got != want:
+                failures.append(f"study map: filtering on {facet}={value} faded {got} studies, expected {want}")
+            chip.click()
+        # the study page's local graph: the study in the middle, its neighbours on either side
+        # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
+        cross = [d for d in cat["dependencies"] if d["from"] != d["to"]]
+        linked = sorted({d["from"] for d in cross} | {d["to"] for d in cross})
+        sid = next((s["id"] for s in cat["studies"] if s["id"] in linked), None)
+        if sid:
+            page.goto(base + f"#/study/{sid}")
+            page.wait_for_selector("#local-map .node", timeout=20000)
+            if page.locator("#local-map .node.focused").count() != 1 or page.locator("#local-map .edge").count() < 1:
+                failures.append("local graph: the study or its links are missing")
+            page.screenshot(path=str(out / "local.png"))
+            check_export(page, "#local-export", "local graph", out / "local.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.goto(base + views["lineage"])
         page.wait_for_selector(".lineage .slot", timeout=20000)
         if page.locator(".lineage .slot").count() < 8:

@@ -400,3 +400,42 @@ def test_malformed_run_provenance_does_not_break_the_build(studies):
     git(studies, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "bad freeze")
     assert build_catalog(studies, validate=False)["wandb_groups"][GROUP]["recovered"] is None
 
+
+
+def test_study_and_report_tags_and_their_vocabulary(studies):
+    (studies / "schemas").mkdir(exist_ok=True)
+    (studies / "schemas/tags.yaml").write_text("""schema_version: 1
+facets:
+  model:
+    label: Model
+    values:
+      gru: {label: GRU, description: Gated recurrent unit}
+      cognitive/bh: {label: Cognitive › BH}
+""")
+    readme = studies / "studies/03-gru-gamma/README.md"
+    readme.parent.mkdir(parents=True)
+    readme.write_text("""---
+schema_version: 1
+id: 03-gru-gamma
+question: Does gamma follow from alpha and beta?
+status: planned
+wandb: {entity: AIND-disRNN, project: gamma}
+motivated_by: []
+tags: {model: [gru, cognitive/bh], question: [scaling]}
+---
+# Study: gamma
+""")
+    git(studies, "add", "-A")
+    git(studies, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "tags")
+    cat = build_catalog(studies, validate=False)
+    assert by_id(cat, "03-gru-gamma")["cover"]["tags"] == {"model": ["gru", "cognitive/bh"], "question": ["scaling"]}
+    assert by_id(cat, "01-gru-alpha")["cover"]["tags"] is None                 # not declared
+    assert cat["tags"]["model"]["values"]["gru"] == {"label": "GRU", "description": "Gated recurrent unit"}
+    assert cat["tags"]["model"]["values"]["cognitive/bh"]["description"] is None
+    assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
+
+
+def test_an_untracked_vocabulary_is_not_read(studies):
+    (studies / "schemas").mkdir(exist_ok=True)
+    (studies / "schemas/tags.yaml").write_text("facets: {model: {label: Model, values: {gru: {label: GRU}}}}\n")
+    assert build_catalog(studies, validate=False, allow_dirty=True)["tags"] is None
