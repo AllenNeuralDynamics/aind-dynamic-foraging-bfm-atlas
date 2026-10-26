@@ -87,6 +87,19 @@
           },
           "artifacts": {
             "$ref": "#/$defs/paths"
+          },
+          "recovered": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "What the group's runs trained on and ran in, recovered after the fact from W&B and Beaker by a run-provenance freeze (studies#28); null if none.",
+            "required": [
+              "artifact",
+              "data",
+              "revisions",
+              "image"
+            ]
           }
         }
       }
@@ -295,6 +308,20 @@
             2,
             null
           ]
+        },
+        "data": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "studies launch-record v2 `data` (studies#25)."
+        },
+        "image": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "studies launch-record v2 `image` (studies#25)."
         }
       }
     },
