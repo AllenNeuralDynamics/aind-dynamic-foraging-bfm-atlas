@@ -558,3 +558,13 @@ def test_skills_are_read_from_the_dispatcher_commit_only(studies, tmp_path):
 def test_remotes_become_web_urls(remote, url):
     from bfm_atlas.framework import web_url
     assert web_url(remote) == url
+
+
+def test_a_locally_edited_skill_publishes_its_committed_text(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    (pack / "skills/study-conventions/SKILL.md").write_text("---\nname: study-conventions\ndescription: local edit\n---\n")
+    fw = build_catalog(studies, validate=False, skills_dir=pack)["framework"]
+    skill = next(s for s in fw["skills"] if s["name"] == "study-conventions")
+    assert skill["description"] == "Organize studies." and skill["headings"] == ["Hard rules first"]
+    assert fw["sources"]["dispatcher"]["dirty"] is True

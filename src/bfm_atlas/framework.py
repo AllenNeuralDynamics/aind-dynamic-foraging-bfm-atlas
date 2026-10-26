@@ -209,27 +209,28 @@ def web_url(remote: str | None) -> str | None:
 
 
 def _skills(skills_dir: Path) -> dict:
-    """The dispatcher's skills pack: every tracked SKILL.md frontmatter, with the repo commit it
-    came from. An ignored or untracked skill is not in that commit, so it is left out."""
+    """The dispatcher's skills pack: every SKILL.md's frontmatter and sections, read from the
+    commit it records (``git show HEAD:...``), so a local edit, draft or ignored file never
+    reaches a catalog stamped with that SHA. Outside a git checkout, the files as they are."""
     pack = skills_dir / "skills" if (skills_dir / "skills").is_dir() else skills_dir
     top = _git(pack, "rev-parse", "--show-toplevel")
-    tracked = None
     if top:
-        listed = _git(Path(top), "ls-files", "--", str(pack.resolve().relative_to(Path(top).resolve())))
-        tracked = {(Path(top) / p).resolve() for p in (listed or "").splitlines()}
+        rel = pack.resolve().relative_to(Path(top).resolve()).as_posix()
+        names = (_git(Path(top), "ls-tree", "-r", "--name-only", "HEAD", "--", rel) or "").splitlines()
+        files = [(p, _git(Path(top), "show", f"HEAD:{p}") or "", Path(p).parent.name) for p in sorted(names)
+                 if re.fullmatch(rf"{re.escape(rel)}/[^/]+/SKILL\.md" if rel != "." else r"[^/]+/SKILL\.md", p)]
+    else:
+        files = [(None, f.read_text(), f.parent.name) for f in sorted(pack.glob("*/SKILL.md"))]
     found = {}
-    for f in sorted(pack.glob("*/SKILL.md")):
-        if tracked is not None and f.resolve() not in tracked:
-            continue
-        m = FRONTMATTER.match(f.read_text())
+    for path, text, folder in files:
+        m = FRONTMATTER.match(text + "\n")
         try:
             fm = yaml.safe_load(m[1]) if m else {}
         except yaml.YAMLError:
             fm = {}
-        name = str((fm or {}).get("name") or f.parent.name)
-        found[name] = {"name": name, "description": (fm or {}).get("description"),
-                       "path": str(f.resolve().relative_to(Path(top).resolve())) if top else None,
-                       "headings": re.findall(r"^## (.+?)\s*$", f.read_text(), re.M)}
+        name = str((fm or {}).get("name") or folder)
+        found[name] = {"name": name, "description": (fm or {}).get("description"), "path": path,
+                       "headings": re.findall(r"^## (.+?)\s*$", text, re.M)}
     return {"root": top, "sha": _git(pack, "rev-parse", "HEAD") if top else None,
             "dirty": bool(_git(pack, "status", "--porcelain", "--", ".")) if top else None,
             "remote": web_url(_git(pack, "remote", "get-url", "origin")) if top else None,
