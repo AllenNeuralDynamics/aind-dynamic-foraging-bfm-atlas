@@ -114,8 +114,9 @@ def main(site: str, out: str) -> int:
         chip = page.locator(".tag-chip").first
         if chip.count():
             facet, value = chip.get_attribute("data-f"), chip.get_attribute("data-v")
-            def carries(s):        # the study's tags plus its reports', a nested tag counting for its parent
-                tags = ((s["cover"].get("tags") or {}).get(facet) or []) + [
+            def carries(s):        # as the map does: study tags plus its reports', nested tags count for their parent,
+                own = s["cover"].get("tags")   # and an untagged study falls back to the model in its name
+                tags = ((own or {}).get(facet) or ([s["model"]] if own is None and facet == "model" and s.get("model") else [])) + [
                     t for r in s["reports"] for t in ((r.get("tags") or {}).get(facet) or [])]
                 return any(t == value or t.startswith(value + "/") for t in tags)
             chip.click()
