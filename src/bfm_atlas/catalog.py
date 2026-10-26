@@ -7,8 +7,9 @@ The studies repo encodes a provenance graph through files whose shape is fixed b
         -> analysis/reports/rN-<slug>.md (frontmatter, result blocks) -> figures
 
 ``build_catalog`` walks a checkout and assembles that graph, reading only committed files (no
-W&B, no Beaker), so the catalog is a pure function of the studies SHA. Field names follow the
-studies schemas; vocabulary follows the studies ``CONTEXT.md``.
+W&B, no Beaker), so the catalog is a pure function of the studies SHA (and, when the About page's
+skills are included, of the dispatcher SHA its skills pack was read at; see ``framework.py``).
+Field names follow the studies schemas; vocabulary follows the studies ``CONTEXT.md``.
 
 Provenance *checking* is not done here. The studies repo's ``scripts/check_provenance.py`` is
 the one implementation of the rules; the catalog embeds its ``--format json`` output so the
@@ -30,6 +31,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import yaml
+
+from .framework import build_framework
 
 CATALOG_SCHEMA_VERSION = 1
 PT = ZoneInfo("America/Los_Angeles")
@@ -644,12 +647,14 @@ class DirtyCheckoutError(RuntimeError):
     """The checkout differs from the commit the catalog would be labelled with."""
 
 
-def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: bool = False) -> dict:
+def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: bool = False,
+                  skills_dir: Path | str | None = None) -> dict:
     """Catalog for a studies checkout (the repository root, containing ``studies/``).
 
     The catalog is labelled with the checkout's HEAD, so by default the checkout must be
     clean: a modified or untracked file would put content in the catalog that the recorded
     SHA does not contain. ``allow_dirty`` builds anyway and records ``studies_git_dirty``.
+    ``skills_dir`` (the dispatcher's skills pack) adds its skills to the About page's framework.
     """
     root = Path(studies_root).resolve()      # the checker runs with cwd=root
     if not allow_dirty:
@@ -780,6 +785,8 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
             dependencies.append(d)
 
     sha = _git(root, "rev-parse", "HEAD")
+    framework = build_framework(root, ok, skills_dir)
+    dispatcher = (framework.get("sources") or {}).get("dispatcher") or {}
     return {
         "_meta": {
             "schema_version": CATALOG_SCHEMA_VERSION,
@@ -789,9 +796,13 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
             "studies_commit_time": _git(root, "log", "-1", "--format=%cI"),
             # never publish credentials embedded in a remote URL
             "studies_remote": re.sub(r"//[^@/]+@", "//", _git(root, "remote", "get-url", "origin") or "") or None,
+            # the dispatcher checkout the skills pack was read from (About page), under its own name
+            "dispatcher_git_sha": dispatcher.get("sha"),
+            "dispatcher_git_dirty": dispatcher.get("dirty"),
         },
         "studies": studies,
         "tags": tag_vocabulary(root, ok),
+        "framework": framework,
         "wandb_groups": dict(sorted(groups.items())),
         "dependencies": dependencies,
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},

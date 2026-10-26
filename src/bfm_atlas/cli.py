@@ -21,9 +21,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="do not copy report figures to <out dir>/files/")
     b.add_argument("--allow-dirty", action="store_true",
                    help="build from a checkout with local changes (recorded as studies_git_dirty)")
+    b.add_argument("--skills", type=Path, default=None,
+                   help="the dispatcher's skills pack (aind-behavior-foundation-model-skills/), for the About page")
     args = p.parse_args(argv)
 
-    catalog = build_catalog(args.studies, validate=not args.no_validate, allow_dirty=args.allow_dirty)
+    catalog = build_catalog(args.studies, validate=not args.no_validate, allow_dirty=args.allow_dirty,
+                            skills_dir=args.skills)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")))
     figures = 0 if args.no_figures else copy_figures(catalog, args.studies, args.out.parent / "files")
