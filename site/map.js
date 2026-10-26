@@ -18,8 +18,10 @@ document.addEventListener("atlas:ready", () => {
 
   // ------------------------------------------------------------ shared: tooltip
   // Hover, keyboard focus and tap all show it (phones have no hover); a tap elsewhere hides it.
+  // With `dock` it sits in the top-left corner of that element's visible part instead of over the target, so it never
+  // covers a study being dragged.
   let tipCount = 0;
-  function tooltip(host) {
+  function tooltip(host, { dock } = {}) {
     host.classList.add("tip-host");
     const tip = document.createElement("div");
     tip.className = "tip";
@@ -41,7 +43,14 @@ document.addEventListener("atlas:ready", () => {
         if (current && current !== target) current.removeAttribute("aria-describedby");
         current = target;
         target.setAttribute("aria-describedby", tip.id);   // read out as the step's description
-        const h = host.getBoundingClientRect(), b = target.getBoundingClientRect();
+        const h = host.getBoundingClientRect();
+        if (dock) {
+          const d = dock.getBoundingClientRect();     // the part of the map on screen, not below the fold
+          tip.style.left = `${d.left - h.left + 8}px`;
+          tip.style.top = `${Math.min(Math.max(d.top, 0), d.bottom - tip.offsetHeight - 16) - h.top + 8}px`;
+          return;
+        }
+        const b = target.getBoundingClientRect();
         const left = Math.min(Math.max(b.left - h.left + b.width / 2 - tip.offsetWidth / 2, 4),
                               Math.max(4, host.clientWidth - tip.offsetWidth - 4));
         const above = b.top - h.top - tip.offsetHeight - 8;
@@ -232,7 +241,7 @@ document.addEventListener("atlas:ready", () => {
       <p class="muted map-hint">Drag a study to move it (Forces › Drag hold sets how much it stays put); pinch or Ctrl+scroll to zoom. Arrows run from a result to the work that built on it.
         ${esc(MODEL_KEY)}</p>
       <div class="map-panel" id="map-panel" aria-live="polite"></div>`;
-    const svg = host.querySelector("svg"), wrapEl = host.querySelector(".map-wrap"), tip = tooltip(host);
+    const svg = host.querySelector("svg"), wrapEl = host.querySelector(".map-wrap"), tip = tooltip(host, { dock: wrapEl });
     const view = d3.select(svg).select(".viewport");
     d3.select(svg).call(d3.zoom().scaleExtent([0.4, 3]).filter((ev) => (ev.type !== "wheel" || ev.ctrlKey) && !ev.button)
       .on("zoom", (ev) => view.attr("transform", ev.transform)));

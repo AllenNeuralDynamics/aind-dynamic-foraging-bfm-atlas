@@ -124,6 +124,10 @@ def main(site: str, out: str) -> int:
         page.mouse.down()
         page.mouse.move(x0 + dx / 2, y0, steps=5)
         page.mouse.move(x0 + dx, y0, steps=5)
+        # mid-drag the tooltip waits in the top-left corner of the map's visible part, not over the study
+        tipbox, wrap = page.locator("#map .tip:not([hidden])").bounding_box(), page.locator("#map .map-wrap").bounding_box()
+        if not tipbox or abs(tipbox["x"] - wrap["x"] - 8) > 2 or abs(tipbox["y"] - max(wrap["y"], 0) - 8) > 2:
+            failures.append(f"study map: the tooltip is not docked in the map's corner ({tipbox} in {wrap})")
         page.mouse.up()
         page.wait_for_timeout(3500)
         box = node.bounding_box()
