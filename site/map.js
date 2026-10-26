@@ -99,22 +99,25 @@ document.addEventListener("atlas:ready", () => {
     supersedes: { label: "Superseded by", verb: "is superseded by", hint: "a later report replaces this one (superseded_by)" },
   };
   const LAYERS = { motivation: true, upstream: true, corrects: true, supersedes: true };
-  const PHYS_DEFAULT = { link: 0.15, distance: 110, repel: 400, island: 0.25, center: 0.07 };
+  const PHYS_DEFAULT = { link: 0.15, distance: 110, repel: 400, island: 0.25, center: 0.07, hold: 0.6 };
   const SLIDERS = [
     ["link", "Link pull", 0, 1, 0.01, "how strongly linked studies attract"],
     ["distance", "Link length", 30, 260, 5, "rest length of a link"],
     ["repel", "Repel", 0, 1500, 10, "how hard every study pushes the others away"],
     ["island", "Island pull", 0, 1, 0.01, "how strongly a study is drawn to its tag's island (islands on)"],
     ["center", "Centre pull", 0, 0.5, 0.01, "how strongly studies are drawn to the middle (islands off)"],
+    ["hold", "Drag hold", 0, 1, 0.05, "how much a study you drag stays where you drop it (0: springs back, 1: stays); Reset lets them all go"],
   ];
-  const label = (s) => (s.purpose || s.id.slice(3)).replace(/-/g, " ");
+  // the study's whole name after its number, model included ("gru vs disrnn embedding recovery"),
+  // wrapped but never cut short
+  const label = (s) => s.id.slice(3).replace(/-/g, " ");
   function wrap(text, n = 17) {
     const lines = [""];
     for (const w of text.split(" ")) {
       if ((lines[lines.length - 1] + " " + w).trim().length > n && lines[lines.length - 1]) lines.push(w);
       else lines[lines.length - 1] = (lines[lines.length - 1] + " " + w).trim();
     }
-    return lines.length > 2 ? [lines[0], `${lines.slice(1).join(" ").slice(0, n - 1)}…`] : lines;
+    return lines;
   }
   const issueHref = (i) => (typeof i === "number" ? `${A.STUDIES_REPO}/issues/${i}`
     : `https://github.com/${String(i).replace("#", "/issues/")}`);
@@ -166,6 +169,15 @@ document.addEventListener("atlas:ready", () => {
   const marker = (k) => `<marker id="m-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9"
       markerUnits="userSpaceOnUse" orient="auto"><path class="mk mk-${k}" d="M0,0 L10,5 L0,10 z"/></marker>`;
   const radius = (s) => (s ? 13 + Math.sqrt(s.reports.length) * 3.2 : 10);
+  // A study's models (tags.model, else the model in its name) in the order it lists them: the
+  // fill is the first, and every further one a ring outside it. The label starts below the
+  // outermost ring.
+  const modelsOf = (s) => (s.cover.tags || {}).model || (s.model ? [s.model] : []);
+  const ringsOf = (s, r) => modelsOf(s).slice(1).map((t, i) => ({ t, r: r + 4 + 4 * i }));
+  const rimOf = (s, r) => (s ? r + 4 * Math.max(0, modelsOf(s).length - 1) : r);
+  const labelY = (s, r) => Math.max(r + 15, rimOf(s, r) + 11);
+  const ringSvg = (s, r) => ringsOf(s, r).map((x) => `<circle class="ring" r="${x.r}" style="stroke:${modelColor(x.t)}"/>`).join("");
+  const MODEL_KEY = "Fill: a study's first model. Each ring: another model it uses or compares, in the colours of the Model chips.";
 
   A.drawMap = (host) => {
     const d3 = window.d3;
@@ -187,10 +199,11 @@ document.addEventListener("atlas:ready", () => {
     }
     const links = list.map((e) => ({ e, source: byId[arrowFrom(e)[0]], target: byId[arrowFrom(e)[1]] }));
 
-    const chips = FACETS.map((f) => `<div class="facet"><span class="facet-name" title="${esc(VOCAB[f].description || "")}">${esc(VOCAB[f].label)}</span>
+    const chips = FACETS.map((f, i) => `<div class="facet"><span class="facet-name" title="${esc(VOCAB[f].description || "")}">${esc(VOCAB[f].label)}</span>
         ${Object.entries(VOCAB[f].values).filter(([v]) => studies.some((s) => allTags(s, f).includes(v))).map(([v, d]) =>
           `<button type="button" class="tag-chip" data-f="${esc(f)}" data-v="${esc(v)}" aria-pressed="false"
-            title="${esc(d.description || d.label)}">${f === "model" ? `<span class="dot" style="background:${modelColor(v)}"></span>` : ""}${esc(d.label)}</button>`).join("")}</div>`).join("");
+            title="${esc(d.description || d.label)}">${f === "model" ? `<span class="dot" style="background:${modelColor(v)}"></span>` : ""}${esc(d.label)}</button>`).join("")}
+        ${i === FACETS.length - 1 ? `<button type="button" class="tag-reset" id="map-reset" disabled title="clear every tag filter">Reset</button>` : ""}</div>`).join("");
     host.innerHTML = `
       <div class="map-tools">
         <div class="facets">${chips}
@@ -215,7 +228,8 @@ document.addEventListener("atlas:ready", () => {
           <button type="button" class="export" id="f-reset">Reset</button>
         </details>
       </div>
-      <p class="muted map-hint">Drag a study to move it; pinch or Ctrl+scroll to zoom. Arrows run from a result to the work that built on it.</p>
+      <p class="muted map-hint">Drag a study to move it (Forces › Drag hold sets how much it stays put); pinch or Ctrl+scroll to zoom. Arrows run from a result to the work that built on it.
+        ${esc(MODEL_KEY)}</p>
       <div class="map-panel" id="map-panel" aria-live="polite"></div>`;
     const svg = host.querySelector("svg"), wrapEl = host.querySelector(".map-wrap"), tip = tooltip(host);
     const view = d3.select(svg).select(".viewport");
@@ -234,12 +248,12 @@ document.addEventListener("atlas:ready", () => {
       .attr("data-id", (n) => n.id).attr("tabindex", (n) => (n.s ? 0 : null)).attr("role", (n) => (n.s ? "button" : null))
       .attr("aria-label", (n) => (n.s ? `${n.id}, ${n.s.cover.status || "status unknown"}` : `issue ${n.issue}`));
     nodeSel.filter((n) => n.s).each(function (n) {
-      const g = d3.select(this), r = radius(n.s);
-      const own = (n.s.cover.tags || {}).model || (n.s.model ? [n.s.model] : []);
-      g.append("circle").attr("class", "body").attr("r", r).style("fill", modelColor(own[0] || "other"));
-      if (own[1]) g.append("circle").attr("class", "ring").attr("r", r + 4).style("stroke", modelColor(own[1]));
+      const g = d3.select(this), r = radius(n.s), lines = wrap(label(n.s)), y0 = labelY(n.s, r);
+      g.append("circle").attr("class", "body").attr("r", r).style("fill", modelColor(modelsOf(n.s)[0] || "other"));
+      ringsOf(n.s, r).forEach((x) => g.append("circle").attr("class", "ring").attr("r", x.r).style("stroke", modelColor(x.t)));
       g.append("text").attr("class", "nn").attr("text-anchor", "middle").attr("dy", "0.35em").text(n.id.slice(0, 2));
-      wrap(label(n.s)).forEach((l, k) => g.append("text").attr("class", "lbl").attr("text-anchor", "middle").attr("y", r + 15 + k * 13).text(l));
+      lines.forEach((l, k) => g.append("text").attr("class", "lbl").attr("text-anchor", "middle").attr("y", y0 + k * 13).text(l));
+      n.below = y0 + 13 * (lines.length - 1) + 6;      // how far the label reaches below the centre
     });
     nodeSel.filter((n) => !n.s).each(function (n) {
       const g = d3.select(this);
@@ -262,18 +276,33 @@ document.addEventListener("atlas:ready", () => {
     };
     const sim = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links)).force("charge", d3.forceManyBody())
-      .force("collide", d3.forceCollide((n) => radius(n.s) + 16)).force("x", d3.forceX()).force("y", d3.forceY());
-    function applyForces() {
+      .force("collide", d3.forceCollide((n) => rimOf(n.s, radius(n.s)) + 16)).force("x", d3.forceX()).force("y", d3.forceY());
+    function applyForces(alpha = 0.7) {
       sim.force("link").distance(PHYS.distance).strength(PHYS.link);
       sim.force("charge").strength(-PHYS.repel);
-      sim.force("x").x((n) => (islands ? goal(n, "x") : W / 2)).strength(islands ? PHYS.island : PHYS.center);
-      sim.force("y").y((n) => (islands ? goal(n, "y") : H / 2)).strength(islands ? PHYS.island : PHYS.center);
-      sim.alpha(0.7).restart();
+      // a study dropped by hand rests that far (Drag hold) toward where it was dropped, held at least as hard
+      const pull = islands ? PHYS.island : PHYS.center;
+      const rest = (n, ax) => { const g = islands ? goal(n, ax) : ax === "x" ? W / 2 : H / 2;
+        return n.drop ? g + (n.drop[ax] - g) * PHYS.hold : g; };
+      sim.force("x").x((n) => rest(n, "x")).strength((n) => (n.drop ? Math.max(pull, PHYS.hold) : pull));
+      sim.force("y").y((n) => rest(n, "y")).strength((n) => (n.drop ? Math.max(pull, PHYS.hold) : pull));
+      nodes.forEach((n) => { if (!held.has(n)) pin(n); });
+      sim.alpha(alpha).restart();
     }
+    // at full hold a dropped study is pinned where it was dropped; below it, only the springs above hold it.
+    // Studies under a finger or the pointer (several at once on a touch screen) are left alone.
+    const held = new Set();
+    const pin = (n) => { const on = !!n.drop && PHYS.hold >= 1; n.fx = on ? n.drop.x : null; n.fy = on ? n.drop.y : null; };
     nodeSel.call(d3.drag()
-      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); n.fx = n.x; n.fy = n.y; })
-      .on("drag", (ev, n) => { n.fx = ev.x; n.fy = ev.y; })
-      .on("end", (ev, n) => { if (!ev.active) sim.alphaTarget(0); n.fx = n.fy = null; }));
+      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); held.add(n); n.fx = n.x; n.fy = n.y; n.moved = false; })
+      .on("drag", (ev, n) => { n.fx = ev.x; n.fy = ev.y; n.moved = true; })
+      .on("end", (ev, n) => {
+        if (!ev.active) sim.alphaTarget(0);
+        held.delete(n);
+        if (n.moved) n.drop = { x: ev.x, y: ev.y };      // a click is not a drop
+        pin(n);
+        if (n.moved) applyForces(0.3);
+      }));
 
     const matches = (n) => !n.s ? true : FACETS.every((f) => !selected[f].size || allTags(n.s, f).some((t) => selected[f].has(t)));
     function drawIslands() {
@@ -295,9 +324,11 @@ document.addEventListener("atlas:ready", () => {
         });
     }
     sim.on("tick", () => {
-      nodes.forEach((n) => { const r = radius(n.s) + 30; n.x = Math.max(r, Math.min(W - r, n.x)); n.y = Math.max(r, Math.min(H - r - 10, n.y)); });
+      // kept inside the drawing, label included
+      nodes.forEach((n) => { const r = radius(n.s) + 30; n.x = Math.max(r, Math.min(W - r, n.x)); n.y = Math.max(r, Math.min(H - Math.max(r + 10, n.below || 0), n.y)); });
       nodeSel.attr("transform", (n) => `translate(${n.x},${n.y})`);
-      edgeSel.selectAll("path").attr("d", (l) => curve(l.source, l.target, radius(l.source.s) + 2, radius(l.target.s) + (l.target.s && studyTags(l.target.s, "model").length > 1 ? 7 : 3), l.e.bend));
+      edgeSel.selectAll("path").attr("d", (l) => curve(l.source, l.target, rimOf(l.source.s, radius(l.source.s)) + 2,
+        rimOf(l.target.s, radius(l.target.s)) + 3, l.e.bend));
       drawIslands();
     });
 
@@ -354,12 +385,21 @@ document.addEventListener("atlas:ready", () => {
       this.addEventListener("click", (ev) => { ev.stopPropagation(); tip.show(this, edgeTip(l.e)); });
     });
     wrapEl.addEventListener("click", () => tip.hide());
+    const resetBtn = host.querySelector("#map-reset");
+    const syncReset = () => { if (resetBtn) resetBtn.disabled = FACETS.every((f) => !selected[f].size); };
     host.querySelectorAll(".tag-chip").forEach((b) => b.addEventListener("click", () => {
       const set = selected[b.dataset.f], v = b.dataset.v;
       set.has(v) ? set.delete(v) : set.add(v);
       b.setAttribute("aria-pressed", String(set.has(v)));
+      syncReset();
       paint();
     }));
+    resetBtn?.addEventListener("click", () => {
+      FACETS.forEach((f) => selected[f].clear());
+      host.querySelectorAll(".tag-chip").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      syncReset();
+      paint();
+    });
     host.querySelectorAll(".layer").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.kind;
       layers[k] = !layers[k];
@@ -386,6 +426,7 @@ document.addEventListener("atlas:ready", () => {
     forces.querySelector("#f-reset").addEventListener("click", () => {
       Object.assign(PHYS, PHYS_DEFAULT); store.set("atlas.graph.forces", PHYS);
       SLIDERS.forEach(([k]) => { forces.querySelector(`#f-${k}`).value = PHYS[k]; forces.querySelector(`#o-${k}`).textContent = PHYS[k]; });
+      nodes.forEach((n) => { delete n.drop; });     // and every study let go back to its forces
       applyForces();
     });
     host.querySelector("#map-export").addEventListener("click", () => {
@@ -460,33 +501,37 @@ document.addEventListener("atlas:ready", () => {
     if (!list.length) { host.innerHTML = `<p class="muted">This study has no relationships to other studies yet.</p>`; return; }
     const rOf = (id) => (S.study[id] ? radius(S.study[id]) + (id === sid ? 6 : 0) : 12);
     // a row holds a node above its centre and its wrapped label below: space rows by the tallest
-    const extent = (id) => rOf(id) + 4 + (S.study[id] ? 15 + 13 * (wrap(label(S.study[id])).length - 1) + 4 : 0);
+    const extent = (id) => (S.study[id] ? labelY(S.study[id], rOf(id)) + 13 * (wrap(label(S.study[id])).length - 1) + 8 : rOf(id) + 4);
     const gap = Math.max(...[...back, ...fwd].map((id) => rOf(id) + extent(id)), 40) + 10;
-    const W = 900, colX = 300, rows = Math.max(back.length, fwd.length, 1), H = Math.max(200, 80 + rows * gap);
-    const cx = W / 2, cy = 30 + (H - 30) / 2, pos = { [sid]: { x: cx, y: cy } };
-    const column = (ids, x) => ids.forEach((id, i) => { pos[id] = { x, y: cy + (i - (ids.length - 1) / 2) * gap }; });
-    column(back, cx - colX);
-    column(fwd, cx + colX);
+    // every node sits at an offset from the middle row (centred at 15 + H/2): the drawing is tall
+    // enough for the lowest label's end and the highest ring, in either column or the middle
+    const off = { [sid]: 0 };
+    [back, fwd].forEach((ids) => ids.forEach((id, i) => { off[id] = (i - (ids.length - 1) / 2) * gap; }));
+    const reach = Math.max(...Object.keys(off).map((id) => off[id] + extent(id)));
+    const lift = Math.max(...Object.keys(off).map((id) => rimOf(S.study[id], rOf(id)) + 4 - off[id]));
+    const W = 900, colX = 300, rows = Math.max(back.length, fwd.length, 1),
+      H = Math.max(200, 80 + rows * gap, 2 * (reach + 23), 2 * (lift + 15));
+    const cx = W / 2, cy = 30 + (H - 30) / 2, pos = {};
+    Object.keys(off).forEach((id) => { pos[id] = { x: id === sid ? cx : back.includes(id) ? cx - colX : cx + colX, y: cy + off[id] }; });
     const nodeSvg = Object.keys(pos).map((id) => {
       const p = pos[id], s = S.study[id];
       if (!s) return `<g class="node issue" data-id="${esc(id)}" transform="translate(${p.x},${p.y})">
           <rect x="-22" y="-10" width="44" height="20" rx="10"/><text class="lbl" text-anchor="middle" y="4">#${esc(id.slice(6).split("#").pop())}</text></g>`;
-      const own = (s.cover.tags || {}).model || (s.model ? [s.model] : []);
       return `<g class="node st-${esc(s.cover.status || "unknown")}${id === sid ? " focused" : ""}" data-id="${esc(id)}" transform="translate(${p.x},${p.y})"
           ${id === sid ? "" : `tabindex="0" role="link" aria-label="${esc(id)}"`}>
-        <circle class="body" r="${rOf(id)}" style="fill:${modelColor(own[0] || "other")}"/>
-        ${own[1] ? `<circle class="ring" r="${rOf(id) + 4}" style="stroke:${modelColor(own[1])}"/>` : ""}
+        <circle class="body" r="${rOf(id)}" style="fill:${modelColor(modelsOf(s)[0] || "other")}"/>
+        ${ringSvg(s, rOf(id))}
         <text class="nn" text-anchor="middle" dy="0.35em">${esc(id.slice(0, 2))}</text>
-        ${wrap(label(s)).map((l, k) => `<text class="lbl" text-anchor="middle" y="${rOf(id) + 15 + k * 13}">${esc(l)}</text>`).join("")}</g>`;
+        ${wrap(label(s)).map((l, k) => `<text class="lbl" text-anchor="middle" y="${labelY(s, rOf(id)) + k * 13}">${esc(l)}</text>`).join("")}</g>`;
     }).join("");
     const edgeSvg = list.map((e, i) => {
       const [a, b] = arrowFrom(e);
-      const d = curve(pos[a], pos[b], rOf(a) + 2, rOf(b) + 3, e.bend);
+      const d = curve(pos[a], pos[b], rimOf(S.study[a], rOf(a)) + 2, rimOf(S.study[b], rOf(b)) + 3, e.bend);
       return `<g class="edge e-${e.kind}" data-i="${i}" tabindex="0" role="button"
         aria-label="${esc(`${e.to} ${KINDS[e.kind].verb} ${e.from}`)}"><path class="hit" d="${d}"/><path class="line" d="${d}" marker-end="url(#m-${e.kind})"
         style="stroke-width:${1.2 + Math.sqrt(e.weight) * 0.9}px"/></g>`;
     }).join("");
-    host.innerHTML = `<div class="map-tools"><span class="muted">Left: what this study builds on. Right: what built on it.</span>
+    host.innerHTML = `<div class="map-tools"><span class="muted">Left: what this study builds on. Right: what built on it. ${esc(MODEL_KEY)}</span>
         <button type="button" class="export" id="local-export">Export SVG</button></div>
       <div class="map-wrap"><svg id="local-map" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sid)} and the studies it connects to">
         <defs>${Object.keys(KINDS).map(marker).join("")}</defs>
