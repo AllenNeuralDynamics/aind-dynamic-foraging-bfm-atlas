@@ -433,3 +433,9 @@ tags: {model: [gru, cognitive/bh], question: [scaling]}
     assert cat["tags"]["model"]["values"]["gru"] == {"label": "GRU", "description": "Gated recurrent unit"}
     assert cat["tags"]["model"]["values"]["cognitive/bh"]["description"] is None
     assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
+
+
+def test_an_untracked_vocabulary_is_not_read(studies):
+    (studies / "schemas").mkdir(exist_ok=True)
+    (studies / "schemas/tags.yaml").write_text("facets: {model: {label: Model, values: {gru: {label: GRU}}}}\n")
+    assert build_catalog(studies, validate=False, allow_dirty=True)["tags"] is None

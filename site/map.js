@@ -146,7 +146,8 @@ document.addEventListener("atlas:ready", () => {
     const pairs = {};
     return Object.values(edges).map((e) => {
       const k = [e.from, e.to].sort().join("|"), i = (pairs[k] = (pairs[k] ?? -1) + 1);
-      return { ...e, bend: 0.12 + 0.16 * i };
+      // line weight counts the distinct reports behind a link (a study-level motivation is one)
+      return { ...e, bend: 0.12 + 0.16 * i, weight: uniq(e.items.map((d) => d.report || "")).length };
     });
   }
   const edgeTip = (e) => {
@@ -226,7 +227,7 @@ document.addEventListener("atlas:ready", () => {
       .attr("data-from", (l) => l.e.from).attr("data-to", (l) => l.e.to);
     edgeSel.append("path").attr("class", "hit");
     edgeSel.append("path").attr("class", "line").attr("marker-end", (l) => `url(#m-${l.e.kind})`)
-      .style("stroke-width", (l) => `${1.2 + Math.sqrt(l.e.items.length) * 0.9}px`);
+      .style("stroke-width", (l) => `${1.2 + Math.sqrt(l.e.weight) * 0.9}px`);
     const nodeSel = view.select(".nodes").selectAll("g").data(nodes).join("g")
       .attr("class", (n) => (n.s ? `node st-${n.s.cover.status || "unknown"}` : "node issue"))
       .attr("data-id", (n) => n.id).attr("tabindex", (n) => (n.s ? 0 : null)).attr("role", (n) => (n.s ? "button" : null))
@@ -482,7 +483,7 @@ document.addEventListener("atlas:ready", () => {
       const d = curve(pos[a], pos[b], rOf(a) + 2, rOf(b) + 3, e.bend);
       return `<g class="edge e-${e.kind}" data-i="${i}" tabindex="0" role="button"
         aria-label="${esc(`${e.to} ${KINDS[e.kind].verb} ${e.from}`)}"><path class="hit" d="${d}"/><path class="line" d="${d}" marker-end="url(#m-${e.kind})"
-        style="stroke-width:${1.2 + Math.sqrt(e.items.length) * 0.9}px"/></g>`;
+        style="stroke-width:${1.2 + Math.sqrt(e.weight) * 0.9}px"/></g>`;
     }).join("");
     host.innerHTML = `<div class="map-tools"><span class="muted">Left: what this study builds on. Right: what built on it.</span>
         <button type="button" class="export" id="local-export">Export SVG</button></div>

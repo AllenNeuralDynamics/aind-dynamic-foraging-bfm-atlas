@@ -359,9 +359,14 @@ def _tags(value) -> dict | None:
     return {str(k): [str(t) for t in v if isinstance(t, (str, int))] for k, v in value.items() if isinstance(v, list)}
 
 
-def tag_vocabulary(root: Path) -> dict | None:
-    """The studies repo's tag vocabulary (schemas/tags.yaml): facet -> {label, description, values}."""
+def tag_vocabulary(root: Path, ok=None) -> dict | None:
+    """The studies repo's tag vocabulary (schemas/tags.yaml): facet -> {label, description, values}.
+
+    ``ok`` (a ``_Tracked``) keeps an ignored or untracked copy out of a catalog stamped with a commit.
+    """
     path = root / "schemas" / "tags.yaml"
+    if ok is not None and not ok(path):
+        return None
     try:
         facets = (yaml.safe_load(path.read_text()) or {}).get("facets")
     except (OSError, yaml.YAMLError, AttributeError):
@@ -786,7 +791,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
             "studies_remote": re.sub(r"//[^@/]+@", "//", _git(root, "remote", "get-url", "origin") or "") or None,
         },
         "studies": studies,
-        "tags": tag_vocabulary(root),
+        "tags": tag_vocabulary(root, ok),
         "wandb_groups": dict(sorted(groups.items())),
         "dependencies": dependencies,
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},

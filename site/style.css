@@ -163,7 +163,7 @@ svg .axis { stroke: var(--line); }
 .edge.off { display: none; }
 .lighting .edge.off.lit { display: inline; }
 .lighting .edge:not(.lit) { opacity: 0.12; }
-.lighting .node:not(.lit):not(.nbr) { opacity: 0.35; }
+.lighting .node:not(.lit):not(.nbr):not(.dim) { opacity: 0.35; }
 .edge.lit .line { stroke-opacity: 1; }
 .edge .line { stroke-opacity: 0.75; }
 .node.dim, .edge.dim { opacity: 0.12; }   /* beats status styling such as st-superseded */
