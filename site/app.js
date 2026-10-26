@@ -97,6 +97,12 @@ function renderMarkdown(md, basePath) {
     if (/^[a-z]+:/.test(href)) continue;
     const [file, fragment] = href.split("#");
     const target = resolvePath(basePath, file);
+    if (/\.html?$/i.test(target)) {
+      // an interactive page the build shipped with the site (catalog `interactive`): open it so it runs
+      a.setAttribute("href", `data/files/${target}` + (fragment ? `#${fragment}` : ""));
+      a.target = "_blank"; a.rel = "noopener";
+      continue;
+    }
     const route = routeForPath(target);
     // a heading fragment rides along as "?<id>" in the hash route and is scrolled to after render
     if (route) a.setAttribute("href", fragment ? `${route}?${fragment}` : route);

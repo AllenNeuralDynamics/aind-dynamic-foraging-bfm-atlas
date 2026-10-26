@@ -22,6 +22,9 @@ studies / dispatcher / wrapper commits.
   half filled or hollow by what the catalog records. Open a step for its evidence (producer and
   digests, W&B groups, launch records, commits and image, data snapshot) and the checker findings
   about it; `#/lineage/<study>/<rN>/<block>/<step>` opens that step.
+- **Interactive explainers**: a report that links to a tracked `.html` file in its study (for
+  example study 13's sampling explainer) gets that page shipped with the site; the link opens it
+  so it runs, rather than as source on GitHub.
 - **Export SVG** on both, stamped with the studies commit, for slides.
 - **About** (`#/about`): the framework itself, for other ML projects to reuse. An interactive map
   of the objects it defines (study, launch, launch record, freeze, producer, report, ...) by

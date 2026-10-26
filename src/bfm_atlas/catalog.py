@@ -278,6 +278,10 @@ def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str], ok: "_
         except ValueError:
             pass
     links = _link_targets(body, path, root)
+    # Standalone interactive pages (e.g. explainers) the report links to: shipped with the site so
+    # they run, instead of opening as source on GitHub.
+    interactive = [{"path": p, "exists": ok(root / p)} for p in dict.fromkeys(links)
+                   if p.split("#")[0].lower().endswith(INTERACTIVE_SUFFIXES)]
     return {
         "path": _rel(path, root),
         "id": f.get("id") or (f"r{m.group(1)}" if m else path.stem),
@@ -297,6 +301,7 @@ def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str], ok: "_
         "superseded_by": f.get("superseded_by") if isinstance(f.get("superseded_by"), dict) else None,
         "reproduce": f.get("reproduce") if isinstance(f.get("reproduce"), str) else None,
         "figures": figures,
+        "interactive": interactive,
         "result_blocks": [{"name": n, "markdown": b.strip("\n")} for n, b in RESULT_BLOCK.findall(body)],
         "cites": sorted({s for s in (_study_of(t, study_ids) for t in links) if s} - {study_dir.name}),
         "markdown": body,
@@ -810,10 +815,12 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
 
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+INTERACTIVE_SUFFIXES = (".html", ".htm")
 
 
 def copy_figures(catalog: dict, studies_root: Path | str, dest: Path | str) -> int:
-    """Copy every figure a report embeds (and every image a v2 producer declares) to dest/<path>.
+    """Copy every figure a report embeds, every interactive page it links to (``.html``), and every
+    image a v2 producer declares to dest/<path>.
 
     The site serves them from data/files/<repo path>, so report markdown renders unchanged.
     """
@@ -822,6 +829,8 @@ def copy_figures(catalog: dict, studies_root: Path | str, dest: Path | str) -> i
     root, dest = Path(studies_root).resolve(), Path(dest)
     ok = _Tracked(root)
     paths = {f["path"] for s in catalog["studies"] for r in s["reports"] for f in r["figures"] if f["exists"]}
+    paths |= {i["path"] for s in catalog["studies"] for r in s["reports"]
+              for i in r.get("interactive", []) if i["exists"]}
     # the app also renders study READMEs and variant notes, so their images ship too
     docs = [(f"{s['path']}/README.md", s["readme"]) for s in catalog["studies"]]
     docs += [(f"{v['path']}/notes.md", v["notes"]) for s in catalog["studies"] for v in s["variants"] if v["notes"]]

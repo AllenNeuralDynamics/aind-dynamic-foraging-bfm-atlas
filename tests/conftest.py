@@ -55,6 +55,7 @@ def make_studies(root: Path, checker: bool = True) -> Path:
     write(root, f"{a}/variants/base/launch_record/experiment_submitted.yaml",
           f"description: {GROUP} submitted\n")
     write(root, f"{a}/analysis/fig.png", "png")
+    write(root, f"{a}/analysis/explainers/demo.html", "<html>demo</html>")
     write(root, f"{a}/analysis/summary.json", json.dumps({
         "_meta": {"schema_version": 2, "kind": "producer", "produced_by": "analysis/produce.py",
                   "produced_at_pt": "2026-10-24T11:00:00-07:00", "studies_git_sha": SHA,
@@ -80,6 +81,8 @@ def make_studies(root: Path, checker: bool = True) -> Path:
         # r1 — the curve
 
         ![curve](../fig.png)
+
+        Try the [demo](../explainers/demo.html).
 
         <!-- BEGIN result-1 -->
         | D | 10 | 614 |
