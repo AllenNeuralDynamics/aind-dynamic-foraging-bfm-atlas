@@ -555,15 +555,17 @@ document.addEventListener("atlas:ready", () => {
   };
 
   // ------------------------------------------------------------ lineage
+  // [key, name, what the step is]. The keys are permalink segments and stay fixed; the names are
+  // plain labels, and each explanation names the CONTEXT.md term behind it.
   const HOPS = [
-    ["report", "Report block", "The delimited numbers in the report."],
-    ["analysis", "Analysis", "The producer that computed them, with digests of its code."],
-    ["query", "Query", "What it read: frozen W&B pulls and other committed inputs, by digest."],
-    ["tracking", "Tracking", "The W&B groups those runs belong to."],
-    ["compute", "Compute", "The launch records for those groups: the launch and every intervention."],
-    ["experiment", "Experiment", "The sweep and experiment manifests the launch submitted."],
-    ["model", "Model & image", "The commits of the code that trained the model, and its container image."],
-    ["data", "Data", "The data snapshot the runs trained and were evaluated on."],
+    ["report", "Report block", "The delimited numbers in the report: its result block."],
+    ["analysis", "Analysis", "The producer that computed them and the analysis artifact it wrote, with digests of its code."],
+    ["query", "Run results", "The files the producer read, by digest: run results frozen from W&B, other committed files, and other studies' results."],
+    ["tracking", "Tracked runs", "The W&B group those runs belong to: one launch, one group."],
+    ["compute", "Launch records", "The record of each launch and intervention on those runs: what was submitted, from which commits, and why."],
+    ["experiment", "Launch manifests", "The sweep and experiment manifests the launch submitted."],
+    ["model", "Code & image", "The commits of the code that trained the model, and its container image."],
+    ["data", "Data snapshot", "The data snapshot the runs trained and were evaluated on."],
   ];
   const STATE = { ok: "recorded", partial: "partly recorded", gap: "not recorded" };
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -674,7 +676,7 @@ document.addEventListener("atlas:ready", () => {
       { paths: [r.path], detail: kv([
         ["Report", `<a href="#/report/${esc(r._study)}/${esc(r.id)}">${esc(r.title)}</a>`],
         ["Source", srcLink(r.path, inStudy(r.path))],
-        ["Block", `<code>${esc(block)}</code>`],
+        ["Result block", `<code>${esc(block)}</code>`],
         ["Digest", declared.length ? declared.map(({ a, o }) => `<span class="mono">${esc(short(o.sha256))}</span>
             <span class="muted">in the outputs of</span> ${srcLink(a.path, base(a.path))}`).join("<br>")
           : `<span class="muted">not declared by any producer</span>`],
@@ -720,7 +722,7 @@ document.addEventListener("atlas:ready", () => {
       !inputs.length ? (v2.length ? "The producer recorded no inputs." : "_meta v1 records no input digests.")
         : plain.length ? `${plain.length} input${plain.length > 1 ? "s are" : " is"} a committed file whose freeze is not recorded (studies#25).`
         : "Every input is a freeze or another study's result, each by digest.",
-      { count: inputs.length > 1 ? plural(inputs.length, "input") : null, paths: inputs,
+      { count: inputs.length > 1 ? plural(inputs.length, "file") : null, paths: inputs,
         detail: inputs.length ? `<ul class="lin-list">${inputs.map((p, i) => `<li>${itemHtml(items[i])}
             ${readsHtml(readsOf[p])}
             ${items[i].xref ? "" : `<span class="muted">${esc(inStudy(p))}</span>`}</li>`).join("")}</ul>` : "" });
@@ -782,7 +784,7 @@ document.addEventListener("atlas:ready", () => {
         detail: expGroups.map((g) => sub(`<span class="mono">${esc(g.key)}</span>`, g.items.length
           ? `<ul class="lin-list">${g.items.map((it) => `<li>${itemHtml(it)} <span class="muted">${esc(inStudy(it.path))}</span></li>`).join("")}</ul>`
           : `<span class="muted">no manifests recorded or found</span>`)).join("") });
-    // Model & image and Data: what the launch recorded (studies#25), else what a provenance
+    // Code & image and Data snapshot: what the launch recorded (studies#25), else what a provenance
     // freeze recovered from W&B runs and Beaker jobs (studies#28), else not recorded.
     const recovered = (g) => S.cat.wandb_groups[g]?.recovered || null;
     const when = (rv) => `recovered ${String(rv.recovered_at_pt || "").slice(0, 10)}`;
