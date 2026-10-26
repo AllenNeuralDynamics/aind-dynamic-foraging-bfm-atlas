@@ -17,7 +17,8 @@ studies / dispatcher / wrapper commits.
   and its reports. Plain links between studies are citations and are not drawn.
 - **Lineage** of any result block: the report drawer (the block's *Provenance* button, or a
   number) and its own page, `#/lineage/<study>/<rN>/<block>`. Each step back from the block to
-  its data (analysis, query, tracking, compute, experiment, model & image, data) is filled,
+  its data (report block, analysis, run results, tracked runs, launch records, launch manifests,
+  code & image, data snapshot) is filled,
   half filled or hollow by what the catalog records. Open a step for its evidence (producer and
   digests, W&B groups, launch records, commits and image, data snapshot) and the checker findings
   about it; `#/lineage/<study>/<rN>/<block>/<step>` opens that step.
