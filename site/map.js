@@ -441,7 +441,8 @@ document.addEventListener("atlas:ready", () => {
               : d.source === "generated" ? "generated" : "not logged",
             sub: d.how }));
       if (!ds.length) return "none";
-      return all && ds.every((d) => (d.source === "snapshot" && d.manifest_sha256) || ["generated", "external"].includes(d.source))
+      // an external dataset is named but not digested: known, not pinned
+      return all && ds.every((d) => (d.source === "snapshot" && d.manifest_sha256) || d.source === "generated")
         ? "pinned" : "partial";
     });
     set("data", !groups.length || dataState.every((s) => s === "none") ? "gap"
@@ -451,6 +452,8 @@ document.addEventListener("atlas:ready", () => {
         : dataState.every((s) => s === "pinned") ? "A dated database snapshot, identified by the digest of its manifest."
         : dataItems.some((i) => i.text === "live database")
           ? "Some runs read the live database (before snapshots existed), so their exact data cannot be fetched again."
+        : dataItems.some((i) => i.text.startsWith("external:"))
+          ? "An external dataset is named, but no digest pins its contents."
           : "Known only in part: some groups or runs have no digested snapshot, or the recovery does not cover every run.");
     out.decisions = [
       ...(S.correctedBy[`${r._study}/${r.id}`] || []).map((c) => ({ text: `corrected by ${c.report._study.slice(0, 2)} ${c.report.id}`,
