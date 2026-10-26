@@ -1,4 +1,4 @@
-/* The study map (home page) and lineage (report drawer and #/lineage/<study>/<rN>/<block>), both
+/* The study map (home page), the local graph (study page) and lineage (report drawer and #/lineage/<study>/<rN>/<block>), both
  * generated from the catalog, plus Export SVG. Vocabulary: the studies repo's CONTEXT.md
  * (Motivation, Upstream, Correction, Lineage) and docs/adr/0002. Registers through window.Atlas.
  */
@@ -89,16 +89,25 @@ document.addEventListener("atlas:ready", () => {
   }
 
   // ------------------------------------------------------------ study map
+  // A force-directed graph (d3-force). Studies drift to islands by tag (studies schemas/tags.yaml);
+  // chips filter by a study's tags plus its reports'. Arrows run from the earlier study to the
+  // one that builds on it, for every kind of relationship.
   const KINDS = {
-    motivation: { label: "Motivation", hint: "why a study exists (study motivated_by)" },
-    corrects: { label: "Correction", hint: "a report amends an earlier report (corrects)" },
-    supersedes: { label: "Supersession", hint: "a report replaces an earlier one (superseded_by)" },
-    upstream: { label: "Upstream", hint: "a report uses another study's results (upstream)" },
+    motivation: { label: "Motivated", verb: "motivated", hint: "an earlier result this study follows up (motivated_by)" },
+    upstream: { label: "Cited by", verb: "is cited by", hint: "a later report uses this study's results (upstream)" },
+    corrects: { label: "Corrected by", verb: "is corrected by", hint: "a later report amends this report (corrects)" },
+    supersedes: { label: "Superseded by", verb: "is superseded by", hint: "a later report replaces this one (superseded_by)" },
   };
-  const LAYERS = { motivation: true, corrects: true, supersedes: true, upstream: false };
-  const LANES = ["GRU", "disRNN", "Baselines & comparisons"];
-  const laneOf = (s) => (/-vs-/.test(s.id) || !["gru", "disrnn"].includes(s.model) ? 2 : s.model === "gru" ? 0 : 1);
-  const label = (s) => (laneOf(s) === 2 ? s.id.slice(3) : s.purpose || s.id.slice(3)).replace(/-/g, " ");
+  const LAYERS = { motivation: true, upstream: true, corrects: true, supersedes: true };
+  const PHYS_DEFAULT = { link: 0.15, distance: 110, repel: 400, island: 0.25, center: 0.07 };
+  const SLIDERS = [
+    ["link", "Link pull", 0, 1, 0.01, "how strongly linked studies attract"],
+    ["distance", "Link length", 30, 260, 5, "rest length of a link"],
+    ["repel", "Repel", 0, 1500, 10, "how hard every study pushes the others away"],
+    ["island", "Island pull", 0, 1, 0.01, "how strongly a study is drawn to its tag's island (islands on)"],
+    ["center", "Centre pull", 0, 0.5, 0.01, "how strongly studies are drawn to the middle (islands off)"],
+  ];
+  const label = (s) => (s.purpose || s.id.slice(3)).replace(/-/g, " ");
   function wrap(text, n = 17) {
     const lines = [""];
     for (const w of text.split(" ")) {
@@ -111,81 +120,185 @@ document.addEventListener("atlas:ready", () => {
     : `https://github.com/${String(i).replace("#", "/issues/")}`);
   const reportHref = (key) => { const r = S.reportByKey[key]; return r ? `#/report/${r._study}/${r.id}` : null; };
 
-  A.drawMap = (host) => {
-    const studies = [...S.cat.studies].sort((a, b) => a.id.localeCompare(b.id));
-    const layers = { ...LAYERS, ...store.get("atlas.map.layers", {}) };
-    const W = 1240, L = 190, R = 40, TOP = 10, LH = 160, H = TOP + LH * LANES.length + 6, rad = 21;
-    const step = (W - L - R) / Math.max(1, studies.length - 1);
-    const pos = {};
-    studies.forEach((s, i) => { pos[s.id] = { x: L + i * step, y: TOP + laneOf(s) * LH + 98 }; });
-    // aggregate per (from, to, kind); a motivation to an issue gets a small node left of its study
-    const edges = {}, issuesOf = {};
-    for (const d of S.cat.dependencies) {
-      if (d.from === d.to || !pos[d.from]) continue;
-      if (!pos[d.to]) {
-        if (!d.to.startsWith("issue:")) continue;
-        // left of the study, stacked upward per issue, kept inside the drawing
-        const k = (issuesOf[d.from] = (issuesOf[d.from] || 0) + 1) - 1;
-        pos[d.to] = { x: Math.max(40, pos[d.from].x - step * 0.55), y: Math.max(TOP + 14, pos[d.from].y - 34 - 24 * k),
-                      issue: d.to.slice(6) };
-      }
+  // tags: a `/` nests (`cognitive/bh` also counts as `cognitive`); a catalog without a vocabulary
+  // (an older studies checkout) falls back to the model in the study's name
+  const expand = (ts) => uniq(ts.flatMap((t) => t.split("/").map((_, i, a) => a.slice(0, i + 1).join("/"))));
+  function vocabulary() {
+    if (S.cat.tags && Object.keys(S.cat.tags).length) return S.cat.tags;
+    const values = {};
+    S.cat.studies.forEach((s) => { if (s.model) values[s.model] = { label: s.model, description: null }; });
+    return { model: { label: "Model", description: null, values } };
+  }
+  const studyTags = (s, f) => expand((s.cover.tags || {})[f] || (f === "model" && !s.cover.tags && s.model ? [s.model] : []));
+  const reportTags = (r, f) => expand(((r.tags || {})[f]) || []);
+  const allTags = (s, f) => uniq([...studyTags(s, f), ...s.reports.flatMap((r) => reportTags(r, f))]);
+  const modelColor = (t) => `var(--m-${String(t).replace(/\//g, "-")}, var(--m-other))`;
+  const arrowFrom = (e) => [e.to, e.from];          // earlier -> later, whatever the kind
+
+  function aggregate(deps, keep) {
+    const edges = {};
+    for (const d of deps) {
+      if (d.from === d.to || !keep(d)) continue;
       (edges[`${d.from}|${d.to}|${d.kind}`] ||= { from: d.from, to: d.to, kind: d.kind, items: [] }).items.push(d);
     }
-    const list = Object.values(edges);
-    // Motivation and upstream flow forward in time (from the earlier result to the later study);
-    // correction and supersession point back at the report they amend or replace.
-    function path(e) {
-      const fwd = e.kind === "motivation" || e.kind === "upstream";
-      const a = pos[fwd ? e.to : e.from], b = pos[fwd ? e.from : e.to];
-      const ra = a.issue ? 10 : rad, rb = b.issue ? 10 : rad;
-      if (Math.abs(a.y - b.y) < 1) {                      // same lane: arc over the nodes between
-        // capped, so a long arc stays inside the lane's headroom
-        const h = Math.min({ motivation: 26, upstream: 12, corrects: 40, supersedes: 48 }[e.kind] + Math.abs(b.x - a.x) * 0.1,
-                           { motivation: 62, upstream: 46, corrects: 70, supersedes: 74 }[e.kind]);
-        return `M${a.x},${a.y - ra} C${a.x},${a.y - ra - h} ${b.x},${b.y - rb - h} ${b.x},${b.y - rb}`;
-      }
-      const dn = b.y > a.y ? 1 : -1, off = { motivation: 0, upstream: 16, corrects: -16, supersedes: -28 }[e.kind];
-      const y1 = a.y + dn * ra, y2 = b.y - dn * (rb + (dn > 0 ? 0 : 40)), ym = (y1 + y2) / 2;
-      return `M${a.x + off * 0.4},${y1} C${a.x + off},${ym} ${b.x + off},${ym} ${b.x + off * 0.4},${y2}`;
-    }
-    const lanes = LANES.map((name, i) => `<rect class="lane" x="0" y="${TOP + i * LH}" width="${W}" height="${LH - 8}" rx="8"/>
-      <text class="lane-label" x="14" y="${TOP + i * LH + 22}">${esc(name)}</text>`).join("");
-    const marker = (k) => `<marker id="m-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
-      orient="auto-start-reverse"><path class="mk mk-${k}" d="M0,0 L10,5 L0,10 z"/></marker>`;
-    const edgeSvg = list.map((e, i) => `<g class="edge e-${e.kind}${layers[e.kind] ? "" : " off"}" data-i="${i}"
-        data-from="${esc(e.from)}" data-to="${esc(e.to)}">
-        <path class="hit" d="${path(e)}"/><path class="line" d="${path(e)}" marker-end="url(#m-${e.kind})"/></g>`).join("");
-    const nodeSvg = studies.map((s) => {
-      const p = pos[s.id], st = s.cover.status || "unknown";
-      return `<g class="node st-${esc(st)}" data-id="${esc(s.id)}" tabindex="0" role="button"
-          aria-label="${esc(`${s.id}, ${st}`)}">
-        <circle cx="${p.x}" cy="${p.y}" r="${rad}"/>
-        <text class="nn" x="${p.x}" y="${p.y + 5}" text-anchor="middle">${esc(s.id.slice(0, 2))}</text>
-        ${wrap(label(s)).map((l, k) => `<text class="lbl" x="${p.x}" y="${p.y + rad + 16 + k * 14}" text-anchor="middle">${esc(l)}</text>`).join("")}
-      </g>`;
-    }).join("");
-    const issueSvg = Object.entries(pos).filter(([, p]) => p.issue).map(([id, p]) => `<g class="node issue" data-id="${esc(id)}">
-        <rect x="${p.x - 22}" y="${p.y - 10}" width="44" height="20" rx="10"/>
-        <text class="lbl" x="${p.x}" y="${p.y + 4}" text-anchor="middle">#${esc(String(p.issue).split("#").pop())}</text></g>`).join("");
+    return Object.values(edges);
+  }
+  const edgeTip = (e) => {
+    const name = (id) => (id.startsWith("issue:") ? id.slice(6) : id.slice(0, 2));
+    return `<b>${esc(KINDS[e.kind].label)}</b> · ${esc(name(e.to))} ${esc(KINDS[e.kind].verb)} ${esc(name(e.from))}
+      <ul>${uniq(e.items.map((d) => `${d.to_report ? d.to_report.split("/").pop() + ": " : ""}${d.note || (d.report ? base(d.report) : "")}`))
+        .slice(0, 6).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
+  };
+  function curve(a, b, ra, rb) {      // a gentle arc from a's rim to b's rim, arriving along its tangent
+    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    const mx = (a.x + b.x) / 2 + nx * 0.12 * L, my = (a.y + b.y) / 2 + ny * 0.12 * L;
+    const sx = mx - a.x, sy = my - a.y, S0 = Math.hypot(sx, sy) || 1, ex = b.x - mx, ey = b.y - my, E = Math.hypot(ex, ey) || 1;
+    return `M${a.x + sx / S0 * ra},${a.y + sy / S0 * ra} Q${mx},${my} ${b.x - ex / E * rb},${b.y - ey / E * rb}`;
+  }
+  const marker = (k) => `<marker id="m-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9"
+      markerUnits="userSpaceOnUse" orient="auto"><path class="mk mk-${k}" d="M0,0 L10,5 L0,10 z"/></marker>`;
+  const radius = (s) => (s ? 13 + Math.sqrt(s.reports.length) * 3.2 : 10);
+
+  A.drawMap = (host) => {
+    const d3 = window.d3;
+    if (!d3) { host.innerHTML = `<p class="muted">The study map needs d3, which did not load.</p>`; return; }
+    const VOCAB = vocabulary(), FACETS = Object.keys(VOCAB);
+    const studies = [...S.cat.studies].sort((a, b) => a.id.localeCompare(b.id));
+    const layers = { ...LAYERS, ...store.get("atlas.graph.layers", {}) };
+    const PHYS = { ...PHYS_DEFAULT, ...store.get("atlas.graph.forces", {}) };
+    let islands = store.get("atlas.graph.islands", "model");
+    if (islands !== null && !VOCAB[islands]) islands = FACETS[0] || null;
+    const selected = Object.fromEntries(FACETS.map((f) => [f, new Set()]));
+    const W = 1100, H = 640;
+
+    const nodes = studies.map((s) => ({ id: s.id, s }));
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    const list = aggregate(S.cat.dependencies, (d) => byId[d.from] && (byId[d.to] || d.to.startsWith("issue:")));
+    list.filter((e) => !byId[e.to]).forEach((e) => { byId[e.to] = { id: e.to, issue: e.to.slice(6) }; nodes.push(byId[e.to]); });
+    const links = list.map((e) => ({ e, source: byId[arrowFrom(e)[0]], target: byId[arrowFrom(e)[1]] }));
+
+    const chips = FACETS.map((f) => `<div class="facet"><span class="facet-name" title="${esc(VOCAB[f].description || "")}">${esc(VOCAB[f].label)}</span>
+        ${Object.entries(VOCAB[f].values).filter(([v]) => studies.some((s) => allTags(s, f).includes(v))).map(([v, d]) =>
+          `<button type="button" class="tag-chip" data-f="${esc(f)}" data-v="${esc(v)}" aria-pressed="false"
+            title="${esc(d.description || d.label)}">${f === "model" ? `<span class="dot" style="background:${modelColor(v)}"></span>` : ""}${esc(d.label)}</button>`).join("")}</div>`).join("");
     host.innerHTML = `
       <div class="map-tools">
-        <span class="muted">Relationships:</span>
-        ${Object.entries(KINDS).filter(([k]) => list.some((e) => e.kind === k) || k !== "supersedes").map(([k, v]) =>
-          `<button type="button" class="layer layer-${k}" data-kind="${k}" aria-pressed="${layers[k]}" title="${esc(v.hint)}">
-            <span class="swatch"></span>${esc(v.label)}</button>`).join("")}
-        <button type="button" class="export" id="map-export">Export SVG</button>
+        <div class="facets">${chips}
+          <div class="facet"><span class="facet-name">Links</span>
+          ${Object.entries(KINDS).filter(([k]) => list.some((e) => e.kind === k)).map(([k, v]) =>
+            `<button type="button" class="layer layer-${k}" data-kind="${k}" aria-pressed="${layers[k]}" title="${esc(v.hint)}">
+              <span class="swatch"></span>${esc(v.label)}</button>`).join("")}</div>
+        </div>
+        <div class="map-actions">
+          <button type="button" class="export" id="map-islands" aria-pressed="${!!islands}"></button>
+          <button type="button" class="export" id="map-export">Export SVG</button>
+        </div>
       </div>
-      <div class="map-wrap">
-        <svg id="study-map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Study map: studies by creation order and model family, with their relationships">
+      <div class="map-wrap graph-wrap">
+        <svg id="study-map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Study map: studies grouped by tag, with their relationships">
           <defs>${Object.keys(KINDS).map(marker).join("")}</defs>
-          ${lanes}${edgeSvg}${issueSvg}${nodeSvg}
+          <g class="viewport"><g class="islands"></g><g class="edges"></g><g class="nodes"></g></g>
         </svg>
+        <details class="forces" id="map-forces"><summary>Forces</summary>
+          ${SLIDERS.map(([k, lab, lo, hi, st, tip]) => `<label title="${esc(tip)}"><span>${esc(lab)}</span>
+            <input id="f-${k}" type="range" min="${lo}" max="${hi}" step="${st}" value="${PHYS[k]}"><output id="o-${k}">${PHYS[k]}</output></label>`).join("")}
+          <button type="button" class="export" id="f-reset">Reset</button>
+        </details>
       </div>
+      <p class="muted map-hint">Drag a study to move it; pinch or Ctrl+scroll to zoom. Arrows run from a result to the work that built on it.</p>
       <div class="map-panel" id="map-panel" aria-live="polite"></div>`;
     const svg = host.querySelector("svg"), wrapEl = host.querySelector(".map-wrap"), tip = tooltip(host);
-    let focused = store.get("atlas.map.focus", null);
-    if (focused && !pos[focused]) focused = null;
+    const view = d3.select(svg).select(".viewport");
+    d3.select(svg).call(d3.zoom().scaleExtent([0.4, 3]).filter((ev) => (ev.type !== "wheel" || ev.ctrlKey) && !ev.button)
+      .on("zoom", (ev) => view.attr("transform", ev.transform)));
 
+    // ---- elements
+    const edgeSel = view.select(".edges").selectAll("g").data(links).join("g")
+      .attr("class", (l) => `edge e-${l.e.kind}${layers[l.e.kind] ? "" : " off"}`)
+      .attr("data-from", (l) => l.e.from).attr("data-to", (l) => l.e.to);
+    edgeSel.append("path").attr("class", "hit");
+    edgeSel.append("path").attr("class", "line").attr("marker-end", (l) => `url(#m-${l.e.kind})`)
+      .style("stroke-width", (l) => `${1.2 + Math.sqrt(l.e.items.length) * 0.9}px`);
+    const nodeSel = view.select(".nodes").selectAll("g").data(nodes).join("g")
+      .attr("class", (n) => (n.s ? `node st-${n.s.cover.status || "unknown"}` : "node issue"))
+      .attr("data-id", (n) => n.id).attr("tabindex", (n) => (n.s ? 0 : null)).attr("role", (n) => (n.s ? "button" : null))
+      .attr("aria-label", (n) => (n.s ? `${n.id}, ${n.s.cover.status || "status unknown"}` : `issue ${n.issue}`));
+    nodeSel.filter((n) => n.s).each(function (n) {
+      const g = d3.select(this), r = radius(n.s);
+      const own = (n.s.cover.tags || {}).model || (n.s.model ? [n.s.model] : []);
+      g.append("circle").attr("class", "body").attr("r", r).style("fill", modelColor(own[0] || "other"));
+      if (own[1]) g.append("circle").attr("class", "ring").attr("r", r + 4).style("stroke", modelColor(own[1]));
+      g.append("text").attr("class", "nn").attr("text-anchor", "middle").attr("dy", "0.35em").text(n.id.slice(0, 2));
+      wrap(label(n.s)).forEach((l, k) => g.append("text").attr("class", "lbl").attr("text-anchor", "middle").attr("y", r + 15 + k * 13).text(l));
+    });
+    nodeSel.filter((n) => !n.s).each(function (n) {
+      const g = d3.select(this);
+      g.append("rect").attr("x", -22).attr("y", -10).attr("width", 44).attr("height", 20).attr("rx", 10);
+      g.append("text").attr("class", "lbl").attr("text-anchor", "middle").attr("y", 4).text(`#${String(n.issue).split("#").pop()}`);
+    });
+
+    // ---- physics
+    let anchors = {};
+    const placeAnchors = () => {
+      anchors = {};
+      if (!islands) return;
+      const vals = Object.keys(VOCAB[islands].values), R = Math.min(W, H) * 0.36;
+      vals.forEach((v, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / vals.length; anchors[v] = { x: W / 2 + R * Math.cos(a), y: H / 2 + R * Math.sin(a) }; });
+    };
+    const goal = (n, ax) => {
+      const ts = n.s ? studyTags(n.s, islands).filter((t) => anchors[t]) : [];
+      if (!ts.length) return ax === "x" ? W / 2 : H / 2;
+      return ts.reduce((a, t) => a + anchors[t][ax], 0) / ts.length;
+    };
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links)).force("charge", d3.forceManyBody())
+      .force("collide", d3.forceCollide((n) => radius(n.s) + 16)).force("x", d3.forceX()).force("y", d3.forceY());
+    function applyForces() {
+      sim.force("link").distance(PHYS.distance).strength(PHYS.link);
+      sim.force("charge").strength(-PHYS.repel);
+      sim.force("x").x((n) => (islands ? goal(n, "x") : W / 2)).strength(islands ? PHYS.island : PHYS.center);
+      sim.force("y").y((n) => (islands ? goal(n, "y") : H / 2)).strength(islands ? PHYS.island : PHYS.center);
+      sim.alpha(0.7).restart();
+    }
+    nodeSel.call(d3.drag()
+      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); n.fx = n.x; n.fy = n.y; })
+      .on("drag", (ev, n) => { n.fx = ev.x; n.fy = ev.y; })
+      .on("end", (ev, n) => { if (!ev.active) sim.alphaTarget(0); n.fx = n.fy = null; }));
+
+    const matches = (n) => !n.s ? true : FACETS.every((f) => !selected[f].size || allTags(n.s, f).some((t) => selected[f].has(t)));
+    function drawIslands() {
+      const g = view.select(".islands");
+      if (!islands) { g.selectAll("*").remove(); return; }
+      const chosen = selected[islands];
+      const all = Object.keys(VOCAB[islands].values).filter((v) => !chosen.size || chosen.has(v))
+        .map((v) => ({ v, pts: nodes.filter((n) => n.s && matches(n) && studyTags(n.s, islands).includes(v)) })).filter((x) => x.pts.length);
+      const key = (x) => x.pts.map((n) => n.id).join();
+      const groups = all.filter((x) => !all.some((y) => y !== x && y.v.startsWith(x.v + "/") && key(y) === key(x)));
+      g.selectAll("g").data(groups, (x) => x.v).join((e) => { const k = e.append("g").attr("class", "island"); k.append("path"); k.append("text"); return k; })
+        .each(function (x) {
+          const pts = x.pts.flatMap((n) => { const r = radius(n.s) + 24; return d3.range(10).map((i) => [n.x + r * Math.cos(i * Math.PI / 5), n.y + r * Math.sin(i * Math.PI / 5)]); });
+          const hull = d3.polygonHull(pts), c = d3.polygonCentroid(hull), top = d3.min(hull, (p) => p[1]);
+          const col = islands === "model" ? modelColor(x.v) : "var(--accent)";
+          d3.select(this).select("path").attr("d", d3.line().curve(d3.curveCatmullRomClosed)(hull)).style("fill", col).style("stroke", col);
+          d3.select(this).select("text").attr("x", c[0]).attr("y", Math.max(14, top - 6)).style("fill", col)
+            .text(VOCAB[islands].values[x.v].label);
+        });
+    }
+    sim.on("tick", () => {
+      nodes.forEach((n) => { const r = radius(n.s) + 30; n.x = Math.max(r, Math.min(W - r, n.x)); n.y = Math.max(r, Math.min(H - r - 10, n.y)); });
+      nodeSel.attr("transform", (n) => `translate(${n.x},${n.y})`);
+      edgeSel.selectAll("path").attr("d", (l) => curve(l.source, l.target, radius(l.source.s) + 2, radius(l.target.s) + (l.target.s && studyTags(l.target.s, "model").length > 1 ? 7 : 3)));
+      drawIslands();
+    });
+
+    // ---- filters, highlight, panel
+    let focused = store.get("atlas.map.focus", null);
+    if (focused && !S.study[focused]) focused = null;
+    function paint() {
+      nodeSel.classed("dim", (n) => !matches(n));
+      edgeSel.classed("dim", (l) => !matches(l.source) || !matches(l.target));
+      drawIslands();
+    }
     function light(id) {
       svg.classList.toggle("lighting", !!id);
       svg.querySelectorAll(".lit, .nbr").forEach((el) => el.classList.remove("lit", "nbr"));
@@ -198,17 +311,19 @@ document.addEventListener("atlas:ready", () => {
         svg.querySelector(`.node[data-id="${CSS.escape(other)}"]`)?.classList.add("nbr");
       });
     }
+    const tagLine = (s) => FACETS.map((f) => studyTags(s, f).filter((t) => !studyTags(s, f).some((o) => o.startsWith(t + "/")))
+      .map((t) => VOCAB[f].values[t]?.label || t).join(", ")).filter(Boolean).join(" · ");
+    const matchedBy = (s) => FACETS.flatMap((f) => [...selected[f]].map((t) => {
+      const rs = s.reports.filter((r) => reportTags(r, f).includes(t)).map((r) => r.id);
+      return rs.length ? `${VOCAB[f].values[t]?.label || t}: ${rs.join(", ")}` : null;
+    })).filter(Boolean);
     const studyTip = (s) => `<b>${esc(s.id)}</b> ${statusChip(s.cover.status)}
+      ${tagLine(s) ? `<div class="tip-tags">${esc(tagLine(s))}</div>` : ""}
       ${s.cover.question ? `<div>${esc(s.cover.question)}</div>` : ""}
-      ${s.cover.verdict ? `<div class="tip-v">${esc(s.cover.verdict)}</div>` : ""}`;
-    const edgeTip = (e) => `<b>${esc(KINDS[e.kind].label)}</b> · ${esc(e.from.slice(0, 2))} ${e.kind === "motivation" ? "follows up" :
-        e.kind === "upstream" ? "uses" : e.kind === "corrects" ? "corrects" : "supersedes"} ${esc(e.to.startsWith("issue:") ? e.to.slice(6) : e.to.slice(0, 2))}
-      <ul>${uniq(e.items.map((d) => `${d.to_report ? d.to_report.split("/").pop() + ": " : ""}${d.note || (d.report ? base(d.report) : "")}`))
-        .slice(0, 6).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
-
-    svg.querySelectorAll(".node[data-id]").forEach((g) => {
-      const s = S.study[g.dataset.id];
-      const show = () => { light(g.dataset.id); if (s) tip.show(g, studyTip(s)); };
+      ${matchedBy(s).length ? `<div class="tip-v">Matching reports · ${esc(matchedBy(s).join("; "))}</div>` : ""}`;
+    nodeSel.each(function (n) {
+      const g = this, s = n.s;
+      const show = () => { light(n.id); if (s) tip.show(g, studyTip(s)); };
       const hide = () => { tip.hide(); light(focused); };
       g.addEventListener("pointerenter", show);
       g.addEventListener("pointerleave", hide);
@@ -216,23 +331,49 @@ document.addEventListener("atlas:ready", () => {
       g.addEventListener("blur", hide);
       if (!s) return;
       const pick = () => { focused = focused === s.id ? null : s.id; store.set("atlas.map.focus", focused); panel(); light(focused); };
-      g.addEventListener("click", (ev) => { ev.stopPropagation(); pick(); });
+      g.addEventListener("click", (ev) => { if (ev.defaultPrevented) return; ev.stopPropagation(); pick(); });
       g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
     });
-    svg.querySelectorAll(".edge").forEach((g) => {
-      const e = list[+g.dataset.i];
-      g.addEventListener("pointerenter", () => tip.show(g, edgeTip(e)));
-      g.addEventListener("pointerleave", () => tip.hide());
-      g.addEventListener("click", (ev) => { ev.stopPropagation(); tip.show(g, edgeTip(e)); });
+    edgeSel.each(function (l) {
+      this.addEventListener("pointerenter", () => tip.show(this, edgeTip(l.e)));
+      this.addEventListener("pointerleave", () => tip.hide());
+      this.addEventListener("click", (ev) => { ev.stopPropagation(); tip.show(this, edgeTip(l.e)); });
     });
     wrapEl.addEventListener("click", () => tip.hide());
+    host.querySelectorAll(".tag-chip").forEach((b) => b.addEventListener("click", () => {
+      const set = selected[b.dataset.f], v = b.dataset.v;
+      set.has(v) ? set.delete(v) : set.add(v);
+      b.setAttribute("aria-pressed", String(set.has(v)));
+      paint();
+    }));
     host.querySelectorAll(".layer").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.kind;
       layers[k] = !layers[k];
       b.setAttribute("aria-pressed", String(layers[k]));
       svg.querySelectorAll(`.e-${k}`).forEach((g) => g.classList.toggle("off", !layers[k]));
-      store.set("atlas.map.layers", layers);
+      store.set("atlas.graph.layers", layers);
     }));
+    const cycle = [...FACETS, null];
+    const islandsBtn = host.querySelector("#map-islands");
+    const islandsLabel = () => { islandsBtn.textContent = `Islands: ${islands ? VOCAB[islands].label : "off"}`; islandsBtn.setAttribute("aria-pressed", String(!!islands)); };
+    islandsBtn.addEventListener("click", () => {
+      islands = cycle[(cycle.indexOf(islands) + 1) % cycle.length];
+      store.set("atlas.graph.islands", islands);
+      islandsLabel(); placeAnchors(); applyForces(); drawIslands();
+    });
+    const forces = host.querySelector("#map-forces");
+    SLIDERS.forEach(([k]) => {
+      const input = forces.querySelector(`#f-${k}`);
+      input.addEventListener("input", () => {
+        PHYS[k] = +input.value; forces.querySelector(`#o-${k}`).textContent = input.value;
+        store.set("atlas.graph.forces", PHYS); applyForces();
+      });
+    });
+    forces.querySelector("#f-reset").addEventListener("click", () => {
+      Object.assign(PHYS, PHYS_DEFAULT); store.set("atlas.graph.forces", PHYS);
+      SLIDERS.forEach(([k]) => { forces.querySelector(`#f-${k}`).value = PHYS[k]; forces.querySelector(`#o-${k}`).textContent = PHYS[k]; });
+      applyForces();
+    });
     host.querySelector("#map-export").addEventListener("click", () => {
       tip.hide();
       light(null);
@@ -252,8 +393,7 @@ document.addEventListener("atlas:ready", () => {
       const el = host.querySelector("#map-panel");
       svg.querySelectorAll(".node.focused").forEach((n) => n.classList.remove("focused"));
       if (!focused) {
-        el.innerHTML = `<p class="muted">Select a study to see why it exists, what it led to, what it uses, and its reports.
-          Arrows run from a result to the work that followed it; a correction points back at the report it amends.</p>`;
+        el.innerHTML = `<p class="muted">Select a study to see why it exists, what it led to, what it uses, and its reports.</p>`;
         return;
       }
       svg.querySelector(`.node[data-id="${CSS.escape(focused)}"]`)?.classList.add("focused");
@@ -277,6 +417,7 @@ document.addEventListener("atlas:ready", () => {
           ${esc(r.title.replace(/^(Result|r)\s*\d+\s*[—:-]\s*/i, ""))}</li>`);
       el.innerHTML = `<div class="panel-head"><a href="#/study/${esc(s.id)}"><b>${esc(s.id)}</b></a> ${statusChip(s.cover.status)}
           <button type="button" class="panel-close" aria-label="Clear selection">×</button></div>
+        ${tagLine(s) ? `<p class="muted">${esc(tagLine(s))}</p>` : ""}
         ${s.cover.question ? `<p>${esc(s.cover.question)}</p>` : ""}
         ${s.cover.verdict ? `<p class="muted">Verdict: ${esc(s.cover.verdict)}</p>` : ""}
         <div class="rels">
@@ -286,8 +427,66 @@ document.addEventListener("atlas:ready", () => {
         </div>`;
       el.querySelector(".panel-close").addEventListener("click", () => { focused = null; store.set("atlas.map.focus", null); panel(); light(null); });
     }
+    islandsLabel();
+    placeAnchors();
+    applyForces();
+    paint();
     panel();
     light(focused);
+  };
+
+  // ------------------------------------------------------------ local graph (study page)
+  // One study in the middle: what it builds on (left) and what built on it (right).
+  A.drawLocal = (host, sid) => {
+    const s0 = S.study[sid];
+    if (!s0) return;
+    const list = aggregate(S.cat.dependencies, (d) => (d.from === sid && (S.study[d.to] || d.to.startsWith("issue:"))) || (d.to === sid && S.study[d.from]));
+    const back = uniq(list.filter((e) => e.from === sid).map((e) => e.to));
+    const fwd = uniq(list.filter((e) => e.to === sid).map((e) => e.from)).filter((id) => !back.includes(id));
+    if (!list.length) { host.innerHTML = `<p class="muted">This study has no relationships to other studies yet.</p>`; return; }
+    const W = 900, colX = 300, gap = 54, rows = Math.max(back.length, fwd.length, 1), H = Math.max(200, 80 + rows * gap);
+    const cx = W / 2, cy = 30 + (H - 30) / 2, pos = { [sid]: { x: cx, y: cy } };
+    const column = (ids, x) => ids.forEach((id, i) => { pos[id] = { x, y: cy + (i - (ids.length - 1) / 2) * gap }; });
+    column(back, cx - colX);
+    column(fwd, cx + colX);
+    const rOf = (id) => (S.study[id] ? radius(S.study[id]) + (id === sid ? 6 : 0) : 12);
+    const nodeSvg = Object.keys(pos).map((id) => {
+      const p = pos[id], s = S.study[id];
+      if (!s) return `<g class="node issue" data-id="${esc(id)}" transform="translate(${p.x},${p.y})">
+          <rect x="-22" y="-10" width="44" height="20" rx="10"/><text class="lbl" text-anchor="middle" y="4">#${esc(id.slice(6).split("#").pop())}</text></g>`;
+      const own = (s.cover.tags || {}).model || (s.model ? [s.model] : []);
+      return `<g class="node st-${esc(s.cover.status || "unknown")}${id === sid ? " focused" : ""}" data-id="${esc(id)}" transform="translate(${p.x},${p.y})"
+          ${id === sid ? "" : `tabindex="0" role="link" aria-label="${esc(id)}"`}>
+        <circle class="body" r="${rOf(id)}" style="fill:${modelColor(own[0] || "other")}"/>
+        ${own[1] ? `<circle class="ring" r="${rOf(id) + 4}" style="stroke:${modelColor(own[1])}"/>` : ""}
+        <text class="nn" text-anchor="middle" dy="0.35em">${esc(id.slice(0, 2))}</text>
+        ${wrap(label(s)).map((l, k) => `<text class="lbl" text-anchor="middle" y="${rOf(id) + 15 + k * 13}">${esc(l)}</text>`).join("")}</g>`;
+    }).join("");
+    const edgeSvg = list.map((e, i) => {
+      const [a, b] = arrowFrom(e);
+      const d = curve(pos[a], pos[b], rOf(a) + 2, rOf(b) + 3);
+      return `<g class="edge e-${e.kind}" data-i="${i}"><path class="hit" d="${d}"/><path class="line" d="${d}" marker-end="url(#m-${e.kind})"
+        style="stroke-width:${1.2 + Math.sqrt(e.items.length) * 0.9}px"/></g>`;
+    }).join("");
+    host.innerHTML = `<div class="map-tools"><span class="muted">Left: what this study builds on. Right: what built on it.</span>
+        <button type="button" class="export" id="local-export">Export SVG</button></div>
+      <div class="map-wrap"><svg id="local-map" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sid)} and the studies it connects to">
+        <defs>${Object.keys(KINDS).map(marker).join("")}</defs>
+        <text class="col-label" x="12" y="20">Builds on</text><text class="col-label" x="${W - 12}" y="20" text-anchor="end">Followed up by</text>
+        ${edgeSvg}${nodeSvg}</svg></div>`;
+    const svg = host.querySelector("svg"), tip = tooltip(host);
+    svg.querySelectorAll(".edge").forEach((g) => {
+      const e = list[+g.dataset.i];
+      g.addEventListener("pointerenter", () => tip.show(g, edgeTip(e)));
+      g.addEventListener("pointerleave", () => tip.hide());
+      g.addEventListener("click", (ev) => { ev.stopPropagation(); tip.show(g, edgeTip(e)); });
+    });
+    svg.querySelectorAll(".node[tabindex]").forEach((g) => {
+      const go = () => { location.hash = `#/study/${g.dataset.id}`; };
+      g.addEventListener("click", go);
+      g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    });
+    host.querySelector("#local-export").addEventListener("click", () => { tip.hide(); downloadSvg(svg, `study-${sid.slice(0, 2)}-${short(S.sha)}.svg`); });
   };
 
   // ------------------------------------------------------------ lineage

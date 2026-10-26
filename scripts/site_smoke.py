@@ -103,6 +103,31 @@ def main(site: str, out: str) -> int:
         page.screenshot(path=str(out / "map.png"))
         check_export(page, "#map-export", "study map", out / "map.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.locator("#map-panel .panel-close").click()
+        # islands cycle through the tag facets and off; a tag chip fades the studies it does not match
+        btn = page.locator("#map-islands")
+        labels = []
+        for _ in range(len(cat.get("tags") or {"model": 0}) + 1):
+            btn.click()
+            labels.append(btn.inner_text())
+        if not any(t.endswith("off") for t in labels):
+            failures.append(f"study map: islands never turned off ({labels})")
+        chip = page.locator(".tag-chip").first
+        if chip.count():
+            chip.click()
+            page.wait_for_timeout(300)
+            if not page.locator("#study-map .node.dim").count() and len(cat["studies"]) > 1:
+                failures.append("study map: a tag filter dimmed nothing")
+            chip.click()
+        # the study page's local graph: the study in the middle, its neighbours on either side
+        linked = sorted({d["from"] for d in cat["dependencies"]} | {d["to"] for d in cat["dependencies"]})
+        sid = next((s["id"] for s in cat["studies"] if s["id"] in linked), None)
+        if sid:
+            page.goto(base + f"#/study/{sid}")
+            page.wait_for_selector("#local-map .node", timeout=20000)
+            if page.locator("#local-map .node.focused").count() != 1 or page.locator("#local-map .edge").count() < 1:
+                failures.append("local graph: the study or its links are missing")
+            page.screenshot(path=str(out / "local.png"))
+            check_export(page, "#local-export", "local graph", out / "local.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.goto(base + views["lineage"])
         page.wait_for_selector(".lineage .slot", timeout=20000)
         if page.locator(".lineage .slot").count() < 8:

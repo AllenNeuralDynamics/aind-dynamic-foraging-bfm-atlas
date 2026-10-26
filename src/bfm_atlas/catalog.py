@@ -283,6 +283,7 @@ def _report(path: Path, study_dir: Path, root: Path, study_ids: set[str], ok: "_
         "status": f.get("status"),
         "authors": f.get("authors") if isinstance(f.get("authors"), list) else [],
         "issue": f.get("issue"),
+        "tags": _tags(f.get("tags")),
         "has_frontmatter": fm is not None,
         "frontmatter_error": fm_error,
         "frontmatter": _jsonable(f),
@@ -351,6 +352,32 @@ def _makefile_targets(path: Path) -> list[str]:
     return sorted({t for line in lines for t in line.split()})
 
 
+def _tags(value) -> dict | None:
+    """Frontmatter `tags: {facet: [value, ...]}` (studies schemas/tags.yaml), strings only; else None."""
+    if not isinstance(value, dict):
+        return None
+    return {str(k): [str(t) for t in v if isinstance(t, (str, int))] for k, v in value.items() if isinstance(v, list)}
+
+
+def tag_vocabulary(root: Path) -> dict | None:
+    """The studies repo's tag vocabulary (schemas/tags.yaml): facet -> {label, description, values}."""
+    path = root / "schemas" / "tags.yaml"
+    try:
+        facets = (yaml.safe_load(path.read_text()) or {}).get("facets")
+    except (OSError, yaml.YAMLError, AttributeError):
+        return None
+    if not isinstance(facets, dict):
+        return None
+    out = {}
+    for name, f in facets.items():
+        if not isinstance(f, dict) or not isinstance(f.get("values"), dict):
+            continue
+        out[str(name)] = {"label": f.get("label") or str(name), "description": f.get("description"),
+                          "values": {str(v): {"label": (d or {}).get("label") or str(v), "description": (d or {}).get("description")}
+                                     for v, d in f["values"].items() if d is None or isinstance(d, dict)}}
+    return out
+
+
 def _cover(fm: dict | None, readme: str) -> dict:
     """Study cover from README frontmatter (schemas/study-frontmatter.v1), else parsed prose."""
     if fm is not None:
@@ -361,10 +388,11 @@ def _cover(fm: dict | None, readme: str) -> dict:
                 "issues": fm.get("issues") or [],
                 # None: not declared (a pre-Motivation study); []: a root study
                 "motivated_by": None if motivated is None else [m for m in motivated if isinstance(m, dict)],
+                "tags": _tags(fm.get("tags")),
                 "wandb": {"entity": w.get("entity"), "project": w.get("project")} if w else None}
     q, proj = QUESTION.search(readme), WANDB_PROJECT.search(readme)
     return {"source": "readme", "question": " ".join(q.group(1).split()) if q else None,
-            "status": None, "verdict": None, "superseded_by": None, "issues": [], "motivated_by": None,
+            "status": None, "verdict": None, "superseded_by": None, "issues": [], "motivated_by": None, "tags": None,
             "wandb": {"entity": proj.group(1), "project": proj.group(2)} if proj else None}
 
 
@@ -758,6 +786,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
             "studies_remote": re.sub(r"//[^@/]+@", "//", _git(root, "remote", "get-url", "origin") or "") or None,
         },
         "studies": studies,
+        "tags": tag_vocabulary(root),
         "wandb_groups": dict(sorted(groups.items())),
         "dependencies": dependencies,
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},
