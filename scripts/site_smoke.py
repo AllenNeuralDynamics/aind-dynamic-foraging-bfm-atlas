@@ -119,7 +119,9 @@ def main(site: str, out: str) -> int:
                 failures.append("study map: a tag filter dimmed nothing")
             chip.click()
         # the study page's local graph: the study in the middle, its neighbours on either side
-        linked = sorted({d["from"] for d in cat["dependencies"]} | {d["to"] for d in cat["dependencies"]})
+        # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
+        cross = [d for d in cat["dependencies"] if d["from"] != d["to"]]
+        linked = sorted({d["from"] for d in cross} | {d["to"] for d in cross})
         sid = next((s["id"] for s in cat["studies"] if s["id"] in linked), None)
         if sid:
             page.goto(base + f"#/study/{sid}")

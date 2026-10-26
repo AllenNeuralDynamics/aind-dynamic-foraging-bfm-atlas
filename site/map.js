@@ -342,9 +342,13 @@ document.addEventListener("atlas:ready", () => {
       g.addEventListener("click", (ev) => { if (ev.defaultPrevented) return; ev.stopPropagation(); pick(); });
       g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
     });
+    edgeSel.attr("tabindex", 0).attr("role", "button")
+      .attr("aria-label", (l) => `${l.e.to} ${KINDS[l.e.kind].verb} ${l.e.from}`);
     edgeSel.each(function (l) {
       this.addEventListener("pointerenter", () => tip.show(this, edgeTip(l.e)));
       this.addEventListener("pointerleave", () => tip.hide());
+      this.addEventListener("focus", () => tip.show(this, edgeTip(l.e)));
+      this.addEventListener("blur", () => tip.hide());
       this.addEventListener("click", (ev) => { ev.stopPropagation(); tip.show(this, edgeTip(l.e)); });
     });
     wrapEl.addEventListener("click", () => tip.hide());
@@ -476,7 +480,8 @@ document.addEventListener("atlas:ready", () => {
     const edgeSvg = list.map((e, i) => {
       const [a, b] = arrowFrom(e);
       const d = curve(pos[a], pos[b], rOf(a) + 2, rOf(b) + 3, e.bend);
-      return `<g class="edge e-${e.kind}" data-i="${i}"><path class="hit" d="${d}"/><path class="line" d="${d}" marker-end="url(#m-${e.kind})"
+      return `<g class="edge e-${e.kind}" data-i="${i}" tabindex="0" role="button"
+        aria-label="${esc(`${e.to} ${KINDS[e.kind].verb} ${e.from}`)}"><path class="hit" d="${d}"/><path class="line" d="${d}" marker-end="url(#m-${e.kind})"
         style="stroke-width:${1.2 + Math.sqrt(e.items.length) * 0.9}px"/></g>`;
     }).join("");
     host.innerHTML = `<div class="map-tools"><span class="muted">Left: what this study builds on. Right: what built on it.</span>
@@ -490,6 +495,8 @@ document.addEventListener("atlas:ready", () => {
       const e = list[+g.dataset.i];
       g.addEventListener("pointerenter", () => tip.show(g, edgeTip(e)));
       g.addEventListener("pointerleave", () => tip.hide());
+      g.addEventListener("focus", () => tip.show(g, edgeTip(e)));
+      g.addEventListener("blur", () => tip.hide());
       g.addEventListener("click", (ev) => { ev.stopPropagation(); tip.show(g, edgeTip(e)); });
     });
     svg.querySelectorAll(".node[tabindex]").forEach((g) => {
