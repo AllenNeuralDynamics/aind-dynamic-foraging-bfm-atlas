@@ -302,28 +302,127 @@ document.addEventListener("atlas:ready", () => {
     ["data", "Data", "The data snapshot the runs trained and were evaluated on."],
   ];
   const STATE = { ok: "recorded", partial: "partly recorded", gap: "not recorded" };
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const inStudy = (p) => String(p).replace(/^studies\/[^/]+\//, "");
+  // a step's details: rows of a definition list, and a titled sub-block per artifact, variant or group
+  const kv = (rows) => `<dl class="kv">${rows.filter(Boolean).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  const sub = (title, body) => `<div class="lin-sub"><div class="lin-sub-h">${title}</div>${body}</div>`;
+  const digestList = (xs, at) => (xs.length ? `<ul class="lin-list">${xs.map((d) => `<li>${srcLink(d.path, inStudy(d.path), at)}
+      <span class="muted mono">${esc(short(d.sha256))}</span></li>`).join("")}</ul>` : `<span class="muted">none</span>`);
+  const groupTitle = (g) => `<a class="mono" href="#/group/${encodeURIComponent(g)}">${esc(g)}</a>`;
+  // with several W&B groups each gets its own sub-block; with one, its details stand alone
+  const perGroup = (parts) => (parts.length === 1 ? parts[0].html : parts.map((p) => sub(groupTitle(p.g), p.html)).join(""));
+
+  function artifactDetail(a) {
+    const m = a.meta, head = `${srcLink(a.path, inStudy(a.path))} <span class="muted mono">sha256 ${esc(short(a.sha256))}</span>`;
+    if (!m) return sub(head, `<p class="muted">No <code>_meta</code> block, so the chain stops here.</p>`);
+    // source links pin the producer's own studies revision (as in the report drawer's chain)
+    const at = m.studies_git_sha || null;
+    const revision = m.studies_git_sha ? `studies ${A.commitLink("studies", m.studies_git_sha)}`
+      : m.dispatcher_git_sha ? `dispatcher ${A.commitLink("dispatcher", m.dispatcher_git_sha)}
+          <span class="muted">(pre-split checkout; source links show the catalog's commit)</span>`
+      : `<span class="muted">not recorded (source links show the catalog's commit)</span>`;
+    const v1 = `<span class="muted">not recorded (_meta v${esc(m.schema_version)})</span>`;
+    return sub(head, kv([
+      ["Producer", m.produced_by ? srcLink(`${S.study[a._study].path}/${m.produced_by}`, m.produced_by, at) : "—"],
+      ["Revision", revision],
+      m.produced_at_pt ? ["Produced", `${esc(m.produced_at_pt)}`] : null,
+      ["Code", m.schema_version === 2 ? digestList(m.code || [], at) : v1],
+      ["Inputs", m.schema_version === 2 ? digestList(m.inputs || [], at) : v1],
+      (m.sources || []).length ? ["Sources", m.sources.map((x) => `${esc(x.type)} <code>${esc(x.id)}</code>${x.step != null ? ` step ${esc(x.step)}` : ""}`).join("<br>")] : null,
+      (m.provenance_findings || []).length ? ["Producer's findings", `<ul class="lin-list">${m.provenance_findings.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`] : null,
+    ]) + `<details class="lin-raw"><summary><code>_meta</code></summary><pre>${esc(JSON.stringify(m, null, 2))}</pre></details>`);
+  }
+
+  function recordDetail(x) {
+    const name = srcLink(x.path, x.path.split("/").slice(-3).join("/"));
+    if (x.format !== "json") return `<li>${name} <span class="muted">older record file (a copied manifest)</span></li>`;
+    const jobs = (x.job_refs || []).map((j) => (j.type === "beaker_experiment"
+      ? `<a class="mono" href="https://beaker.org/ex/${esc(j.id)}" target="_blank" rel="noopener">${esc(j.id)}</a>`
+      : `${esc(j.type.replace(/_/g, " "))} <code>${esc(j.id)}</code>`));
+    const facts = [x.platform, x.time && String(x.time).slice(0, 16).replace("T", " "),
+                   x.n_tasks != null ? plural(x.n_tasks, "task") : null, x.label ? `label ${x.label}` : null].filter(Boolean);
+    return `<li>${name} ${chip(x.kind || "launch")} <span class="muted">${esc(facts.join(" · "))}</span>
+      ${x.note ? `<div>${esc(x.note)}</div>` : ""}
+      ${jobs.length ? `<div class="muted">jobs: ${jobs.join(", ")}</div>` : ""}</li>`;
+  }
+
+  // a data source as recorded at launch or recovered: every field it carries, so a new one still shows
+  const DATA_KEYS = { source: "Source", type: "Type", snapshot: "Snapshot", uri: "URI", manifest_sha256: "Manifest digest",
+                      build_id: "Build", n_sessions: "Sessions", n_runs: "Runs", config: "Config", how: "Recorded" };
+  const dataKv = (d) => kv(Object.entries(d).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) =>
+    [DATA_KEYS[k] || k.replace(/_/g, " "), typeof v === "object" ? `<code>${esc(JSON.stringify(v))}</code>`
+      : typeof v === "number" ? esc(v.toLocaleString("en-US"))
+      : ["uri", "manifest_sha256", "snapshot", "build_id"].includes(k) ? `<span class="mono">${esc(v)}</span>` : esc(v)]));
+  // where recovered values came from, and what the recovery could not find
+  function recoveredNote(rv) {
+    if (!rv) return "";
+    const un = Object.entries(rv.unrecovered || {});
+    return `<p class="muted">Recovered ${esc(String(rv.recovered_at_pt || "").slice(0, 16).replace("T", " "))} PT from
+        ${plural(rv.n_runs || 0, "run")} by ${srcLink(rv.artifact, base(rv.artifact))}.</p>
+      ${un.length ? `<p class="lvl-warn">Not recovered: ${esc(un.map(([k, v]) => `${k} (${typeof v === "number" ? plural(v, "run") : JSON.stringify(v)})`).join(", "))}</p>` : ""}`;
+  }
+
+  // Checker findings sit on the step they concern: a report's by its check, an artifact, input or
+  // launch record by its path, and a variant's on the step that reads files under it.
+  function attachFindings(L) {
+    const groups = new Set(L.groups);
+    for (const f of S.findings) {
+      if (f.level !== "error" && f.level !== "warn") continue;
+      if (f.path === L.r.path) {
+        const k = f.check === "report-group-unrecorded" ? (groups.has(f.item) ? "tracking" : null)
+          : f.check === "report-input-missing" ? "query" : f.check === "report-reproduce" ? "analysis" : "report";
+        if (k) L.hops[k].findings.push(f);
+        continue;
+      }
+      const under = String(f.check).startsWith("variant-");
+      const k = f.check === "variant-launch-record-dir" ? "compute" : under ? "experiment" : null;
+      for (const [hk, h] of Object.entries(L.hops)) {
+        if (k ? hk === k && h.paths.some((p) => p.startsWith(`${f.path}/`)) : h.paths.includes(f.path)) h.findings.push(f);
+      }
+    }
+  }
 
   function buildLineage(r, block) {
     const { list: arts, how } = A.producersFor(r, block);
     const v2 = arts.filter((a) => a.meta?.schema_version === 2);
     const out = { r, block, hops: {} };
-    const set = (k, state, items, why) => { out.hops[k] = { state, items, why }; };
+    // count: a multi-valued step's collapsed summary; paths: the files it cites, for its findings
+    const set = (k, state, items, why, more = {}) => {
+      out.hops[k] = { state, items, why, count: null, paths: [], detail: "", findings: [], ...more };
+    };
     const blockKey = `${r.path}#${block}`;
     const declared = arts.flatMap((a) => (a.meta?.outputs || []).filter((o) => o.path === blockKey).map((o) => ({ a, o })));
     set("report", declared.length ? "ok" : "partial",
       [{ text: `${r.id} · ${block}`, sub: declared[0] ? `digest ${short(declared[0].o.sha256)}` : null, href: `#/report/${r._study}/${r.id}` }],
       declared.length ? `Its digest is in ${base(declared[0].a.path)}'s outputs, so a hand edit fails the studies CI.`
-        : "No producer declares this block in _meta.outputs, so an edit by hand would go unnoticed.");
+        : "No producer declares this block in _meta.outputs, so an edit by hand would go unnoticed.",
+      { paths: [r.path], detail: kv([
+        ["Report", `<a href="#/report/${esc(r._study)}/${esc(r.id)}">${esc(r.title)}</a>`],
+        ["Source", srcLink(r.path, inStudy(r.path))],
+        ["Block", `<code>${esc(block)}</code>`],
+        ["Digest", declared.length ? declared.map(({ a, o }) => `<span class="mono">${esc(short(o.sha256))}</span>
+            <span class="muted">in the outputs of</span> ${srcLink(a.path, base(a.path))}`).join("<br>")
+          : `<span class="muted">not declared by any producer</span>`],
+        r.reproduce ? ["Reproduce", `<code>${esc(r.reproduce)}</code>`] : null,
+      ]) });
     set("analysis", !arts.length ? "gap" : v2.length === arts.length ? "ok" : "partial",
       arts.map((a) => ({ text: a.meta?.produced_by ? base(a.meta.produced_by) : base(a.path),
         sub: a.meta?.schema_version === 2 ? `${(a.meta.code || []).length} code digests` : "no code digests (_meta v1)",
         link: srcLink(a.path, base(a.path)) })),
       !arts.length ? "No analysis JSON is linked to this block." : how === "inputs"
-        ? "Found through the report's declared inputs, not through _meta.outputs." : "Code digests are checked in CI: an edited producer marks this stale.");
+        ? "Found through the report's declared inputs, not through _meta.outputs." : "Code digests are checked in CI: an edited producer marks this stale.",
+      { count: arts.length > 1 ? plural(arts.length, "analysis artifact") : null,
+        paths: [...arts.map((a) => a.path), ...arts.filter((a) => a.meta?.produced_by).map((a) => `${S.study[a._study].path}/${a.meta.produced_by}`)],
+        detail: (how === "inputs" && arts.length ? `<p class="muted">No producer declares this block in <code>_meta.outputs</code>
+            (a v2 producer would); these are the report's JSON inputs.</p>` : "") + arts.map(artifactDetail).join("") });
     const inputs = uniq(arts.flatMap((a) => (a.meta?.inputs || []).map((i) => i.path)));
-    // an input is linked at the revision of the producer that read it (as in the detail list)
-    const readAt = {};
-    arts.forEach((a) => (a.meta?.inputs || []).forEach((i) => { readAt[i.path] ||= a.meta?.studies_git_sha || undefined; }));
+    // an input is linked at the revision of the producer that read it, with the digest it recorded
+    const readAt = {}, digestOf = {};
+    arts.forEach((a) => (a.meta?.inputs || []).forEach((i) => {
+      readAt[i.path] ||= a.meta?.studies_git_sha || undefined;
+      digestOf[i.path] ||= i.sha256;
+    }));
     const freezes = inputs.map((p) => S.artifactByPath[p]).filter((a) => a?.meta?.kind === "freeze");
     const items = inputs.map((p) => {
       const st = studyOfPath(p), cross = st && st !== r._study, art = S.artifactByPath[p];
@@ -341,12 +440,22 @@ document.addEventListener("atlas:ready", () => {
     set("query", !inputs.length ? "gap" : plain.length ? "partial" : "ok", items,
       !inputs.length ? (v2.length ? "The producer recorded no inputs." : "_meta v1 records no input digests.")
         : plain.length ? `${plain.length} input${plain.length > 1 ? "s are" : " is"} a committed file whose freeze is not recorded (studies#25).`
-        : "Every input is a freeze or another study's result, each by digest.");
+        : "Every input is a freeze or another study's result, each by digest.",
+      { count: inputs.length > 1 ? plural(inputs.length, "input") : null, paths: inputs,
+        detail: inputs.length ? `<ul class="lin-list">${inputs.map((p, i) => `<li>${itemHtml(items[i])}
+            ${digestOf[p] ? `<span class="muted mono">${esc(short(digestOf[p]))}</span>` : ""}
+            ${items[i].xref ? "" : `<span class="muted">${esc(inStudy(p))}</span>`}</li>`).join("")}</ul>` : "" });
     const groups = uniq([...arts, ...freezes].flatMap((a) => a.meta?.wandb_groups || []));
+    out.groups = groups;
+    const recsOf = (g) => (S.cat.wandb_groups[g]?.launch_records || []).map((p) => S.recordByPath[p]).filter(Boolean);
     set("tracking", groups.length ? "ok" : "gap",
       groups.map((g) => ({ text: g, href: `#/group/${encodeURIComponent(g)}` })),
-      groups.length ? "Pinned by exact name; one launch mints one group (ADR 0001)." : "No W&B group is recorded for this result.");
-    const recsOf = (g) => (S.cat.wandb_groups[g]?.launch_records || []).map((p) => S.recordByPath[p]).filter(Boolean);
+      groups.length ? "Pinned by exact name; one launch mints one group (ADR 0001)." : "No W&B group is recorded for this result.",
+      { count: groups.length > 1 ? plural(groups.length, "W&B group") : null,
+        detail: groups.length ? `<ul class="lin-list">${groups.map((g) => { const e = S.cat.wandb_groups[g] || {};
+          return `<li>${groupTitle(g)}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">open in W&amp;B</a>` : ""}
+            <div class="muted">${e.study ? `${esc(e.study)}${e.variant ? ` / ${esc(e.variant)}` : ""} · ` : ""}${plural(recsOf(g).length, "launch record")}</div></li>`; })
+          .join("")}</ul>` : "" });
     const recs = uniq(groups.flatMap(recsOf));
     const json = recs.filter((x) => x.format === "json");
     const kinds = uniq(json.map((x) => x.kind || "launch"));
@@ -357,40 +466,48 @@ document.addEventListener("atlas:ready", () => {
       [...(json.length ? [{ text: `${json.length} launch record${json.length > 1 ? "s" : ""}`, sub: kinds.join(", ") }] : []),
        ...(older ? [{ text: `${older} older record file${older > 1 ? "s" : ""}`, sub: "pre-JSON manifests" }] : [])],
       !recs.length ? (groups.length ? "No launch record names these groups." : "No W&B group, so no launch to find.")
-        : json.length ? "Every launch and intervention writes a launch record." : "Only older record files (copied manifests), without the launch's kind, jobs or commits.");
+        : json.length ? "Every launch and intervention writes a launch record." : "Only older record files (copied manifests), without the launch's kind, jobs or commits.",
+      { paths: recs.map((x) => x.path),
+        // launches first, in time order; older record files after
+        detail: recs.length ? `<ul class="lin-list">${[...json].sort((a, b) => String(a.time || "~").localeCompare(String(b.time || "~")))
+          .concat(recs.filter((x) => x.format !== "json")).map(recordDetail).join("")}</ul>` : "" });
     // Per variant: the manifests its launch records snapshot (named relative to the variant, as the
     // studies launchers write them), or else the variant's files as they are now, marked so.
     const variantOf = (x) => S.study[x._study]?.variants.find((v) => v.name === x._variant);
     const resolve = (x, m) => (m.startsWith("studies/") ? m
       : `${variantOf(x)?.path || S.study[x._study]?.path}/${m.replace(/^\.\//, "")}`);
     const byVariant = {};
-    recs.forEach((x) => { (byVariant[`${x._study}/${x._variant}`] ||= []).push(x); });
+    recs.forEach((x) => { (byVariant[`${x._study}/${x._variant || "(study root)"}`] ||= []).push(x); });
     let snapshotted = 0;
-    const expItems = Object.values(byVariant).flatMap((xs) => {
+    const expGroups = Object.entries(byVariant).map(([key, xs]) => {
       // a manifest as submitted is the file at the launch's recorded studies revision
       const recorded = uniq(xs.filter((x) => x.format === "json").flatMap((x) =>
         (x.manifests || []).map((m) => `${resolve(x, m)}@${x.revisions?.studies || ""}`)));
       // a snapshot needs the revision it was submitted at; without one the link shows today's file
-      if (recorded.length && recorded.every((k) => k.split("@")[1])) {
-        snapshotted++;
-        return recorded.map((k) => { const [m, sha] = k.split("@");
-          return { text: base(m), sub: `at ${short(sha)}`, link: srcLink(m, base(m), sha) }; });
-      }
-      if (recorded.length) return recorded.map((k) => { const [m, sha] = k.split("@");
-        return sha ? { text: base(m), sub: `at ${short(sha)}`, link: srcLink(m, base(m), sha) }
-                   : { text: base(m), sub: "current file", link: srcLink(m, base(m)) }; });
-      return (variantOf(xs[0])?.manifests || []).map((m) => ({ text: base(m), sub: "current file", link: srcLink(m, base(m)) }));
+      if (recorded.length && recorded.every((k) => k.split("@")[1])) snapshotted++;
+      const its = recorded.length ? recorded.map((k) => { const [m, sha] = k.split("@");
+          return sha ? { text: base(m), sub: `at ${short(sha)}`, path: m, link: srcLink(m, base(m), sha) }
+                     : { text: base(m), sub: "current file", path: m, link: srcLink(m, base(m)) }; })
+        : (variantOf(xs[0])?.manifests || []).map((m) => ({ text: base(m), sub: "current file", path: m, link: srcLink(m, base(m)) }));
+      return { key, items: its };
     });
-    const nVariants = Object.keys(byVariant).length;
+    const expItems = expGroups.flatMap((g) => g.items);
+    const nVariants = expGroups.length;
     set("experiment", !nVariants ? "gap" : snapshotted === nVariants ? "ok" : expItems.length ? "partial" : "gap", expItems,
       !nVariants ? "No launch record to read manifests from."
         : snapshotted === nVariants ? "Manifests as submitted, copied into the launch record."
-        : "Some launches did not snapshot their manifests; those show the variant's files as they are now, which may have changed since.");
+        : "Some launches did not snapshot their manifests; those show the variant's files as they are now, which may have changed since.",
+      { count: expItems.length > 1 ? `${plural(expItems.length, "manifest")}${nVariants > 1 ? ` in ${nVariants} variants` : ""}` : null,
+        paths: expItems.map((i) => i.path),
+        detail: expGroups.map((g) => sub(`<span class="mono">${esc(g.key)}</span>`, g.items.length
+          ? `<ul class="lin-list">${g.items.map((it) => `<li>${itemHtml(it)} <span class="muted">${esc(inStudy(it.path))}</span></li>`).join("")}</ul>`
+          : `<span class="muted">no manifests recorded or found</span>`)).join("") });
     // Model & image and Data: what the launch recorded (studies#25), else what a provenance
     // freeze recovered from W&B runs and Beaker jobs (studies#28), else not recorded.
     const recovered = (g) => S.cat.wandb_groups[g]?.recovered || null;
     const when = (rv) => `recovered ${String(rv.recovered_at_pt || "").slice(0, 10)}`;
     const recordsOf = (g) => recsOf(g).filter((x) => x.format === "json");
+    const recoveredFrom = uniq(groups.map(recovered).filter(Boolean).map((rv) => rv.artifact));
     // recovered values count as known only when they cover every run of the group
     const covers = (rv, entries) => !!rv && entries.reduce((n, e) => n + (e.n_runs || 0), 0) >= (rv.n_runs || Infinity);
     // a launch-record value is complete only when every JSON launch record of the group has it
@@ -421,10 +538,14 @@ document.addEventListener("atlas:ready", () => {
       });
       return out;
     };
-    const modelItems = [], modelHas = groups.map((g) => {
+    const modelItems = [], modelParts = [], modelHas = groups.map((g) => {
       const img = imageOf(g), revs = revsOf(g);
       Object.entries(revs).forEach(([k, v]) => modelItems.push({ text: `${k} ${[...v.shas].map(short).join(", ")}`, sub: v.how }));
       img.items.forEach((i) => modelItems.push({ text: `image ${short(i.id)}`, sub: i.how }));
+      const rows = [...Object.entries(revs).map(([k, v]) => [k, `${[...v.shas].map((sha) => A.commitLink(k, sha)).join(", ")}
+          <span class="muted">${esc(v.how)}${v.all ? "" : ", not every run"}</span>`]),
+        ...img.items.map((i) => ["image", `<span class="mono">${esc(i.id)}</span> <span class="muted">${esc(i.how)}${img.all ? "" : ", not every run"}</span>`])];
+      modelParts.push({ g, html: (rows.length ? kv(rows) : `<p class="muted">Not recorded at launch and not recovered.</p>`) + recoveredNote(recovered(g)) });
       // the training code: the wrapper that trained and the dispatcher config it ran
       return { image: img.items.length > 0 && img.all,
                code: ["wrapper", "dispatcher"].every((k) => revs[k]) && Object.values(revs).every((v) => v.all),
@@ -438,41 +559,48 @@ document.addEventListener("atlas:ready", () => {
           ? "Code commits and the exact image id are known for every group (at launch, or recovered from W&B and Beaker)."
           : modelHas.some((h) => h.any)
             ? "Known only in part: some groups, repositories or runs predate recording and could not be recovered (studies#25, #28)."
-            : "Not recorded at launch and not recovered (studies#25, #28).");
+            : "Not recorded at launch and not recovered (studies#25, #28).",
+      { paths: recoveredFrom, detail: groups.length ? perGroup(modelParts) : "" });
     const dataOf = (g) => {
       const recs = recordsOf(g), atLaunch = recs.map((x) => x.data).filter(Boolean);
       if (atLaunch.length && atLaunch.length === recs.length) return { ds: atLaunch.map((d) => ({ ...d, how: "at launch" })), all: true };
       const rv = recovered(g), ds = (rv?.data || []).map((d) => ({ ...d, how: when(rv) }));
       return { ds: [...atLaunch.map((d) => ({ ...d, how: "at launch" })), ...ds], all: covers(rv, ds) };
     };
-    const dataItems = [], dataState = groups.map((g) => {
+    const dataItems = [], dataParts = [], dataState = groups.map((g) => {
       const { ds, all } = dataOf(g);
       ds.forEach((d) => dataItems.push(d.source === "snapshot"
         ? { text: `snapshot ${d.snapshot}`, sub: `${d.manifest_sha256 ? `manifest ${short(d.manifest_sha256)}, ` : ""}${d.how}` }
         : { text: d.source === "live" ? "live database" : d.source === "external" ? `external: ${d.config}`
               : d.source === "generated" ? "generated" : "not logged",
             sub: d.how }));
+      dataParts.push({ g, html: (ds.length ? ds.map(dataKv).join("") : `<p class="muted">Not recorded at launch and not recovered.</p>`)
+        + recoveredNote(recovered(g)) });
       if (!ds.length) return "none";
       // an external dataset is named but not digested: known, not pinned
       return all && ds.every((d) => (d.source === "snapshot" && d.manifest_sha256) || d.source === "generated")
         ? "pinned" : "partial";
     });
+    const dataUniq = uniq(dataItems.map((i) => JSON.stringify(i))).map((s) => JSON.parse(s));
     set("data", !groups.length || dataState.every((s) => s === "none") ? "gap"
         : dataState.every((s) => s === "pinned") ? "ok" : "partial",
-      uniq(dataItems.map((i) => JSON.stringify(i))).map((s) => JSON.parse(s)),
+      dataUniq,
       !groups.length || dataState.every((s) => s === "none") ? "Not recorded at launch and not recovered (studies#25, #28)."
         : dataState.every((s) => s === "pinned") ? "A dated database snapshot, identified by the digest of its manifest."
         : dataItems.some((i) => i.text === "live database")
           ? "Some runs read the live database (before snapshots existed), so their exact data cannot be fetched again."
         : dataItems.some((i) => i.text.startsWith("external:"))
           ? "An external dataset is named, but no digest pins its contents."
-          : "Known only in part: some groups or runs have no digested snapshot, or the recovery does not cover every run.");
+          : "Known only in part: some groups or runs have no digested snapshot, or the recovery does not cover every run.",
+      { count: dataUniq.length > 1 ? plural(dataUniq.length, "data source") : null,
+        paths: recoveredFrom, detail: groups.length ? perGroup(dataParts) : "" });
     out.decisions = [
       ...(S.correctedBy[`${r._study}/${r.id}`] || []).map((c) => ({ text: `corrected by ${c.report._study.slice(0, 2)} ${c.report.id}`,
         href: `#/report/${c.report._study}/${c.report.id}`, note: c.note })),
       ...(r.superseded_by ? [{ text: `superseded by ${r.superseded_by.study.slice(0, 2)} ${r.superseded_by.report}`,
         href: reportHref(`${r.superseded_by.study}/${r.superseded_by.report}`) }] : []),
     ];
+    if (S.healthRan) attachFindings(out);
     return out;
   }
 
@@ -483,39 +611,74 @@ document.addEventListener("atlas:ready", () => {
     return `<span class="lchip">${body}</span>`;
   }
 
-  A.mountLineage = (host, r, block, { full = false } = {}) => {
-    const L = buildLineage(r, block);
+  // The collapsed row: a count when the step has several values, else the value itself.
+  function summaryHtml(h) {
+    if (!h.items.length) return `<span class="muted">${STATE[h.state]}</span>`;
+    const text = (it) => `${esc(it.text)}${it.sub ? ` <span class="muted">${esc(it.sub)}</span>` : ""}`;
+    if (h.count) return `<b>${esc(h.count)}</b> <span class="muted">${h.items.map((it) => esc(it.text)).join(" · ")}</span>`;
+    return h.items.map(text).join(" · ");
+  }
+  const badges = (fs) => ["error", "warn"].map((lvl) => { const n = fs.filter((f) => f.level === lvl).length;
+    return n ? `<span class="badge ${lvl}" title="${plural(n, `checker ${lvl === "warn" ? "warning" : lvl}`)}">${n}<span class="sr">
+      ${plural(n, lvl === "warn" ? "warning" : lvl)}</span></span>` : ""; }).join("");
+  const findingsHtml = (fs) => (fs.length ? `<div class="k">Checker findings</div><ul class="findings">${fs.map((f) =>
+    `<li><span class="lvl-${esc(f.level)}">${esc(f.check)}</span> ${srcLink(f.path, f.path.replace(/^studies\//, ""))}: ${esc(f.message)}
+      ${f.fix ? `<div class="muted">Fix: ${esc(f.fix)}</div>` : ""}</li>`).join("")}</ul>` : "");
+
+  let linCount = 0;
+  A.mountLineage = (host, r, block, { full = false, open = null } = {}) => {
+    const L = buildLineage(r, block), id = `lin${++linCount}`;
     const permalink = `#/lineage/${encodeURIComponent(r._study)}/${encodeURIComponent(r.id)}/${encodeURIComponent(block)}`;
+    const cap = (s) => s[0].toUpperCase() + s.slice(1);
     host.innerHTML = `<div class="lineage">
       <div class="lin-head"><span class="k">Lineage</span>
-        ${full ? "" : `<a href="${permalink}">full page</a>`}
+        ${full ? "" : `<a class="lin-full" href="${permalink}">full page</a>`}
+        <button type="button" class="export lin-all">Expand all</button>
         <button type="button" class="export lin-export">Export SVG</button></div>
-      <ol class="lin">${HOPS.map(([k, name]) => { const h = L.hops[k];
-        return `<li class="slot s-${h.state}" data-hop="${k}" tabindex="0">
-          <span class="dot" aria-hidden="true"></span>
-          <div class="slot-body"><div class="slot-name">${esc(name)} <span class="sr">(${STATE[h.state]})</span></div>
-            <div class="slot-items">${h.items.slice(0, 3).map(itemHtml).join("")}
-              ${h.items.length > 3 ? `<button type="button" class="more">+${h.items.length - 3} more</button>
-                <span class="rest" hidden>${h.items.slice(3).map(itemHtml).join("")}</span>` : ""}
-              ${!h.items.length ? `<span class="muted gap-text">${STATE[h.state]}</span>` : ""}</div></div></li>`; }).join("")}
-        ${L.decisions.map((d) => `<li class="slot s-decision" tabindex="0" data-hop="decision"><span class="dot" aria-hidden="true"></span>
-          <div class="slot-body"><div class="slot-name">Decision</div><div class="slot-items">
-            <a class="lchip" href="${esc(d.href || "#/")}">${esc(d.text)}</a>${d.note ? ` <span class="muted">${esc(d.note)}</span>` : ""}</div></div></li>`).join("")}
+      <ol class="lin">${HOPS.map(([k, name, hint]) => { const h = L.hops[k];
+        return `<li class="slot s-${h.state}" data-hop="${k}">
+          <button type="button" class="slot-head" aria-expanded="false" aria-controls="${id}-${k}">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="slot-name">${esc(name)} <span class="sr">(${STATE[h.state]})</span></span>
+            <span class="slot-val">${summaryHtml(h)}</span>
+            <span class="slot-badges">${badges(h.findings)}</span>
+            <span class="chev" aria-hidden="true"></span></button>
+          <div class="slot-detail" id="${id}-${k}" hidden>
+            <p><b>${esc(cap(STATE[h.state]))}.</b> ${esc(h.why)} <span class="muted">${esc(hint)}</span></p>
+            ${h.detail}${findingsHtml(h.findings)}</div></li>`; }).join("")}
+        ${L.decisions.map((d) => `<li class="slot s-decision" data-hop="decision"><div class="slot-head lin-static">
+            <span class="dot" aria-hidden="true"></span><span class="slot-name">Decision</span>
+            <span class="slot-val"><a href="${esc(d.href || "#/")}">${esc(d.text)}</a>${d.note ? ` <span class="muted">${esc(d.note)}</span>` : ""}</span>
+          </div></li>`).join("")}
       </ol></div>`;
-    const tip = tooltip(host.querySelector(".lineage"));
-    host.querySelectorAll(".slot").forEach((li) => {
-      const k = li.dataset.hop, hop = L.hops[k], meta = HOPS.find((h) => h[0] === k);
-      const html = k === "decision" ? "<b>Decision</b><div>A later report amends or replaces this one.</div>"
-        : `<b>${esc(meta[1])}</b> · ${esc(STATE[hop.state])}<div>${esc(meta[2])}</div><div class="tip-v">${esc(hop.why)}</div>`;
-      li.addEventListener("pointerenter", (ev) => { if (ev.pointerType !== "touch") tip.show(li, html); });
-      li.addEventListener("pointerleave", (ev) => { if (ev.pointerType !== "touch") tip.hide(); });
-      li.addEventListener("focus", () => tip.show(li, html));
-      li.addEventListener("blur", () => tip.hide());
-      li.addEventListener("click", (ev) => { if (!ev.target.closest("a, button")) tip.show(li, html); });
-      li.querySelector(".more")?.addEventListener("click", (ev) => {
-        ev.target.hidden = true; ev.target.nextElementSibling.hidden = false;
-      });
+    const heads = [...host.querySelectorAll("button.slot-head")], all = host.querySelector(".lin-all");
+    const fullLink = host.querySelector(".lin-full");
+    const isOpen = (b) => b.getAttribute("aria-expanded") === "true";
+    const show = (b, on) => { b.setAttribute("aria-expanded", String(on)); b.nextElementSibling.hidden = !on; };
+    // The permalink names the step opened last; on the page the address bar follows without a
+    // re-render (replaceState fires no hashchange), in the drawer the "full page" link does.
+    let current = null;
+    const remember = (k) => {
+      current = k;
+      const href = k ? `${permalink}/${encodeURIComponent(k)}` : permalink;
+      if (full) history.replaceState(null, "", href);
+      else if (fullLink) fullLink.href = href;
+    };
+    const sync = () => { all.textContent = heads.every(isOpen) ? "Collapse all" : "Expand all"; };
+    heads.forEach((b) => b.addEventListener("click", () => {
+      const k = b.closest(".slot").dataset.hop, on = !isOpen(b);
+      show(b, on);
+      if (on) remember(k); else if (current === k) remember(null);
+      sync();
+    }));
+    all.addEventListener("click", () => {
+      const on = !heads.every(isOpen);
+      heads.forEach((b) => show(b, on));
+      if (!on) remember(null);
+      sync();
     });
+    const start = open && heads.find((b) => b.closest(".slot").dataset.hop === open);
+    if (start) { show(start, true); current = open; start.scrollIntoView({ block: "nearest" }); }
     host.querySelector(".lin-export").addEventListener("click", () =>
       downloadSvg(lineageSvg(L), `lineage-${r._study.slice(0, 2)}-${r.id}-${block}-${short(S.sha)}.svg`));
   };
@@ -546,6 +709,8 @@ document.addEventListener("atlas:ready", () => {
   }
 
   VIEWS.lineage = (sid, rid, ...rest) => {
+    // .../<block>/<step> opens that step; a block name never contains "/" (its BEGIN/END marker is [\w.-]+)
+    const step = rest.length === 2 && HOPS.some((h) => h[0] === rest[1]) ? rest.pop() : null;
     const block = rest.join("/");
     const r = S.reportByKey[`${sid}/${rid}`];
     const main = document.getElementById("main");
@@ -557,10 +722,9 @@ document.addEventListener("atlas:ready", () => {
         <a href="#/report/${esc(sid)}/${esc(rid)}">${esc(rid)}</a> / lineage</div>
       <h1>Lineage of ${esc(rid)} <code>${esc(block)}</code></h1>
       <p class="muted">${esc(r.title)}. Each step back from this result block to the data it came from, generated from the
-        catalog at studies ${esc(short(S.sha))}. A hollow step is not recorded yet.</p>
-      <div id="lineage-full"></div>
-      <h2>Details</h2>
-      ${A.producersFor(r, block).list.map(A.artifactChain).join("<hr>") || `<p class="muted">No analysis JSON is linked to this block.</p>`}`;
-    A.mountLineage(document.getElementById("lineage-full"), r, block, { full: true });
+        catalog at studies ${esc(short(S.sha))}. A hollow step is not recorded yet; open a step for its evidence and the
+        checker's findings about it.</p>
+      <div id="lineage-full"></div>`;
+    A.mountLineage(document.getElementById("lineage-full"), r, block, { full: true, open: step });
   };
 });
