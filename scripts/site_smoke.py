@@ -175,6 +175,11 @@ def main(site: str, out: str) -> int:
                 failures.append("about: fewer than seven porting prompts with a copy button")
             if "{{" in page.locator("#porting").inner_text():
                 failures.append("about: a porting prompt kept an unfilled {{placeholder}}")
+            # pinned prompts when the dispatcher commit is recorded, and a warning when it is not
+            pinned = bool(cat["_meta"].get("dispatcher_git_sha"))
+            if pinned == bool(page.locator("#porting-unpinned").count()) or \
+                    (pinned and "/blob/main/" in page.locator("#porting").inner_text()):
+                failures.append("about: the porting prompts' dispatcher links are not pinned, or not flagged as unpinned")
             if fw.get("skills") and page.locator("#fw-skills .skill-card").count() != len(fw["skills"]):
                 failures.append("about: not one card per skill")
             page.screenshot(path=str(out / "about.png"), full_page=True)

@@ -255,7 +255,10 @@ document.addEventListener("atlas:ready", () => {
     const host = document.getElementById("porting");
     const show = (md) => {
       const text = md.replaceAll("{{studies}}", L.studies).replaceAll("{{dispatcher}}", L.dispatcher);
-      host.innerHTML = "";
+      // a build without --skills records no dispatcher commit: say its links are unpinned
+      host.innerHTML = L.dsha ? "" : `<div class="banner correction" id="porting-unpinned"><b>Unpinned dispatcher links.</b>
+        This catalog was built without the dispatcher's skills pack, so no dispatcher commit is recorded and the prompts'
+        dispatcher links point at <code>main</code>, which can change. The studies links are pinned.</div>`;
       host.appendChild(A.renderMarkdown(text, "porting.md"));
       host.querySelectorAll("pre").forEach((pre) => {
         const b = document.createElement("button");
