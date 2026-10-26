@@ -26,7 +26,7 @@ document.addEventListener("atlas:ready", () => {
     const d = fw.sources?.dispatcher || {};
     const repo = d.remote || DISPATCHER_REPO;        // the build turns any origin into a web URL, or null
     return { studies: `${A.STUDIES_REPO}/blob/${fw.sources?.studies_git_sha || S.sha}`,
-             dispatcher: `${repo}/blob/${d.sha || "main"}`, dsha: d.sha };
+             dispatcher: `${repo}/blob/${d.sha || "main"}`, dsha: d.sha, drepo: repo };
   };
   const ext = (href, text, cls = "") => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
   const level = (l) => { const [name, hint] = LEVELS[l || "none"]; return `<span class="lvl-chip lv-${esc(l || "none")}" title="${esc(hint)}">${esc(name)}</span>`; };
@@ -79,7 +79,7 @@ document.addEventListener("atlas:ready", () => {
       <div id="fw-adrs"></div>
       <div class="prose porting" id="porting"><p class="muted">Loading the porting prompts…</p></div>
       <p class="muted about-foot">Generated from studies ${A.commitLink("studies", fw.sources?.studies_git_sha)}${L.dsha
-        ? ` and dispatcher ${A.commitLink("dispatcher", L.dsha)}` : ""}. Definitions, schema fields, checker rules and skill
+        ? ` and dispatcher ${ext(`${L.drepo}/commit/${L.dsha}`, short(L.dsha), "mono")}` : ""}. Definitions, schema fields, checker rules and skill
         descriptions are read from those files at build time; which objects exist, how they connect and how general each
         skill is are an editorial model in the atlas (${ext("https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas/blob/main/src/bfm_atlas/framework.py", "framework.py")}),
         checked against those files on every build.</p>`;
