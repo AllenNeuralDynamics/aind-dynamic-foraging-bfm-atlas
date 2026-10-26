@@ -404,13 +404,20 @@ document.addEventListener("atlas:ready", () => {
                all: covers(rv, known) };
     };
     const revsOf = (g) => {
-      // per repository: the launch record's commit, else the recovered one
-      const out = {};
-      recordsOf(g).forEach((x) => Object.entries(x.revisions || {}).forEach(([k, v]) => {
-        (out[k] ||= { shas: new Set(), how: "at launch", all: true }).shas.add(v); }));
+      // per repository: the launch records' commits, complete only when every record has one;
+      // otherwise the recovered commits fill the gap, and both sources stay labelled
+      const recs = recordsOf(g), out = {};
+      recs.forEach((x) => Object.entries(x.revisions || {}).forEach(([k, v]) => {
+        if (!v) return;
+        const r = (out[k] ||= { shas: new Set(), how: "at launch", n: 0 });
+        r.shas.add(v); r.n += 1; }));
+      Object.values(out).forEach((r) => { r.all = r.n === recs.length; });
       const rv = recovered(g);
       Object.entries(rv?.revisions || {}).forEach(([k, shas]) => {
-        if (!out[k]) out[k] = { shas: new Set(Object.keys(shas)), how: when(rv), all: covers(rv, Object.values(shas).map((n) => ({ n_runs: n }))) };
+        const r = out[k];
+        if (r?.all) return;
+        const got = { shas: new Set(Object.keys(shas)), how: when(rv), all: covers(rv, Object.values(shas).map((n) => ({ n_runs: n }))) };
+        out[k] = r ? { shas: new Set([...r.shas, ...got.shas]), how: `${r.how}; ${got.how}`, all: got.all } : got;
       });
       return out;
     };
