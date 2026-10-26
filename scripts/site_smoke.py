@@ -91,6 +91,16 @@ def main(site: str, out: str) -> int:
         page.wait_for_selector("#study-map .node", timeout=20000)
         if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
             failures.append("study map: not one node per study")
+        # a node's label is its whole name after the number; it draws one ring per model after the first
+        for s in cat["studies"]:
+            node = page.locator(f'#study-map .node[data-id="{s["id"]}"]')
+            shown = " ".join(node.locator(".lbl").evaluate_all("els => els.map((e) => e.textContent)"))
+            if shown != s["id"][3:].replace("-", " "):
+                failures.append(f"study map: {s['id']} is labelled '{shown}'")
+            own = s["cover"].get("tags")
+            models = (own or {}).get("model") or ([s["model"]] if s.get("model") else [])
+            if node.locator(".ring").count() != max(0, len(models) - 1):
+                failures.append(f"study map: {s['id']} draws {node.locator('.ring').count()} rings for models {models}")
         up = page.locator('.layer[data-kind="upstream"]')
         before = up.get_attribute("aria-pressed")
         up.click()
@@ -103,6 +113,23 @@ def main(site: str, out: str) -> int:
         page.screenshot(path=str(out / "map.png"))
         check_export(page, "#map-export", "study map", out / "map.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.locator("#map-panel .panel-close").click()
+        # a dragged study keeps part of the move once the forces settle (Drag hold), not springing back
+        node = page.locator("#study-map .node[data-id]:not(.issue) .body").nth(1)
+        page.wait_for_timeout(2500)
+        node.scroll_into_view_if_needed()          # mouse events land only inside the viewport
+        box, frame = node.bounding_box(), page.locator("#study-map").bounding_box()
+        x0, y0 = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        dx = 120 if x0 < frame["x"] + frame["width"] / 2 else -120          # toward the middle, away from the edge
+        page.mouse.move(x0, y0)
+        page.mouse.down()
+        page.mouse.move(x0 + dx / 2, y0, steps=5)
+        page.mouse.move(x0 + dx, y0, steps=5)
+        page.mouse.up()
+        page.wait_for_timeout(3500)
+        box = node.bounding_box()
+        kept = (box["x"] + box["width"] / 2 - x0) / dx
+        if kept < 0.3:
+            failures.append(f"study map: a dragged study kept only {kept:.0%} of the move")
         # islands cycle through the tag facets and off; a tag chip fades the studies it does not match
         btn = page.locator("#map-islands")
         labels = []
@@ -125,7 +152,12 @@ def main(site: str, out: str) -> int:
             got = page.locator("#study-map .node.dim:not(.issue)").count()
             if got != want:
                 failures.append(f"study map: filtering on {facet}={value} faded {got} studies, expected {want}")
-            chip.click()
+            reset = page.locator("#map-reset")
+            reset.click()
+            page.wait_for_timeout(300)
+            if page.locator("#study-map .node.dim").count() or chip.get_attribute("aria-pressed") != "false" \
+                    or not reset.is_disabled():
+                failures.append("study map: Reset did not clear the tag filters")
         # the study page's local graph: the study in the middle, its neighbours on either side
         # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
         cross = [d for d in cat["dependencies"] if d["from"] != d["to"]]

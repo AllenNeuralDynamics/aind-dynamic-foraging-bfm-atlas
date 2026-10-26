@@ -177,6 +177,9 @@ svg .axis { stroke: var(--line); }
 .tag-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 .tag-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tag-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+.tag-reset { font: 0.8rem var(--sans); border: 0; background: none; color: var(--accent); cursor: pointer; padding: 2px 6px; }
+.tag-reset:disabled { color: var(--muted); opacity: 0.5; cursor: default; }
+.tag-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .forces { position: absolute; top: 8px; right: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
   padding: 6px 10px; font-size: 0.8rem; max-width: calc(100% - 16px); }
 .forces summary { cursor: pointer; font-weight: 600; }
