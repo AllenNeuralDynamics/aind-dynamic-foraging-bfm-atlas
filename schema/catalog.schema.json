@@ -189,6 +189,55 @@
           }
         }
       }
+    },
+    "tags": {
+      "description": "The studies repo's tag vocabulary (schemas/tags.yaml); null when the checkout has none.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "label",
+              "values"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "values": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "$defs": {
@@ -248,6 +297,9 @@
               "items": {
                 "type": "object"
               }
+            },
+            "tags": {
+              "$ref": "#/$defs/tags"
             }
           }
         },
@@ -406,6 +458,9 @@
               }
             }
           }
+        },
+        "tags": {
+          "$ref": "#/$defs/tags"
         }
       }
     },
@@ -455,6 +510,23 @@
           ]
         }
       }
+    },
+    "tags": {
+      "description": "Frontmatter tags (studies schemas/tags.yaml): facet -> values; null when not declared.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      ]
     }
   }
 }

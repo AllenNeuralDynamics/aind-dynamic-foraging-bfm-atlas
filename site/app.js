@@ -32,6 +32,15 @@ const srcLink = (path, label, sha) =>
 const slug = (s) => s.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s/g, "-");
 const chip = (text, cls = "") => `<span class="chip ${cls}">${esc(text)}</span>`;
 const statusChip = (s) => (s ? chip(s, `status-${s}`) : "");
+// a study's declared tags (studies schemas/tags.yaml) as chips; the name's model when it has none
+const tagChips = (s) => {
+  const tags = s.cover.tags, vocab = S.cat.tags || {};
+  if (!tags) return chip(s.model || "?");
+  return Object.entries(tags).flatMap(([f, vs]) => vs.map((v) => {
+    const d = vocab[f]?.values?.[v];
+    return `<span class="chip tag tag-${esc(f)}" title="${esc(d?.description || "")}">${esc(d?.label || v)}</span>`;
+  })).join("");
+};
 
 function resolvePath(base, rel) {
   // Resolve `rel` against the directory of repo path `base`.
@@ -179,7 +188,7 @@ function viewStudies() {
         <a class="card" href="#/study/${esc(s.id)}">
           <div class="num">${esc(s.id)}</div>
           <div><b>${esc(s.title.replace(/^Study:\s*/, ""))}</b></div>
-          <div class="chips">${chip(s.model || "?")}${statusChip(s.cover.status)}
+          <div class="chips">${tagChips(s)}${statusChip(s.cover.status)}
             ${chip(`${s.reports.length} reports`)}${chip(`${s.variants.length} variants`)}
             <span title="provenance findings">${healthBadges(s.path)}</span></div>
           ${s.cover.question ? `<div class="q">${esc(s.cover.question)}</div>` : ""}
@@ -199,7 +208,7 @@ function viewStudy(id) {
   $main().innerHTML = `
     <div class="crumbs"><a href="#/">Studies</a> / ${esc(s.id)}</div>
     <h1>${esc(s.title.replace(/^Study:\s*/, ""))}</h1>
-    <div class="chips">${chip(s.model || "?")}${statusChip(s.cover.status)}
+    <div class="chips">${tagChips(s)}${statusChip(s.cover.status)}
       ${w ? `<a class="chip" href="https://wandb.ai/${esc(w.entity)}/${esc(w.project)}" target="_blank" rel="noopener">W&amp;B ${esc(w.project)}</a>` : ""}
       <a class="chip" href="${STUDIES_REPO}/tree/${S.sha}/${esc(s.path)}" target="_blank" rel="noopener">source @ ${short(S.sha)}</a>
       <span class="chip">health ${healthBadges(s.path)}</span>
@@ -209,6 +218,8 @@ function viewStudy(id) {
     ${inbound.map(({ r, c }) => `<div class="banner correction"><b>Correction.</b>
       <a href="#/report/${s.id}/${r.id}">${esc(r.id)}</a> is corrected by
       <a href="#/report/${c.report._study}/${c.report.id}">${esc(c.report._study)} ${esc(c.report.id)}</a>: ${esc(c.note || "")}</div>`).join("")}
+    <h2>How it connects</h2>
+    <section class="map" id="local-map-host" aria-label="Studies this one builds on and those that built on it"></section>
     <h2>Reports</h2>
     <div class="table-wrap"><table><thead><tr><th>Report</th><th>Status</th><th>Result blocks</th><th>W&amp;B groups</th><th>Health</th></tr></thead><tbody>
     ${s.reports.map((r) => `<tr>
@@ -228,6 +239,7 @@ function viewStudy(id) {
     ${findingList(findingsFor(s.path))}
     <details><summary>README</summary><div class="prose" id="readme"></div></details>`;
   document.getElementById("readme").appendChild(renderMarkdown(s.readme, `${s.path}/README.md`));
+  if (window.Atlas?.drawLocal) window.Atlas.drawLocal(document.getElementById("local-map-host"), s.id);
 }
 
 function variantBlock(s, v) {
