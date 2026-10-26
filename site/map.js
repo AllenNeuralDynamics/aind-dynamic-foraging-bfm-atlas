@@ -87,6 +87,7 @@ document.addEventListener("atlas:ready", () => {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
+  Object.assign(A, { tooltip, downloadSvg });      // shared with the About page (about.js)
 
   // ------------------------------------------------------------ study map
   // A force-directed graph (d3-force). Studies drift to islands by tag (studies schemas/tags.yaml);
