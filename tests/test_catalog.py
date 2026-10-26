@@ -133,6 +133,22 @@ def test_cli_copies_figures(studies, tmp_path):
     out = tmp_path / "data" / "catalog.json"
     main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
     assert (tmp_path / "data" / "files" / "studies/01-gru-alpha/analysis/fig.png").read_text() == "png"
+def test_interactive_pages_are_catalogued_and_copied(studies, tmp_path):
+    """A report's link to a tracked .html file ships with the site, so the page runs."""
+    report = next(r for s in build_catalog(studies, validate=False)["studies"] for r in s["reports"]
+                  if r["path"].endswith("r1-curve.md"))
+    base = "studies/01-gru-alpha/analysis/explainers/"
+    # inline, titled inline and reference-style links are all picked up
+    assert sorted(i["path"] for i in report["interactive"]) == [
+        base + "demo.html", base + "ref.html", base + "titled.html"]
+    assert all(i["exists"] for i in report["interactive"])
+    out = tmp_path / "data" / "catalog.json"
+    main(["build", "--studies", str(studies), "--out", str(out), "--no-validate"])
+    for name in ("demo", "titled", "ref"):
+        copied = tmp_path / "data" / "files" / base / f"{name}.html"
+        assert copied.read_text() == f"<html>{name}</html>"
+
+
 def test_dirty_checkout_is_refused_unless_allowed(studies):
     (studies / "studies/01-gru-alpha/analysis/reports/r2-new.md").write_text("# r2\n")
     with pytest.raises(DirtyCheckoutError):
