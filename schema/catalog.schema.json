@@ -50,6 +50,20 @@
             "string",
             "null"
           ]
+        },
+        "dispatcher_git_sha": {
+          "description": "The dispatcher checkout the About page read its skills pack from; null without --skills.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dispatcher_git_dirty": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },
@@ -238,6 +252,187 @@
           }
         }
       ]
+    },
+    "framework": {
+      "description": "The About page model of the framework: editorial objects and edges (framework.py) filled in from the studies CONTEXT.md, schemas/, ADRs and checker, and from the dispatcher skills pack when built with --skills.",
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "type": "object",
+          "properties": {
+            "studies_git_sha": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dispatcher": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sha": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dirty": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "remote": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "summary"
+            ]
+          }
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "stage",
+              "kind",
+              "definition",
+              "checks"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "term",
+                  "field"
+                ]
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "from",
+              "to",
+              "label"
+            ]
+          }
+        },
+        "vocabulary": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "definition"
+            ]
+          }
+        },
+        "schemas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "file",
+              "path",
+              "fields"
+            ]
+          }
+        },
+        "adrs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "title",
+              "summary"
+            ]
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skills": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "description",
+                  "level",
+                  "objects"
+                ],
+                "properties": {
+                  "level": {
+                    "enum": [
+                      "general",
+                      "site",
+                      "project",
+                      null
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "skills_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     }
   },
   "$defs": {
