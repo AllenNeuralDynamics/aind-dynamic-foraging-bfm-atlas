@@ -46,7 +46,10 @@ FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 RESULT_BLOCK = re.compile(r"<!-- BEGIN ([\w.-]+) -->\n?(.*?)<!-- END \1 -->", re.S)
 # ![alt](src) or ![alt](<src> "optional title")
 MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(<?([^)\s>]+)>?(?:\s+[\"'(][^)]*)?\)")
-MD_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s#]+)(?:#[^)]*)?\)")
+# inline links, with an optional <...> wrapper, fragment and title: [x](a.md#h "Title")
+MD_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(<?([^)\s#>]+)>?(?:#[^)\s]*)?(?:\s+[\"'(][^)]*)?\)")
+# reference-style link definitions: [x]: a.md "Title"
+MD_LINK_DEF = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>#]+)>?", re.MULTILINE)
 WANDB_PROJECT = re.compile(r"https://wandb\.ai/([\w.-]+)/([\w.-]+)")
 H1 = re.compile(r"^#\s+(.+?)\s*$", re.M)
 QUESTION = re.compile(r"\*\*Question\.?\*\*\.?\s*(.+?)(?:\n\s*\n|\Z)", re.S)
@@ -238,7 +241,7 @@ def _resolve(study_dir: Path, root: Path, item: str, ok: "_Tracked") -> tuple[st
 def _link_targets(text: str, here: Path, root: Path) -> list[str]:
     """Repo-relative targets of the markdown file's relative links."""
     out = []
-    for target in MD_LINK.findall(text):
+    for target in MD_LINK.findall(text) + MD_LINK_DEF.findall(text):
         if "://" in target or target.startswith("mailto:"):
             continue
         try:

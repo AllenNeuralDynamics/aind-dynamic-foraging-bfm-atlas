@@ -56,6 +56,8 @@ def make_studies(root: Path, checker: bool = True) -> Path:
           f"description: {GROUP} submitted\n")
     write(root, f"{a}/analysis/fig.png", "png")
     write(root, f"{a}/analysis/explainers/demo.html", "<html>demo</html>")
+    write(root, f"{a}/analysis/explainers/titled.html", "<html>titled</html>")
+    write(root, f"{a}/analysis/explainers/ref.html", "<html>ref</html>")
     write(root, f"{a}/analysis/summary.json", json.dumps({
         "_meta": {"schema_version": 2, "kind": "producer", "produced_by": "analysis/produce.py",
                   "produced_at_pt": "2026-10-24T11:00:00-07:00", "studies_git_sha": SHA,
@@ -82,7 +84,10 @@ def make_studies(root: Path, checker: bool = True) -> Path:
 
         ![curve](../fig.png)
 
-        Try the [demo](../explainers/demo.html).
+        Try the [demo](../explainers/demo.html), the [titled one](../explainers/titled.html "Titled"),
+        and the [reference one][ref].
+
+        [ref]: ../explainers/ref.html
 
         <!-- BEGIN result-1 -->
         | D | 10 | 614 |

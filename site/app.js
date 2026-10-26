@@ -97,8 +97,9 @@ function renderMarkdown(md, basePath) {
     if (/^[a-z]+:/.test(href)) continue;
     const [file, fragment] = href.split("#");
     const target = resolvePath(basePath, file);
-    if (/\.html?$/i.test(target)) {
-      // an interactive page the build shipped with the site (catalog `interactive`): open it so it runs
+    if (S.interactive && S.interactive.has(target)) {
+      // an interactive page the build shipped with the site (catalog `interactive`): open it so it
+      // runs. Any other .html link (a README's, an uncopied one) keeps the GitHub fallback below.
       a.setAttribute("href", `data/files/${target}` + (fragment ? `#${fragment}` : ""));
       a.target = "_blank"; a.rel = "noopener";
       continue;
@@ -136,6 +137,7 @@ function index(cat) {
   S.producersOf = {};          // "<report path>#<block>" or file path -> [artifact]
   S.correctedBy = {};          // "<study>/<rN>" -> [{report, note}]
   S.supersededBy = {};
+  S.interactive = new Set();   // interactive pages the build shipped (report `interactive`)
   S.healthRan = cat.health.ran;
   S.findings = cat.health.findings || [];
   for (const s of cat.studies) {
@@ -144,6 +146,7 @@ function index(cat) {
       r._study = s.id;
       S.reportByPath[r.path] = r;
       S.reportByKey[`${s.id}/${r.id}`] = r;
+      for (const i of r.interactive || []) if (i.exists) S.interactive.add(i.path);
       for (const c of r.corrects) {
         (S.correctedBy[`${c.study}/${c.report}`] ||= []).push({ report: r, note: c.note });
       }
