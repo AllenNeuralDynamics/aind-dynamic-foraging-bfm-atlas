@@ -286,18 +286,19 @@ document.addEventListener("atlas:ready", () => {
         return n.drop ? g + (n.drop[ax] - g) * PHYS.hold : g; };
       sim.force("x").x((n) => rest(n, "x")).strength((n) => (n.drop ? Math.max(pull, PHYS.hold) : pull));
       sim.force("y").y((n) => rest(n, "y")).strength((n) => (n.drop ? Math.max(pull, PHYS.hold) : pull));
-      nodes.forEach((n) => { if (n !== dragging) pin(n); });
+      nodes.forEach((n) => { if (!held.has(n)) pin(n); });
       sim.alpha(alpha).restart();
     }
-    // at full hold a dropped study is pinned where it was dropped; below it, only the springs above hold it
-    let dragging = null;
+    // at full hold a dropped study is pinned where it was dropped; below it, only the springs above hold it.
+    // Studies under a finger or the pointer (several at once on a touch screen) are left alone.
+    const held = new Set();
     const pin = (n) => { const on = !!n.drop && PHYS.hold >= 1; n.fx = on ? n.drop.x : null; n.fy = on ? n.drop.y : null; };
     nodeSel.call(d3.drag()
-      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); dragging = n; n.fx = n.x; n.fy = n.y; n.moved = false; })
+      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); held.add(n); n.fx = n.x; n.fy = n.y; n.moved = false; })
       .on("drag", (ev, n) => { n.fx = ev.x; n.fy = ev.y; n.moved = true; })
       .on("end", (ev, n) => {
         if (!ev.active) sim.alphaTarget(0);
-        dragging = null;
+        held.delete(n);
         if (n.moved) n.drop = { x: ev.x, y: ev.y };      // a click is not a drop
         pin(n);
         if (n.moved) applyForces(0.3);
@@ -502,13 +503,16 @@ document.addEventListener("atlas:ready", () => {
     // a row holds a node above its centre and its wrapped label below: space rows by the tallest
     const extent = (id) => (S.study[id] ? labelY(S.study[id], rOf(id)) + 13 * (wrap(label(S.study[id])).length - 1) + 8 : rOf(id) + 4);
     const gap = Math.max(...[...back, ...fwd].map((id) => rOf(id) + extent(id)), 40) + 10;
-    // tall enough for the columns, and for the study in the middle (centred at 15 + H/2) down to its label's end
+    // every node sits at an offset from the middle row (centred at 15 + H/2): the drawing is tall
+    // enough for the lowest label's end and the highest ring, in either column or the middle
+    const off = { [sid]: 0 };
+    [back, fwd].forEach((ids) => ids.forEach((id, i) => { off[id] = (i - (ids.length - 1) / 2) * gap; }));
+    const reach = Math.max(...Object.keys(off).map((id) => off[id] + extent(id)));
+    const lift = Math.max(...Object.keys(off).map((id) => rimOf(S.study[id], rOf(id)) + 4 - off[id]));
     const W = 900, colX = 300, rows = Math.max(back.length, fwd.length, 1),
-      H = Math.max(200, 80 + rows * gap, 2 * (extent(sid) + 23));
-    const cx = W / 2, cy = 30 + (H - 30) / 2, pos = { [sid]: { x: cx, y: cy } };
-    const column = (ids, x) => ids.forEach((id, i) => { pos[id] = { x, y: cy + (i - (ids.length - 1) / 2) * gap }; });
-    column(back, cx - colX);
-    column(fwd, cx + colX);
+      H = Math.max(200, 80 + rows * gap, 2 * (reach + 23), 2 * (lift + 15));
+    const cx = W / 2, cy = 30 + (H - 30) / 2, pos = {};
+    Object.keys(off).forEach((id) => { pos[id] = { x: id === sid ? cx : back.includes(id) ? cx - colX : cx + colX, y: cy + off[id] }; });
     const nodeSvg = Object.keys(pos).map((id) => {
       const p = pos[id], s = S.study[id];
       if (!s) return `<g class="node issue" data-id="${esc(id)}" transform="translate(${p.x},${p.y})">

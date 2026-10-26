@@ -170,6 +170,17 @@ def main(site: str, out: str) -> int:
                 failures.append("local graph: the study or its links are missing")
             page.screenshot(path=str(out / "local.png"))
             check_export(page, "#local-export", "local graph", out / "local.svg", failures, sha=cat["_meta"]["studies_git_sha"])
+        # every study's local graph holds each node whole, rings and full label included
+        for other in linked:
+            if other not in {s["id"] for s in cat["studies"]}:
+                continue
+            page.goto(base + f"#/study/{other}")
+            page.wait_for_selector("#local-map .node", timeout=20000)
+            out_of = page.evaluate("""() => { const svg = document.getElementById("local-map").getBoundingClientRect();
+                return [...document.querySelectorAll("#local-map .node")].filter((n) => { const b = n.getBoundingClientRect();
+                  return b.top < svg.top - 1 || b.bottom > svg.bottom + 1; }).map((n) => n.dataset.id); }""")
+            if out_of:
+                failures.append(f"local graph of {other}: {', '.join(out_of)} drawn outside the graph")
         page.goto(base + views["lineage"])
         page.wait_for_selector(".lineage .slot", timeout=20000)
         if page.locator(".lineage .slot").count() < 8:
