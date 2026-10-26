@@ -17,7 +17,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-OPTIONAL_VIEWS = ("timeline",)   # visited when the nav shows them
+OPTIONAL_VIEWS = ("timeline", "about")   # visited when the nav shows them
 
 
 def check_export(page, button, what, path, failures, sha):
@@ -158,6 +158,32 @@ def main(site: str, out: str) -> int:
             if page.locator("#study-map .node.dim").count() or chip.get_attribute("aria-pressed") != "false" \
                     or not reset.is_disabled():
                 failures.append("study map: Reset did not clear the tag filters")
+        # the About page: one box per framework object, a selection fills the panel with its
+        # definition, the porting prompts render with copy buttons, and the map exports
+        fw = cat.get("framework") or {}
+        if fw.get("available"):
+            page.goto(base + "#/about")
+            page.wait_for_selector("#fw-map .fw-node", timeout=20000)
+            if page.locator("#fw-map .fw-node").count() != len(fw["objects"]):
+                failures.append("about: not one box per framework object")
+            first = fw["objects"][0]
+            page.locator(f'#fw-map .fw-node[data-id="{first["id"]}"]').click()
+            if (first.get("definition") or "")[:40] not in page.locator("#fw-panel").inner_text():
+                failures.append("about: selecting an object did not show its definition")
+            page.wait_for_selector("#porting pre .copy", timeout=20000)
+            if page.locator("#porting pre .copy").count() < 7:
+                failures.append("about: fewer than seven porting prompts with a copy button")
+            if "{{" in page.locator("#porting").inner_text():
+                failures.append("about: a porting prompt kept an unfilled {{placeholder}}")
+            # pinned prompts when the dispatcher commit is recorded, and a warning when it is not
+            pinned = bool(cat["_meta"].get("dispatcher_git_sha"))
+            if pinned == bool(page.locator("#porting-unpinned").count()) or \
+                    (pinned and "/blob/main/" in page.locator("#porting").inner_text()):
+                failures.append("about: the porting prompts' dispatcher links are not pinned, or not flagged as unpinned")
+            if fw.get("skills") and page.locator("#fw-skills .skill-card").count() != len(fw["skills"]):
+                failures.append("about: not one card per skill")
+            page.screenshot(path=str(out / "about.png"), full_page=True)
+            check_export(page, "#fw-export", "framework map", out / "framework.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         # the study page's local graph: the study in the middle, its neighbours on either side
         # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
         cross = [d for d in cat["dependencies"] if d["from"] != d["to"]]
@@ -236,7 +262,7 @@ def main(site: str, out: str) -> int:
             if view not in views:
                 failures.append(f"{view}: navigation link hidden, so its view is not registered")
         page.set_viewport_size({"width": 390, "height": 844})
-        for name in ("landing", "report", "lineage"):
+        for name in ("landing", "report", "lineage", "about"):
             page.goto(base + views[name])
             page.wait_for_timeout(800)
             if name == "lineage":      # every step open, so the details must fit too

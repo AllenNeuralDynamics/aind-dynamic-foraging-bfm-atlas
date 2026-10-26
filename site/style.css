@@ -268,3 +268,58 @@ a.lchip { color: var(--accent); }
 .lin-svg .d-decision { fill: var(--error-soft); stroke: var(--error); }
 .lin-svg .lin-name { font: 600 14px var(--sans); fill: var(--text); }
 .lin-svg .lin-items { font: 12px var(--mono); fill: var(--muted); }
+
+/* ---------------- About page (about.js) */
+.about-lede { font-size: 1.02rem; max-width: 70ch; }
+.pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 14px 0 6px; }
+.pillars > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; }
+.pillars b { display: block; margin-bottom: 2px; }
+.fw-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; }
+.fw-legend .sw { display: inline-block; width: 18px; height: 11px; border-radius: 3px; border: 1.5px solid var(--accent); background: var(--surface); }
+.fw-legend .sw-field { border-style: dashed; margin-left: 8px; }
+#fw-map { display: block; width: 100%; min-width: 980px; height: auto; }
+#fw-map text { font-family: var(--sans); }
+.fw-lane { fill: var(--block); opacity: 0.55; }
+.fw-stage-name { font-size: 13px; font-weight: 650; fill: var(--text); }
+.fw-stage-sum { font-size: 10px; fill: var(--muted); }
+.fw-node { cursor: pointer; outline: none; }
+.fw-node rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.fw-node.k-field rect { stroke-dasharray: 4 3; }
+.fw-node text { font-size: 12.5px; fill: var(--text); }
+.fw-node:focus-visible rect, .fw-node.focused rect { stroke-width: 3; }
+.fw-node.focused rect { fill: var(--accent-soft); }
+.fw-edge .line { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: 0.7; }
+.fw-edge .hit { fill: none; stroke: transparent; stroke-width: 10; pointer-events: stroke; }
+.fw-mk { fill: var(--muted); }
+#fw-map.lighting .fw-edge:not(.lit) { opacity: 0.12; }
+#fw-map.lighting .fw-node:not(.lit):not(.nbr) { opacity: 0.35; }
+#fw-map .fw-edge.lit .line { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.fw-panel { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+.fw-panel .k { color: var(--muted); font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 8px; }
+.fw-panel .rule { font-size: 0.78rem; background: var(--block); border: 1px solid var(--block-line); border-radius: 5px; padding: 0 5px; }
+.linkish { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+.linkish:hover { text-decoration: underline; }
+.linkish:focus-visible, .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fw-fields td, .fw-fields th { font-size: 0.85rem; }
+.fw-fields .req { font-size: 0.72rem; color: var(--accent); }
+.lvl-chip { display: inline-block; font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 0 8px; border: 1px solid; white-space: nowrap; }
+.lv-general { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.lv-site { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.lv-project, .lv-none { color: var(--muted); border-color: var(--line); }
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.skill-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px; font-size: 0.88rem; }
+.skill-card p { margin: 0; }
+.skill-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-weight: 600; }
+.skill-desc { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; cursor: pointer; }
+.skill-desc.open { display: block; -webkit-line-clamp: unset; cursor: auto; }
+.skill-desc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.skill-toc { margin: 0; padding: 4px 8px; }
+.skill-toc ul { margin: 4px 0 0; padding-left: 18px; }
+.fw-schema summary { font-weight: 500; }
+.fw-adrs li { margin: 6px 0; }
+.porting { margin-top: 24px; }
+.porting pre.has-copy { position: relative; white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 30px; }
+.copy { position: absolute; top: 6px; right: 6px; font: 600 0.75rem var(--sans); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); color: var(--text); padding: 2px 9px; cursor: pointer; }
+.about-foot { margin-top: 20px; font-size: 0.85rem; }

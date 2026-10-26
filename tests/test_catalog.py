@@ -439,3 +439,132 @@ def test_an_untracked_vocabulary_is_not_read(studies):
     (studies / "schemas").mkdir(exist_ok=True)
     (studies / "schemas/tags.yaml").write_text("facets: {model: {label: Model, values: {gru: {label: GRU}}}}\n")
     assert build_catalog(studies, validate=False, allow_dirty=True)["tags"] is None
+
+
+# --- About page: the framework model ------------------------------------------------------------
+from bfm_atlas.framework import OBJECTS, SKILLS, FrameworkError  # noqa: E402
+
+
+def add_framework_sources(root: Path, drop_term: str | None = None) -> None:
+    """A CONTEXT.md defining every modelled term, the launch-record schema the field objects name,
+    a schemas README, an ADR, and checker rule ids; committed."""
+    terms = [o["term"] for o in OBJECTS.values() if "term" in o and o["term"] != drop_term]
+    (root / "CONTEXT.md").write_text("# glossary\n\n## Language\n\n" + "".join(
+        f"**{t}**:\nWhat {t.lower()} means.\n_Avoid_: something else\n\n" for t in terms))
+    (root / "schemas").mkdir(exist_ok=True)
+    (root / "schemas/launch-record.v2.schema.json").write_text(json.dumps({
+        "required": ["kind", "manifests"], "properties": {
+            "kind": {"description": "initial or an intervention"},
+            "manifests": {"description": "Variant-relative paths of the submitted manifests."},
+            "revisions": {"description": "Commit per repository."},
+            "image": {"description": "The environment the code ran in."},
+            "data": {"description": "What the runs trained and were evaluated on."}}}))
+    (root / "schemas/provenance-baseline.json").write_text(json.dumps({"_comment": "x", "findings": ["a", "b"]}))
+    (root / "schemas/README.md").write_text("| File | Governs |\n|---|---|\n"
+                                           "| `launch-record.v2.schema.json` | `variants/<v>/launch_record/*.json` |\n")
+    (root / "docs/adr").mkdir(parents=True, exist_ok=True)
+    (root / "docs/adr/0001-one-launch.md").write_text("# One launch mints one group\n\nA launch mints one W&B group.\n\nMore.\n")
+    (root / "scripts/check_provenance.py").write_text(
+        (root / "scripts/check_provenance.py").read_text() + '\nRULES = ["record-manifest-missing", "report-upstream-stale"]\n')
+    git(root, "add", "-A")
+    git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "framework sources")
+
+
+def make_skills(root: Path) -> Path:
+    for name, desc in (("study-conventions", "Organize studies."), ("my-new-skill", "Not yet classified.")):
+        p = root / "pack/skills" / name / "SKILL.md"
+        p.parent.mkdir(parents=True)
+        p.write_text(f"---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\n\n## Hard rules first\n\n1. x\n")
+    git(root, "init", "-q")
+    git(root, "add", "-A")
+    git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "skills")
+    return root / "pack"
+
+
+def test_framework_is_unavailable_without_a_context_file(studies):
+    fw = build_catalog(studies, validate=False)["framework"]
+    assert fw == {"available": False, "error": "the studies checkout has no CONTEXT.md"}
+
+
+def test_framework_is_filled_in_from_the_sources(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    cat = build_catalog(studies, validate=False, skills_dir=pack)
+    fw = cat["framework"]
+    objs = {o["id"]: o for o in fw["objects"]}
+    assert set(objs) == set(OBJECTS)
+    assert objs["launch"]["definition"] == "What launch means." and objs["launch"]["avoid"] == "something else"
+    assert objs["data"]["kind"] == "field" and objs["data"]["definition"] == "What the runs trained and were evaluated on."
+    assert objs["manifests"]["checks"] == ["record-manifest-missing"]       # by prefix, from the checker's source
+    assert "report-upstream-stale" in objs["upstream"]["checks"]
+    lr = next(s for s in fw["schemas"] if s["file"] == "launch-record.v2.schema.json")
+    assert lr["governs"] == "`variants/<v>/launch_record/*.json`"
+    assert {"name": "manifests", "required": True, "description": "Variant-relative paths of the submitted manifests."} in lr["fields"]
+    assert next(s for s in fw["schemas"] if s["file"] == "provenance-baseline.json")["entries"] == 2
+    assert fw["adrs"] == [{"path": "docs/adr/0001-one-launch.md", "title": "One launch mints one group",
+                           "summary": "A launch mints one W&B group."}]
+    skills = {s["name"]: s for s in fw["skills"]}
+    assert skills["study-conventions"]["level"] == SKILLS["study-conventions"]["level"]
+    assert skills["study-conventions"]["path"] == "pack/skills/study-conventions/SKILL.md"
+    assert skills["study-conventions"]["headings"] == ["Hard rules first"]
+    assert skills["my-new-skill"]["level"] is None                           # shown, marked unclassified
+    sha = cat["_meta"]["dispatcher_git_sha"]
+    assert sha and len(sha) == 40 and fw["sources"]["dispatcher"]["sha"] == sha
+    assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
+
+
+def test_framework_without_skills_says_so(studies):
+    add_framework_sources(studies)
+    cat = build_catalog(studies, validate=False)
+    assert cat["framework"]["skills"] is None and "--skills" in cat["framework"]["skills_error"]
+    assert cat["_meta"]["dispatcher_git_sha"] is None
+
+
+def test_a_modelled_term_missing_from_context_fails_the_build(studies):
+    add_framework_sources(studies, drop_term="Freeze")
+    with pytest.raises(FrameworkError, match="Freeze"):
+        build_catalog(studies, validate=False)
+
+
+def test_cli_build_with_skills(studies, tmp_path, capsys):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    out = tmp_path / "data" / "catalog.json"
+    assert main(["build", "--studies", str(studies), "--out", str(out), "--no-validate", "--skills", str(pack)]) == 0
+    assert len(json.loads(out.read_text())["framework"]["skills"]) == 2
+
+
+def test_skills_are_read_from_the_dispatcher_commit_only(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    (pack / "skills/local-draft").mkdir()
+    (pack / "skills/local-draft/SKILL.md").write_text("---\nname: local-draft\ndescription: untracked\n---\n")
+    git(tmp_path / "dispatcher", "remote", "add", "origin", "git@github.com:Example/dispatcher.git")
+    fw = build_catalog(studies, validate=False, skills_dir=pack)["framework"]
+    assert "local-draft" not in {s["name"] for s in fw["skills"]}      # not in the recorded commit
+    assert fw["sources"]["dispatcher"]["remote"] == "https://github.com/Example/dispatcher"
+    assert fw["sources"]["dispatcher"]["dirty"] is True                  # and the checkout says so
+
+
+@pytest.mark.parametrize("remote, url", [
+    ("git@github.com:Org/repo.git", "https://github.com/Org/repo"),
+    ("ssh://git@github.com/Org/repo.git", "https://github.com/Org/repo"),
+    ("ssh://git@github.com:22/Org/repo", "https://github.com/Org/repo"),
+    ("https://user:token@github.com/Org/repo.git", "https://github.com/Org/repo"),
+    ("https://github.com/Org/repo", "https://github.com/Org/repo"),
+    ("/local/path/repo", None),
+    (None, None),
+])
+def test_remotes_become_web_urls(remote, url):
+    from bfm_atlas.framework import web_url
+    assert web_url(remote) == url
+
+
+def test_a_locally_edited_skill_publishes_its_committed_text(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    (pack / "skills/study-conventions/SKILL.md").write_text("---\nname: study-conventions\ndescription: local edit\n---\n")
+    fw = build_catalog(studies, validate=False, skills_dir=pack)["framework"]
+    skill = next(s for s in fw["skills"] if s["name"] == "study-conventions")
+    assert skill["description"] == "Organize studies." and skill["headings"] == ["Hard rules first"]
+    assert fw["sources"]["dispatcher"]["dirty"] is True

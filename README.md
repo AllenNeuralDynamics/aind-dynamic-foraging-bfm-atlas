@@ -23,15 +23,27 @@ studies / dispatcher / wrapper commits.
   digests, W&B groups, launch records, commits and image, data snapshot) and the checker findings
   about it; `#/lineage/<study>/<rN>/<block>/<step>` opens that step.
 - **Export SVG** on both, stamped with the studies commit, for slides.
+- **About** (`#/about`): the framework itself, for other ML projects to reuse. An interactive map
+  of the objects it defines (study, launch, launch record, freeze, producer, report, ...) by
+  lifecycle stage, each with its definition, schema fields, checker rules and the skills that
+  operate it; the skills pack, marked by how much carries over; and copyable prompts that port
+  the framework to another repository. Definitions, fields, rules and skill descriptions are read
+  from the source files at build time; the object map and skill levels are an editorial model in
+  `src/bfm_atlas/framework.py`, and the build fails if it names a term or field the sources no
+  longer have.
 
 ## How it works
 
 ```
-studies checkout @ SHA ──bfm-atlas build──> catalog.json ──> static site (GitHub Pages)
+studies checkout @ SHA ─┐
+                        ├─bfm-atlas build──> catalog.json ──> static site (GitHub Pages)
+dispatcher skills @ SHA ┘ (optional, About page)
 ```
 
-- `bfm-atlas build --studies <checkout>` reads only committed files (no W&B, no Beaker), so the
-  catalog is a pure function of the studies SHA it records in `_meta.studies_git_sha`.
+- `bfm-atlas build --studies <checkout> [--skills <dispatcher>/aind-behavior-foundation-model-skills]`
+  reads only committed files (no W&B, no Beaker), so the catalog is a pure function of the
+  studies SHA it records in `_meta.studies_git_sha` and, with `--skills`, of the dispatcher SHA
+  in `_meta.dispatcher_git_sha`.
 - Field names follow the studies repo's `schemas/`; vocabulary (study, variant, launch,
   intervention, report, correction, upstream, freeze) follows its `CONTEXT.md`.
 - Provenance findings are **not** computed here: the build runs the studies repo's own
@@ -46,7 +58,9 @@ studies checkout @ SHA ──bfm-atlas build──> catalog.json ──> static 
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest -q
 git clone https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-studies ../studies-main
-.venv/bin/bfm-atlas build --studies ../studies-main --out site/data/catalog.json
+git clone https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher ../dispatcher-main
+.venv/bin/bfm-atlas build --studies ../studies-main \
+  --skills ../dispatcher-main/aind-behavior-foundation-model-skills --out site/data/catalog.json
 ```
 
 ## Contributing
