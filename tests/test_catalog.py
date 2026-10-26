@@ -532,3 +532,29 @@ def test_cli_build_with_skills(studies, tmp_path, capsys):
     out = tmp_path / "data" / "catalog.json"
     assert main(["build", "--studies", str(studies), "--out", str(out), "--no-validate", "--skills", str(pack)]) == 0
     assert len(json.loads(out.read_text())["framework"]["skills"]) == 2
+
+
+def test_skills_are_read_from_the_dispatcher_commit_only(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    (pack / "skills/local-draft").mkdir()
+    (pack / "skills/local-draft/SKILL.md").write_text("---\nname: local-draft\ndescription: untracked\n---\n")
+    git(tmp_path / "dispatcher", "remote", "add", "origin", "git@github.com:Example/dispatcher.git")
+    fw = build_catalog(studies, validate=False, skills_dir=pack)["framework"]
+    assert "local-draft" not in {s["name"] for s in fw["skills"]}      # not in the recorded commit
+    assert fw["sources"]["dispatcher"]["remote"] == "https://github.com/Example/dispatcher"
+    assert fw["sources"]["dispatcher"]["dirty"] is True                  # and the checkout says so
+
+
+@pytest.mark.parametrize("remote, url", [
+    ("git@github.com:Org/repo.git", "https://github.com/Org/repo"),
+    ("ssh://git@github.com/Org/repo.git", "https://github.com/Org/repo"),
+    ("ssh://git@github.com:22/Org/repo", "https://github.com/Org/repo"),
+    ("https://user:token@github.com/Org/repo.git", "https://github.com/Org/repo"),
+    ("https://github.com/Org/repo", "https://github.com/Org/repo"),
+    ("/local/path/repo", None),
+    (None, None),
+])
+def test_remotes_become_web_urls(remote, url):
+    from bfm_atlas.framework import web_url
+    assert web_url(remote) == url

@@ -24,7 +24,7 @@ document.addEventListener("atlas:ready", () => {
   // links pin the commits the catalog was built from
   const srcs = (fw) => {
     const d = fw.sources?.dispatcher || {};
-    const repo = (d.remote || DISPATCHER_REPO).replace(/\.git$/, "");
+    const repo = d.remote || DISPATCHER_REPO;        // the build turns any origin into a web URL, or null
     return { studies: `${A.STUDIES_REPO}/blob/${fw.sources?.studies_git_sha || S.sha}`,
              dispatcher: `${repo}/blob/${d.sha || "main"}`, dsha: d.sha };
   };
