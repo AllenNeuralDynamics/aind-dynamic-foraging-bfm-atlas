@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20      # the Chromium step installs system packages; a slow Ubuntu mirror has taken 10+ minutes
     steps:
       - uses: actions/checkout@v4
 
@@ -30,9 +30,15 @@ jobs:
           path: studies
           fetch-depth: 0
 
+      # and the About page reads the dispatcher main's skills pack
+      - uses: actions/checkout@v4
+        with:
+          repository: AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher
+          path: dispatcher
+
       - name: Build the catalog from studies main and check it against its schema
         run: |
-          bfm-atlas build --studies studies --out build/data/catalog.json
+          bfm-atlas build --studies studies --skills dispatcher/aind-behavior-foundation-model-skills --out build/data/catalog.json
           python - <<'PY'
           import json
           from jsonschema import Draft202012Validator
@@ -41,13 +47,15 @@ jobs:
           errors = [f"{e.json_path}: {e.message}" for e in Draft202012Validator(schema).iter_errors(catalog)]
           assert not errors, "\n".join(errors[:20])
           assert catalog["health"]["ran"], catalog["health"]["error"]
+          assert catalog["framework"]["available"], catalog["framework"].get("error")
+          assert catalog["framework"]["skills"], catalog["framework"]["skills_error"]
           PY
 
       - name: Render the site in Chromium (JS errors, key views, provenance drawer, phone width)
         run: |
           python -m pip install playwright==1.47.0
           python -m playwright install --with-deps chromium
-          bfm-atlas build --studies studies --out site/data/catalog.json
+          bfm-atlas build --studies studies --skills dispatcher/aind-behavior-foundation-model-skills --out site/data/catalog.json
           python scripts/site_smoke.py site screenshots
 
       - uses: actions/upload-artifact@v4

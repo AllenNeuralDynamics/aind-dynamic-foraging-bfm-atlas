@@ -1,7 +1,7 @@
 name: Deploy atlas
 
-# Rebuild from studies main on every atlas change, daily (studies merges do not notify this
-# repo), and on demand.
+# Rebuild from studies main (and the dispatcher main's skills pack, for the About page) on every
+# atlas change, daily (studies and dispatcher merges do not notify this repo), and on demand.
 on:
   push:
     branches: [main]
@@ -38,8 +38,13 @@ jobs:
           path: studies
           fetch-depth: 0     # report history is built from git log
 
+      - uses: actions/checkout@v4
+        with:
+          repository: AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher
+          path: dispatcher     # the skills pack the About page describes
+
       - name: Build the catalog and copy figures
-        run: bfm-atlas build --studies studies --out site/data/catalog.json
+        run: bfm-atlas build --studies studies --skills dispatcher/aind-behavior-foundation-model-skills --out site/data/catalog.json
 
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -61,7 +66,7 @@ jobs:
     # Render the deployed site, not the build directory: catches a broken Pages deploy.
     needs: deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20      # as in ci.yml: the Chromium install can stall on a slow mirror
     steps:
       - uses: actions/checkout@v4
 
