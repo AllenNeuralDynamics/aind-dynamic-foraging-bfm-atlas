@@ -390,3 +390,13 @@ def test_launch_data_image_and_recovered_provenance(studies):
     assert (got["n_runs"], got["data"][0]["source"], got["image"][0]["id"]) == (3, "live", "01KOLD")
     assert not list(Draft202012Validator(SCHEMA).iter_errors(cat))
 
+
+def test_malformed_run_provenance_does_not_break_the_build(studies):
+    freeze = studies / "studies/01-gru-alpha/analysis/provenance/run_provenance.json"
+    freeze.parent.mkdir(parents=True)
+    freeze.write_text(json.dumps({"_meta": {"schema_version": 2, "kind": "freeze", "wandb_groups": [GROUP]},
+                                  "groups": [GROUP]}))
+    git(studies, "add", "-A")
+    git(studies, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "bad freeze")
+    assert build_catalog(studies, validate=False)["wandb_groups"][GROUP]["recovered"] is None
+

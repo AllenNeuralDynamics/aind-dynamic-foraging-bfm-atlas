@@ -664,7 +664,8 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
             # and ran in (studies#28); it stands in for launch records that predate those fields
             if a["path"].endswith(RUN_PROVENANCE) and (a["meta"] or {}).get("kind") == "freeze":
                 body, err = _load_json(root / a["path"])
-                for g, rec in ((body or {}).get("groups") or {}).items() if not err and isinstance(body, dict) else []:
+                groups_ = body.get("groups") if not err and isinstance(body, dict) else None
+                for g, rec in groups_.items() if isinstance(groups_, dict) else []:   # other shapes: unavailable
                     if isinstance(rec, dict):
                         entry(g)["recovered"] = {"artifact": a["path"], "recovered_at_pt": body.get("recovered_at_pt"),
                                                  **{k: rec.get(k) for k in ("project", "n_runs", "data", "revisions",

@@ -393,11 +393,14 @@ document.addEventListener("atlas:ready", () => {
     const recordsOf = (g) => recsOf(g).filter((x) => x.format === "json");
     // recovered values count as known only when they cover every run of the group
     const covers = (rv, entries) => !!rv && entries.reduce((n, e) => n + (e.n_runs || 0), 0) >= (rv.n_runs || Infinity);
+    // a launch-record value is complete only when every JSON launch record of the group has it
     const imageOf = (g) => {
-      const atLaunch = recordsOf(g).map((x) => x.image).filter((i) => i && (i.id || i.lock_sha256));
-      if (atLaunch.length) return { items: atLaunch.map((i) => ({ id: i.id || i.lock_sha256, how: "at launch" })), all: true };
+      const recs = recordsOf(g), atLaunch = recs.map((x) => x.image).filter((i) => i && (i.id || i.lock_sha256));
+      if (atLaunch.length && atLaunch.length === recs.length)
+        return { items: atLaunch.map((i) => ({ id: i.id || i.lock_sha256, how: "at launch" })), all: true };
       const rv = recovered(g), known = (rv?.image || []).filter((i) => i.id);
-      return { items: known.map((i) => ({ id: i.id, how: when(rv) + (i.via && i.via !== "beaker job" ? ` via ${i.via}` : "") })),
+      return { items: [...atLaunch.map((i) => ({ id: i.id || i.lock_sha256, how: "at launch" })),
+                       ...known.map((i) => ({ id: i.id, how: when(rv) + (i.via && i.via !== "beaker job" ? ` via ${i.via}` : "") }))],
                all: covers(rv, known) };
     };
     const revsOf = (g) => {
@@ -415,7 +418,9 @@ document.addEventListener("atlas:ready", () => {
       const img = imageOf(g), revs = revsOf(g);
       Object.entries(revs).forEach(([k, v]) => modelItems.push({ text: `${k} ${[...v.shas].map(short).join(", ")}`, sub: v.how }));
       img.items.forEach((i) => modelItems.push({ text: `image ${short(i.id)}`, sub: i.how }));
-      return { image: img.items.length > 0 && img.all, code: Object.keys(revs).length > 0 && Object.values(revs).every((v) => v.all),
+      // the training code: the wrapper that trained and the dispatcher config it ran
+      return { image: img.items.length > 0 && img.all,
+               code: ["wrapper", "dispatcher"].every((k) => revs[k]) && Object.values(revs).every((v) => v.all),
                any: img.items.length > 0 || Object.keys(revs).length > 0 };
     });
     const modelUniq = uniq(modelItems.map((i) => JSON.stringify(i))).map((s) => JSON.parse(s));
@@ -428,10 +433,10 @@ document.addEventListener("atlas:ready", () => {
             ? "Known only in part: some groups, repositories or runs predate recording and could not be recovered (studies#25, #28)."
             : "Not recorded at launch and not recovered (studies#25, #28).");
     const dataOf = (g) => {
-      const atLaunch = recordsOf(g).map((x) => x.data).filter(Boolean);
-      if (atLaunch.length) return { ds: atLaunch.map((d) => ({ ...d, how: "at launch" })), all: true };
+      const recs = recordsOf(g), atLaunch = recs.map((x) => x.data).filter(Boolean);
+      if (atLaunch.length && atLaunch.length === recs.length) return { ds: atLaunch.map((d) => ({ ...d, how: "at launch" })), all: true };
       const rv = recovered(g), ds = (rv?.data || []).map((d) => ({ ...d, how: when(rv) }));
-      return { ds, all: covers(rv, ds) };
+      return { ds: [...atLaunch.map((d) => ({ ...d, how: "at launch" })), ...ds], all: covers(rv, ds) };
     };
     const dataItems = [], dataState = groups.map((g) => {
       const { ds, all } = dataOf(g);
