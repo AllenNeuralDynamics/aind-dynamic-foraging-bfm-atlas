@@ -18,8 +18,9 @@ studies / dispatcher / wrapper commits.
 - **Lineage** of any result block: the report drawer (the block's *Provenance* button, or a
   number) and its own page, `#/lineage/<study>/<rN>/<block>`. Each step back from the block to
   its data (analysis, query, tracking, compute, experiment, model & image, data) is filled,
-  half filled or hollow by what the catalog records; hover a step for where it is recorded and
-  what checks it.
+  half filled or hollow by what the catalog records. Open a step for its evidence (producer and
+  digests, W&B groups, launch records, commits and image, data snapshot) and the checker findings
+  about it; `#/lineage/<study>/<rN>/<block>/<step>` opens that step.
 - **Export SVG** on both, stamped with the studies commit, for slides.
 
 ## How it works

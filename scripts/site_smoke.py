@@ -142,6 +142,19 @@ def main(site: str, out: str) -> int:
         page.wait_for_selector(".lineage .slot", timeout=20000)
         if page.locator(".lineage .slot").count() < 8:
             failures.append("lineage: fewer than eight hops rendered")
+        # a step opens to its details and the address bar names it; .../<block>/<step> opens it
+        step = page.locator('#lineage-full .slot[data-hop="analysis"]')
+        step.locator(".slot-head").click()
+        if step.locator(".slot-head").get_attribute("aria-expanded") != "true" or step.locator(".slot-detail").is_hidden():
+            failures.append("lineage: a step did not open")
+        if not page.evaluate("location.hash.endsWith('/analysis')"):
+            failures.append("lineage: opening a step did not update the permalink")
+        page.goto(base + views["lineage"] + "/data")
+        page.wait_for_selector(".lineage .slot", timeout=20000)
+        if page.locator('#lineage-full .slot[data-hop="data"] .slot-head').get_attribute("aria-expanded") != "true":
+            failures.append("lineage: the step permalink did not open its step")
+        page.locator("#lineage-full .lin-all").click()
+        page.screenshot(path=str(out / "lineage-open.png"), full_page=True)
         check_export(page, ".lin-export", "lineage", out / "lineage.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         page.goto(base + views["report"])
         page.wait_for_selector(".result-block button", timeout=20000)
@@ -180,9 +193,11 @@ def main(site: str, out: str) -> int:
             if view not in views:
                 failures.append(f"{view}: navigation link hidden, so its view is not registered")
         page.set_viewport_size({"width": 390, "height": 844})
-        for name in ("landing", "report"):
+        for name in ("landing", "report", "lineage"):
             page.goto(base + views[name])
             page.wait_for_timeout(800)
+            if name == "lineage":      # every step open, so the details must fit too
+                page.locator("#lineage-full .lin-all").click()
             page.screenshot(path=str(out / f"mobile-{name}.png"))
             if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"):
                 failures.append(f"{name}: horizontal scroll at phone width")
