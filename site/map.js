@@ -558,7 +558,7 @@ document.addEventListener("atlas:ready", () => {
     if (x.format !== "json") return `<li>${name} <span class="muted">older record file (a copied manifest)</span></li>`;
     const jobs = (x.job_refs || []).map((j) => (j.type === "beaker_experiment"
       ? `<a class="mono" href="https://beaker.org/ex/${esc(j.id)}" target="_blank" rel="noopener">${esc(j.id)}</a>`
-      : `${esc(j.type.replace(/_/g, " "))} <code>${esc(j.id)}</code>`));
+      : `${esc(String(j.type ?? "job").replace(/_/g, " "))} <code>${esc(j.id)}</code>`));   // the catalog keeps job refs as written
     const facts = [x.platform, x.time && String(x.time).slice(0, 16).replace("T", " "),
                    x.n_tasks != null ? plural(x.n_tasks, "task") : null, x.label ? `label ${x.label}` : null].filter(Boolean);
     return `<li>${name} ${chip(x.kind || "launch")} <span class="muted">${esc(facts.join(" · "))}</span>
@@ -578,7 +578,7 @@ document.addEventListener("atlas:ready", () => {
     if (!rv) return "";
     const un = Object.entries(rv.unrecovered || {});
     return `<p class="muted">Recovered ${esc(String(rv.recovered_at_pt || "").slice(0, 16).replace("T", " "))} PT from
-        ${plural(rv.n_runs || 0, "run")} by ${srcLink(rv.artifact, base(rv.artifact))}.</p>
+        ${esc(plural(rv.n_runs || 0, "run"))} by ${srcLink(rv.artifact, base(rv.artifact))}.</p>
       ${un.length ? `<p class="lvl-warn">Not recovered: ${esc(un.map(([k, v]) => `${k} (${typeof v === "number" ? plural(v, "run") : JSON.stringify(v)})`).join(", "))}</p>` : ""}`;
   }
 
@@ -636,12 +636,17 @@ document.addEventListener("atlas:ready", () => {
         detail: (how === "inputs" && arts.length ? `<p class="muted">No producer declares this block in <code>_meta.outputs</code>
             (a v2 producer would); these are the report's JSON inputs.</p>` : "") + arts.map(artifactDetail).join("") });
     const inputs = uniq(arts.flatMap((a) => (a.meta?.inputs || []).map((i) => i.path)));
-    // an input is linked at the revision of the producer that read it, with the digest it recorded
-    const readAt = {}, digestOf = {};
+    // an input is linked at the revision of the producer that read it; every distinct digest the
+    // producers recorded for it is kept, with who read it, so a disagreement stays visible
+    const readAt = {}, readsOf = {};
     arts.forEach((a) => (a.meta?.inputs || []).forEach((i) => {
       readAt[i.path] ||= a.meta?.studies_git_sha || undefined;
-      digestOf[i.path] ||= i.sha256;
+      const reads = (readsOf[i.path] ||= []);
+      if (i.sha256 && !reads.some((x) => x.sha256 === i.sha256))
+        reads.push({ sha256: i.sha256, by: a.meta?.produced_by ? base(a.meta.produced_by) : base(a.path), at: a.meta?.studies_git_sha });
     }));
+    const readsHtml = (reads = []) => reads.map((x) => `<span class="muted mono">${esc(short(x.sha256))}</span>${reads.length > 1
+      ? ` <span class="muted">read by ${esc(x.by)}${x.at ? ` at ${esc(short(x.at))}` : ""}</span>` : ""}`).join("; ");
     const freezes = inputs.map((p) => S.artifactByPath[p]).filter((a) => a?.meta?.kind === "freeze");
     const items = inputs.map((p) => {
       const st = studyOfPath(p), cross = st && st !== r._study, art = S.artifactByPath[p];
@@ -662,7 +667,7 @@ document.addEventListener("atlas:ready", () => {
         : "Every input is a freeze or another study's result, each by digest.",
       { count: inputs.length > 1 ? plural(inputs.length, "input") : null, paths: inputs,
         detail: inputs.length ? `<ul class="lin-list">${inputs.map((p, i) => `<li>${itemHtml(items[i])}
-            ${digestOf[p] ? `<span class="muted mono">${esc(short(digestOf[p]))}</span>` : ""}
+            ${readsHtml(readsOf[p])}
             ${items[i].xref ? "" : `<span class="muted">${esc(inStudy(p))}</span>`}</li>`).join("")}</ul>` : "" });
     const groups = uniq([...arts, ...freezes].flatMap((a) => a.meta?.wandb_groups || []));
     out.groups = groups;
