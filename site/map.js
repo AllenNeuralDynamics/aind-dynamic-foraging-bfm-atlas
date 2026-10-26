@@ -553,13 +553,23 @@ document.addEventListener("atlas:ready", () => {
     ]) + `<details class="lin-raw"><summary><code>_meta</code></summary><pre>${esc(JSON.stringify(m, null, 2))}</pre></details>`);
   }
 
+  // Launch times come as UTC or with a Pacific offset (created_utc, submitted_at, produced_at_pt),
+  // some with a space for "T" or microseconds: parse to an instant, show it in Seattle time.
+  const launchTime = (t) => {
+    const ms = t ? Date.parse(String(t).replace(" ", "T").replace(/(\.\d{3})\d+/, "$1")) : NaN;
+    return Number.isNaN(ms) ? null : ms;
+  };
+  const ptTime = (ms) => `${new Date(ms).toLocaleString("sv-SE", { timeZone: "America/Los_Angeles", year: "numeric",
+    month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} PT`;
+
   function recordDetail(x) {
     const name = srcLink(x.path, x.path.split("/").slice(-3).join("/"));
     if (x.format !== "json") return `<li>${name} <span class="muted">older record file (a copied manifest)</span></li>`;
     const jobs = (x.job_refs || []).map((j) => (j.type === "beaker_experiment"
       ? `<a class="mono" href="https://beaker.org/ex/${esc(j.id)}" target="_blank" rel="noopener">${esc(j.id)}</a>`
       : `${esc(String(j.type ?? "job").replace(/_/g, " "))} <code>${esc(j.id)}</code>`));   // the catalog keeps job refs as written
-    const facts = [x.platform, x.time && String(x.time).slice(0, 16).replace("T", " "),
+    const ms = launchTime(x.time);
+    const facts = [x.platform, ms !== null ? ptTime(ms) : x.time,
                    x.n_tasks != null ? plural(x.n_tasks, "task") : null, x.label ? `label ${x.label}` : null].filter(Boolean);
     return `<li>${name} ${chip(x.kind || "launch")} <span class="muted">${esc(facts.join(" · "))}</span>
       ${x.note ? `<div>${esc(x.note)}</div>` : ""}
@@ -693,7 +703,7 @@ document.addEventListener("atlas:ready", () => {
         : json.length ? "Every launch and intervention writes a launch record." : "Only older record files (copied manifests), without the launch's kind, jobs or commits.",
       { paths: recs.map((x) => x.path),
         // launches first, in time order; older record files after
-        detail: recs.length ? `<ul class="lin-list">${[...json].sort((a, b) => String(a.time || "~").localeCompare(String(b.time || "~")))
+        detail: recs.length ? `<ul class="lin-list">${[...json].sort((a, b) => (launchTime(a.time) ?? Infinity) - (launchTime(b.time) ?? Infinity))
           .concat(recs.filter((x) => x.format !== "json")).map(recordDetail).join("")}</ul>` : "" });
     // Per variant: the manifests its launch records snapshot (named relative to the variant, as the
     // studies launchers write them), or else the variant's files as they are now, marked so.
@@ -747,28 +757,32 @@ document.addEventListener("atlas:ready", () => {
     };
     const revsOf = (g) => {
       // per repository: the launch records' commits, complete only when every record has one;
-      // otherwise the recovered commits fill the gap, and both sources stay labelled
+      // otherwise the recovered commits fill the gap; each commit keeps the source(s) that gave it
       const recs = recordsOf(g), out = {};
       recs.forEach((x) => Object.entries(x.revisions || {}).forEach(([k, v]) => {
         if (!v) return;
-        const r = (out[k] ||= { shas: new Set(), how: "at launch", n: 0 });
-        r.shas.add(v); r.n += 1; }));
+        const r = (out[k] ||= { shas: new Map(), n: 0 });
+        r.shas.set(v, "at launch"); r.n += 1; }));
       Object.values(out).forEach((r) => { r.all = r.n === recs.length; });
       const rv = recovered(g);
       Object.entries(rv?.revisions || {}).forEach(([k, shas]) => {
-        const r = out[k];
-        if (r?.all) return;
-        const got = { shas: new Set(Object.keys(shas)), how: when(rv), all: covers(rv, Object.values(shas).map((n) => ({ n_runs: n }))) };
-        out[k] = r ? { shas: new Set([...r.shas, ...got.shas]), how: `${r.how}; ${got.how}`, all: got.all } : got;
+        const r = (out[k] ||= { shas: new Map() });
+        if (r.all) return;
+        Object.keys(shas).forEach((sha) => r.shas.set(sha, r.shas.has(sha) ? `${r.shas.get(sha)}; ${when(rv)}` : when(rv)));
+        r.all = covers(rv, Object.values(shas).map((n) => ({ n_runs: n })));
       });
       return out;
     };
+    // a repository's commits grouped by the source that gave them: [[how, [sha, ...]], ...]
+    const byHow = (shas) => Object.entries([...shas].reduce((o, [sha, how]) => ((o[how] ||= []).push(sha), o), {}));
     const modelItems = [], modelParts = [], modelHas = groups.map((g) => {
       const img = imageOf(g), revs = revsOf(g);
-      Object.entries(revs).forEach(([k, v]) => modelItems.push({ text: `${k} ${[...v.shas].map(short).join(", ")}`, sub: v.how }));
+      Object.entries(revs).forEach(([k, v]) => byHow(v.shas).forEach(([how, shas]) =>
+        modelItems.push({ text: `${k} ${shas.map(short).join(", ")}`, sub: how })));
       img.items.forEach((i) => modelItems.push({ text: `image ${short(i.id)}`, sub: i.how }));
-      const rows = [...Object.entries(revs).map(([k, v]) => [k, `${[...v.shas].map((sha) => A.commitLink(k, sha)).join(", ")}
-          <span class="muted">${esc(v.how)}${v.all ? "" : ", not every run"}</span>`]),
+      const rows = [...Object.entries(revs).map(([k, v]) => [k, byHow(v.shas).map(([how, shas]) =>
+          `${shas.map((sha) => A.commitLink(k, sha)).join(", ")} <span class="muted">${esc(how)}</span>`).join("<br>")
+          + (v.all ? "" : ` <span class="muted">(not every run)</span>`)]),
         ...img.items.map((i) => ["image", `<span class="mono">${esc(i.id)}</span> <span class="muted">${esc(i.how)}${img.all ? "" : ", not every run"}</span>`])];
       modelParts.push({ g, html: (rows.length ? kv(rows) : `<p class="muted">Not recorded at launch and not recovered.</p>`) + recoveredNote(recovered(g)) });
       // the training code: the wrapper that trained and the dispatcher config it ran
