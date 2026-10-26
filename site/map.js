@@ -146,8 +146,9 @@ document.addEventListener("atlas:ready", () => {
     const pairs = {};
     return Object.values(edges).map((e) => {
       const k = [e.from, e.to].sort().join("|"), i = (pairs[k] = (pairs[k] ?? -1) + 1);
-      // line weight counts the distinct reports behind a link (a study-level motivation is one)
-      return { ...e, bend: 0.12 + 0.16 * i, weight: uniq(e.items.map((d) => d.report || "")).length };
+      // line weight counts the distinct reports behind a link: the declaring report, or for a
+      // supersession (declared on the replaced report) the report replaced; a motivation is one
+      return { ...e, bend: 0.12 + 0.16 * i, weight: uniq(e.items.map((d) => d.report || d.to_report || "")).length };
     });
   }
   const edgeTip = (e) => {

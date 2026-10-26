@@ -113,10 +113,17 @@ def main(site: str, out: str) -> int:
             failures.append(f"study map: islands never turned off ({labels})")
         chip = page.locator(".tag-chip").first
         if chip.count():
+            facet, value = chip.get_attribute("data-f"), chip.get_attribute("data-v")
+            def carries(s):        # the study's tags plus its reports', a nested tag counting for its parent
+                tags = ((s["cover"].get("tags") or {}).get(facet) or []) + [
+                    t for r in s["reports"] for t in ((r.get("tags") or {}).get(facet) or [])]
+                return any(t == value or t.startswith(value + "/") for t in tags)
             chip.click()
             page.wait_for_timeout(300)
-            if not page.locator("#study-map .node.dim").count() and len(cat["studies"]) > 1:
-                failures.append("study map: a tag filter dimmed nothing")
+            want = sum(not carries(s) for s in cat["studies"])
+            got = page.locator("#study-map .node.dim:not(.issue)").count()
+            if got != want:
+                failures.append(f"study map: filtering on {facet}={value} faded {got} studies, expected {want}")
             chip.click()
         # the study page's local graph: the study in the middle, its neighbours on either side
         # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
