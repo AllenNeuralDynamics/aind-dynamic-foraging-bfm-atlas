@@ -56,7 +56,7 @@ document.addEventListener("atlas:ready", () => {
   // Resolves the page's CSS (theme variables included) into attributes, so the file renders the
   // same anywhere, and stamps the studies commit the catalog was built from.
   const PROPS = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-dasharray", "stroke-opacity",
-                 "opacity", "font-size", "font-weight", "font-family"];
+                 "stroke-linecap", "paint-order", "opacity", "font-size", "font-weight", "font-family"];
   function downloadSvg(svg, filename) {
     const clone = svg.cloneNode(true);
     const src = [svg, ...svg.querySelectorAll("*")], dst = [clone, ...clone.querySelectorAll("*")];
@@ -132,7 +132,8 @@ document.addEventListener("atlas:ready", () => {
   const studyTags = (s, f) => expand((s.cover.tags || {})[f] || (f === "model" && !s.cover.tags && s.model ? [s.model] : []));
   const reportTags = (r, f) => expand(((r.tags || {})[f]) || []);
   const allTags = (s, f) => uniq([...studyTags(s, f), ...s.reports.flatMap((r) => reportTags(r, f))]);
-  const modelColor = (t) => `var(--m-${String(t).replace(/\//g, "-")}, var(--m-other))`;
+  // tag values are data: only CSS identifier characters reach the style attribute
+  const modelColor = (t) => `var(--m-${String(t).replace(/[^A-Za-z0-9_-]/g, "-")}, var(--m-other))`;
   const arrowFrom = (e) => [e.to, e.from];          // earlier -> later, whatever the kind
 
   function aggregate(deps, keep) {
@@ -141,7 +142,12 @@ document.addEventListener("atlas:ready", () => {
       if (d.from === d.to || !keep(d)) continue;
       (edges[`${d.from}|${d.to}|${d.kind}`] ||= { from: d.from, to: d.to, kind: d.kind, items: [] }).items.push(d);
     }
-    return Object.values(edges);
+    // links between the same two studies bend apart, so each keeps its own hover target
+    const pairs = {};
+    return Object.values(edges).map((e) => {
+      const k = [e.from, e.to].sort().join("|"), i = (pairs[k] = (pairs[k] ?? -1) + 1);
+      return { ...e, bend: 0.12 + 0.16 * i };
+    });
   }
   const edgeTip = (e) => {
     const name = (id) => (id.startsWith("issue:") ? id.slice(6) : id.slice(0, 2));
@@ -149,9 +155,9 @@ document.addEventListener("atlas:ready", () => {
       <ul>${uniq(e.items.map((d) => `${d.to_report ? d.to_report.split("/").pop() + ": " : ""}${d.note || (d.report ? base(d.report) : "")}`))
         .slice(0, 6).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
   };
-  function curve(a, b, ra, rb) {      // a gentle arc from a's rim to b's rim, arriving along its tangent
+  function curve(a, b, ra, rb, bend = 0.12) {      // an arc from a's rim to b's rim, arriving along its tangent
     const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
-    const mx = (a.x + b.x) / 2 + nx * 0.12 * L, my = (a.y + b.y) / 2 + ny * 0.12 * L;
+    const mx = (a.x + b.x) / 2 + nx * bend * L, my = (a.y + b.y) / 2 + ny * bend * L;
     const sx = mx - a.x, sy = my - a.y, S0 = Math.hypot(sx, sy) || 1, ex = b.x - mx, ey = b.y - my, E = Math.hypot(ex, ey) || 1;
     return `M${a.x + sx / S0 * ra},${a.y + sy / S0 * ra} Q${mx},${my} ${b.x - ex / E * rb},${b.y - ey / E * rb}`;
   }
@@ -174,7 +180,9 @@ document.addEventListener("atlas:ready", () => {
     const nodes = studies.map((s) => ({ id: s.id, s }));
     const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
     const list = aggregate(S.cat.dependencies, (d) => byId[d.from] && (byId[d.to] || d.to.startsWith("issue:")));
-    list.filter((e) => !byId[e.to]).forEach((e) => { byId[e.to] = { id: e.to, issue: e.to.slice(6) }; nodes.push(byId[e.to]); });
+    for (const e of list) {          // one node per issue, however many studies it motivated
+      if (!byId[e.to]) { byId[e.to] = { id: e.to, issue: e.to.slice(6) }; nodes.push(byId[e.to]); }
+    }
     const links = list.map((e) => ({ e, source: byId[arrowFrom(e)[0]], target: byId[arrowFrom(e)[1]] }));
 
     const chips = FACETS.map((f) => `<div class="facet"><span class="facet-name" title="${esc(VOCAB[f].description || "")}">${esc(VOCAB[f].label)}</span>
@@ -287,7 +295,7 @@ document.addEventListener("atlas:ready", () => {
     sim.on("tick", () => {
       nodes.forEach((n) => { const r = radius(n.s) + 30; n.x = Math.max(r, Math.min(W - r, n.x)); n.y = Math.max(r, Math.min(H - r - 10, n.y)); });
       nodeSel.attr("transform", (n) => `translate(${n.x},${n.y})`);
-      edgeSel.selectAll("path").attr("d", (l) => curve(l.source, l.target, radius(l.source.s) + 2, radius(l.target.s) + (l.target.s && studyTags(l.target.s, "model").length > 1 ? 7 : 3)));
+      edgeSel.selectAll("path").attr("d", (l) => curve(l.source, l.target, radius(l.source.s) + 2, radius(l.target.s) + (l.target.s && studyTags(l.target.s, "model").length > 1 ? 7 : 3), l.e.bend));
       drawIslands();
     });
 
@@ -444,12 +452,15 @@ document.addEventListener("atlas:ready", () => {
     const back = uniq(list.filter((e) => e.from === sid).map((e) => e.to));
     const fwd = uniq(list.filter((e) => e.to === sid).map((e) => e.from)).filter((id) => !back.includes(id));
     if (!list.length) { host.innerHTML = `<p class="muted">This study has no relationships to other studies yet.</p>`; return; }
-    const W = 900, colX = 300, gap = 54, rows = Math.max(back.length, fwd.length, 1), H = Math.max(200, 80 + rows * gap);
+    const rOf = (id) => (S.study[id] ? radius(S.study[id]) + (id === sid ? 6 : 0) : 12);
+    // a row holds a node above its centre and its wrapped label below: space rows by the tallest
+    const extent = (id) => rOf(id) + 4 + (S.study[id] ? 15 + 13 * (wrap(label(S.study[id])).length - 1) + 4 : 0);
+    const gap = Math.max(...[...back, ...fwd].map((id) => rOf(id) + extent(id)), 40) + 10;
+    const W = 900, colX = 300, rows = Math.max(back.length, fwd.length, 1), H = Math.max(200, 80 + rows * gap);
     const cx = W / 2, cy = 30 + (H - 30) / 2, pos = { [sid]: { x: cx, y: cy } };
     const column = (ids, x) => ids.forEach((id, i) => { pos[id] = { x, y: cy + (i - (ids.length - 1) / 2) * gap }; });
     column(back, cx - colX);
     column(fwd, cx + colX);
-    const rOf = (id) => (S.study[id] ? radius(S.study[id]) + (id === sid ? 6 : 0) : 12);
     const nodeSvg = Object.keys(pos).map((id) => {
       const p = pos[id], s = S.study[id];
       if (!s) return `<g class="node issue" data-id="${esc(id)}" transform="translate(${p.x},${p.y})">
@@ -464,7 +475,7 @@ document.addEventListener("atlas:ready", () => {
     }).join("");
     const edgeSvg = list.map((e, i) => {
       const [a, b] = arrowFrom(e);
-      const d = curve(pos[a], pos[b], rOf(a) + 2, rOf(b) + 3);
+      const d = curve(pos[a], pos[b], rOf(a) + 2, rOf(b) + 3, e.bend);
       return `<g class="edge e-${e.kind}" data-i="${i}"><path class="hit" d="${d}"/><path class="line" d="${d}" marker-end="url(#m-${e.kind})"
         style="stroke-width:${1.2 + Math.sqrt(e.items.length) * 0.9}px"/></g>`;
     }).join("");
