@@ -286,17 +286,21 @@ document.addEventListener("atlas:ready", () => {
         return n.drop ? g + (n.drop[ax] - g) * PHYS.hold : g; };
       sim.force("x").x((n) => rest(n, "x")).strength((n) => (n.drop ? Math.max(pull, PHYS.hold) : pull));
       sim.force("y").y((n) => rest(n, "y")).strength((n) => (n.drop ? Math.max(pull, PHYS.hold) : pull));
+      nodes.forEach((n) => { if (n !== dragging) pin(n); });
       sim.alpha(alpha).restart();
     }
+    // at full hold a dropped study is pinned where it was dropped; below it, only the springs above hold it
+    let dragging = null;
+    const pin = (n) => { const on = !!n.drop && PHYS.hold >= 1; n.fx = on ? n.drop.x : null; n.fy = on ? n.drop.y : null; };
     nodeSel.call(d3.drag()
-      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); n.fx = n.x; n.fy = n.y; n.moved = false; })
+      .on("start", (ev, n) => { if (!ev.active) sim.alphaTarget(0.25).restart(); dragging = n; n.fx = n.x; n.fy = n.y; n.moved = false; })
       .on("drag", (ev, n) => { n.fx = ev.x; n.fy = ev.y; n.moved = true; })
       .on("end", (ev, n) => {
         if (!ev.active) sim.alphaTarget(0);
-        n.fx = n.fy = null;
-        if (!n.moved) return;        // a click, not a drop
-        n.drop = { x: ev.x, y: ev.y };
-        applyForces(0.3);
+        dragging = null;
+        if (n.moved) n.drop = { x: ev.x, y: ev.y };      // a click is not a drop
+        pin(n);
+        if (n.moved) applyForces(0.3);
       }));
 
     const matches = (n) => !n.s ? true : FACETS.every((f) => !selected[f].size || allTags(n.s, f).some((t) => selected[f].has(t)));
@@ -498,7 +502,9 @@ document.addEventListener("atlas:ready", () => {
     // a row holds a node above its centre and its wrapped label below: space rows by the tallest
     const extent = (id) => (S.study[id] ? labelY(S.study[id], rOf(id)) + 13 * (wrap(label(S.study[id])).length - 1) + 8 : rOf(id) + 4);
     const gap = Math.max(...[...back, ...fwd].map((id) => rOf(id) + extent(id)), 40) + 10;
-    const W = 900, colX = 300, rows = Math.max(back.length, fwd.length, 1), H = Math.max(200, 80 + rows * gap);
+    // tall enough for the columns, and for the study in the middle (centred at 15 + H/2) down to its label's end
+    const W = 900, colX = 300, rows = Math.max(back.length, fwd.length, 1),
+      H = Math.max(200, 80 + rows * gap, 2 * (extent(sid) + 23));
     const cx = W / 2, cy = 30 + (H - 30) / 2, pos = { [sid]: { x: cx, y: cy } };
     const column = (ids, x) => ids.forEach((id, i) => { pos[id] = { x, y: cy + (i - (ids.length - 1) / 2) * gap }; });
     column(back, cx - colX);
