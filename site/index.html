@@ -20,6 +20,17 @@
     <a href="#/about" data-view="about" hidden>About</a>
   </nav>
   <span class="pin" id="pin"></span>
+  <!-- a static page cannot start a workflow without a token: this opens the deploy workflow, one "Run workflow" click away -->
+  <a class="rebuild" id="rebuild" href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas/actions/workflows/pages.yml"
+    target="_blank" rel="noopener" title="Rebuild: opens the Deploy atlas workflow on GitHub; press Run workflow (needs write access) and the site redeploys in a few minutes">↻ Rebuild</a>
+  <details class="repos" id="repos"><summary title="Source repositories on GitHub">GitHub</summary>
+    <div class="repos-menu">
+      <a href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas" target="_blank" rel="noopener">atlas <span>this site</span></a>
+      <a href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-studies" target="_blank" rel="noopener">studies <span>study definitions, records, reports</span></a>
+      <a href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher" target="_blank" rel="noopener">dispatcher <span>launchers, configs, skills</span></a>
+      <a href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-wrapper" target="_blank" rel="noopener">wrapper <span>training and analysis</span></a>
+    </div>
+  </details>
 </header>
 <main id="main"><p class="muted">Loading catalog…</p></main>
 <aside id="drawer" class="drawer" role="dialog" aria-modal="false" aria-label="Provenance" tabindex="-1" hidden>

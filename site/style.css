@@ -40,6 +40,16 @@ h3 { font-size: 1rem; margin: 1.2em 0 0.4em; }
 .brand { font-weight: 650; color: var(--text); }
 .top nav { display: flex; gap: 14px; flex-wrap: wrap; }
 .pin { margin-left: auto; color: var(--muted); font-size: 0.85em; }
+.repos { position: relative; font-size: 0.85em; background: none; border: 0; padding: 0; margin: 0; }
+.repos summary { cursor: pointer; color: var(--accent); white-space: nowrap; font-weight: 400; }
+.repos-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 7; display: grid; min-width: 250px; max-width: calc(100vw - 32px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+.repos-menu a { padding: 5px 8px; border-radius: 6px; font-weight: 600; }
+.repos-menu a:hover { background: var(--line); }
+.repos-menu span { display: block; font-weight: 400; color: var(--muted); font-size: 0.9em; }
+.rebuild { font: 600 0.75rem var(--sans); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+  color: var(--text); background: var(--surface); text-decoration: none; white-space: nowrap; }
+.rebuild:hover { border-color: var(--accent); color: var(--accent); }
 main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
 
 .crumbs { color: var(--muted); font-size: 0.9em; margin-bottom: 4px; }
@@ -323,3 +333,4 @@ a.lchip { color: var(--accent); }
 .copy { position: absolute; top: 6px; right: 6px; font: 600 0.75rem var(--sans); border: 1px solid var(--line); border-radius: 6px;
   background: var(--surface); color: var(--text); padding: 2px 9px; cursor: pointer; }
 .about-foot { margin-top: 20px; font-size: 0.85rem; }
+.repos-menu a:hover { text-decoration: none; }

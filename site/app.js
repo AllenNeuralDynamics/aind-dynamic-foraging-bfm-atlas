@@ -476,6 +476,26 @@ function syncNav() {
 document.querySelector(".drawer-close").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 
+// the banner's GitHub menu closes on a pick, a click elsewhere, or Escape; capture phase, since the
+// map and About graphs stop their clicks from bubbling
+const reposMenu = document.getElementById("repos");
+// right-aligned to its button, shifted to stay 8 px inside both viewport edges (the header wraps at any width)
+reposMenu?.addEventListener("toggle", () => {
+  const menu = reposMenu.querySelector(".repos-menu");
+  menu.style.transform = "";
+  if (!reposMenu.open) return;
+  const r = menu.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+  const dx = r.left < 8 ? 8 - r.left : r.right > vw - 8 ? vw - 8 - r.right : 0;
+  if (dx) menu.style.transform = `translateX(${dx}px)`;
+});
+document.addEventListener("click", (e) => { if (reposMenu?.open && (!reposMenu.contains(e.target) || e.target.closest("a"))) reposMenu.open = false; }, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !reposMenu?.open) return;
+  const inside = reposMenu.contains(document.activeElement);
+  reposMenu.open = false;
+  if (inside) reposMenu.querySelector("summary").focus();      // keep the keyboard user's place
+});
+
 fetch("data/catalog.json")
   .then((r) => { if (!r.ok) throw new Error(`catalog.json: HTTP ${r.status}`); return r.json(); })
   .then((cat) => {

@@ -71,6 +71,31 @@ def main(site: str, out: str) -> int:
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.goto(base)
         page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
+        # the banner links the four repositories and opens the deploy workflow for a rebuild
+        for width in (1280, 820, 390, 320):          # whichever row the header wraps it onto, the menu stays on screen
+            page.set_viewport_size({"width": width, "height": 900})
+            page.click("#repos summary")
+            menu = page.locator(".repos-menu").bounding_box()
+            vw = page.evaluate("document.documentElement.clientWidth")
+            if not menu or menu["x"] < 0 or menu["x"] + menu["width"] > vw:
+                failures.append(f"banner: at {width} px the GitHub menu is not on screen ({menu})")
+            page.click("#repos summary")
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.click("#repos summary")
+        page.locator("#study-map .node[data-id]:not(.issue)").first.dispatch_event("click")    # stops propagation
+        if page.evaluate("document.getElementById('repos').open"):
+            failures.append("banner: a click on a study leaves the GitHub menu open")
+        page.locator("#study-map .node[data-id]:not(.issue)").first.dispatch_event("click")    # undo the selection
+        page.click("#repos summary")
+        page.focus(".repos-menu a")
+        page.keyboard.press("Escape")
+        if page.evaluate("!document.activeElement.matches('#repos summary') || document.getElementById('repos').open"):
+            failures.append("banner: Escape in the GitHub menu does not close it and return focus to its button")
+        repos = page.locator(".top .repos a").evaluate_all("as => as.map(a => a.href.split('/').pop())")
+        if repos != [f"aind-dynamic-foraging-bfm-{r}" for r in ("atlas", "studies", "dispatcher", "wrapper")]:
+            failures.append(f"banner: repository links are {repos}")
+        if not (page.get_attribute("#rebuild", "href") or "").endswith("/actions/workflows/pages.yml"):
+            failures.append("banner: Rebuild does not open the deploy workflow")
         for view in OPTIONAL_VIEWS:
             if page.locator(f'.top nav a[data-view="{view}"]').is_visible():
                 views[view] = f"#/{view}"
