@@ -237,6 +237,37 @@ def _skills(skills_dir: Path) -> dict:
             "skills": found}
 
 
+# the dispatcher's interactive stack diagram (archify HTML), shown on the About page
+STACK_DIAGRAM = "docs/diagrams/bfm-stack.html"
+
+
+def dispatcher_file(skills_dir: Path | str, path: str) -> bytes | None:
+    """A file of the dispatcher checkout holding the skills pack, read from the commit it records
+    (``git show HEAD:<path>``) like the skills themselves, so the site never ships a local edit
+    under that SHA. None outside a git checkout or when the commit has no such file."""
+    top = _git(Path(skills_dir).resolve(), "rev-parse", "--show-toplevel")
+    if not top:
+        return None
+    try:
+        out = subprocess.run(["git", "-C", top, "show", f"HEAD:{path}"], capture_output=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.stdout
+
+
+def copy_stack_diagram(catalog: dict, skills_dir: Path | str | None, dest: Path | str) -> Path | None:
+    """Write the stack diagram the catalog names to dest/dispatcher/<path>, where the About page
+    loads it; None when the build had no skills pack or its commit has no diagram."""
+    d = ((catalog.get("framework") or {}).get("sources") or {}).get("dispatcher") or {}
+    data = dispatcher_file(skills_dir, d["diagram"]) if skills_dir and d.get("diagram") else None
+    if data is None:
+        return None
+    out = Path(dest) / "dispatcher" / d["diagram"]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    return out
+
+
 # ---------------------------------------------------------------- assembly
 def build_framework(studies_root: Path | str, ok=None, skills_dir: Path | str | None = None) -> dict:
     """The About page's model of the framework, filled in from the studies checkout and, when
@@ -285,7 +316,9 @@ def build_framework(studies_root: Path | str, ok=None, skills_dir: Path | str | 
         if not pack["skills"]:
             skills_error = f"no SKILL.md under {skills_dir}"
         else:
-            dispatcher = {"sha": pack["sha"], "dirty": pack["dirty"], "remote": pack["remote"]}
+            diagram = pack["root"] and _git(Path(pack["root"]), "ls-tree", "--name-only", "HEAD", "--", STACK_DIAGRAM)
+            dispatcher = {"sha": pack["sha"], "dirty": pack["dirty"], "remote": pack["remote"],
+                          "diagram": STACK_DIAGRAM if diagram else None}
             skills = []
             for name, s in pack["skills"].items():
                 ed = SKILLS.get(name, {})

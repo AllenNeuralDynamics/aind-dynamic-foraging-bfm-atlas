@@ -6,6 +6,15 @@ every study, report and number, traced back through the producer that computed i
 inputs it read, the W&B group and launch record that produced them, and the exact
 studies / dispatcher / wrapper commits.
 
+It is the last of four repositories: the
+[studies](https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-studies) say what to run
+and why and keep the results, the
+[dispatcher](https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher) launches
+it, the [wrapper](https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-wrapper) trains
+it, and this site shows it. The dispatcher's
+[stack diagram](https://raw.githack.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher/main/docs/diagrams/bfm-stack.html)
+draws how they connect; the About page embeds it.
+
 **Live site: <https://allenneuraldynamics.github.io/aind-dynamic-foraging-bfm-atlas/>** (rebuilt on every push to `main` and daily at 13:17 UTC, i.e. 06:17 PDT / 05:17 PST, from studies `main`).
 
 ## What it shows
@@ -26,7 +35,9 @@ studies / dispatcher / wrapper commits.
   example study 13's sampling explainer) gets that page shipped with the site; the link opens it
   so it runs, rather than as source on GitHub.
 - **Export SVG** on both, stamped with the studies commit, for slides.
-- **About** (`#/about`): the framework itself, for other ML projects to reuse. An interactive map
+- **About** (`#/about`): the framework itself, for other ML projects to reuse. The stack
+  diagram of the four repositories (the dispatcher's `docs/diagrams/bfm-stack.html`, read from the
+  same dispatcher commit as the skills and shipped under `data/dispatcher/`); an interactive map
   of the objects it defines (study, launch, launch record, freeze, producer, report, ...) by
   lifecycle stage, each with its definition, schema fields, checker rules and the skills that
   operate it; the skills pack, marked by how much carries over; and copyable prompts that port
@@ -39,14 +50,15 @@ studies / dispatcher / wrapper commits.
 
 ```
 studies checkout @ SHA ─┐
-                        ├─bfm-atlas build──> catalog.json ──> static site (GitHub Pages)
-dispatcher skills @ SHA ┘ (optional, About page)
+                        ├─bfm-atlas build──> catalog.json + files/ + dispatcher/ ──> static site (GitHub Pages)
+dispatcher checkout @ SHA (optional, About page: skills pack + stack diagram)
 ```
 
 - `bfm-atlas build --studies <checkout> [--skills <dispatcher>/aind-behavior-foundation-model-skills]`
   reads only committed files (no W&B, no Beaker), so the catalog is a pure function of the
   studies SHA it records in `_meta.studies_git_sha` and, with `--skills`, of the dispatcher SHA
-  in `_meta.dispatcher_git_sha`.
+  in `_meta.dispatcher_git_sha`. The skills and the stack diagram are read from that dispatcher
+  commit with `git show`, never from its working tree.
 - Field names follow the studies repo's `schemas/`; vocabulary (study, variant, launch,
   intervention, report, correction, upstream, freeze) follows its `CONTEXT.md`.
 - Provenance findings are **not** computed here: the build runs the studies repo's own

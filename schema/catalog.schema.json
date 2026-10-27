@@ -303,6 +303,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "diagram": {
+                      "description": "Dispatcher-relative path of the interactive stack diagram the build shipped under data/dispatcher/, or null when that commit has none.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
