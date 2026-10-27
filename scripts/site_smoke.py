@@ -33,6 +33,40 @@ def check_export(page, button, what, path, failures, sha):
         failures.append(f"{what} export: no download ({type(e).__name__})")
 
 
+# Markdown math, one case per line: (markdown, what renderMarkdown must give)
+MATH_MD = "\n\n".join([
+    r"inline $\alpha_t^+ = \beta_{t}*x$ here",              # _ and * stay TeX, not emphasis
+    r"asymmetric ($\alpha^+/\alpha^-$), as in study 01",    # closing $ before a bracket
+    r"costs $5 and $10, or $5-$10",                         # prices are prose
+    r"code `$x_t$` and escaped \$y$.",                      # neither is math
+    "$$\n\\sum_i x_i \\{a\\}\n$$",                          # display block, escaped braces
+    r"broken $\frac{$ shows an error",
+])
+
+
+def check_math(page, failures):
+    """renderMarkdown turns $...$ and $$...$$ into KaTeX and leaves prose dollars alone."""
+    got = page.evaluate("""md => {
+      const d = window.Atlas.renderMarkdown(md, "math.md");
+      const ps = [...d.children];
+      return { inline: ps.map((p) => p.querySelectorAll(".katex:not(.katex-display .katex)").length),
+               display: d.querySelectorAll(".katex-display").length, em: d.querySelectorAll("em, strong").length,
+               mathml: d.querySelectorAll("annotation").length, errors: d.querySelectorAll(".katex-error").length,
+               text: ps.map((p) => p.textContent) };
+    }""", MATH_MD)
+    want_inline = [1, 1, 0, 0, 0, 0]
+    if got["inline"] != want_inline or got["display"] != 1:
+        failures.append(f"math: inline per paragraph {got['inline']} (want {want_inline}), display {got['display']} (want 1)")
+    if got["em"]:
+        failures.append("math: marked turned TeX into emphasis")
+    if got["mathml"] < 3:
+        failures.append("math: KaTeX's MathML is missing (sanitized away?)")
+    if got["errors"] != 1:
+        failures.append(f"math: {got['errors']} KaTeX error spans (want 1, for the broken expression)")
+    if "$5 and $10, or $5-$10" not in got["text"][2] or "$x_t$" not in got["text"][3] or "$y$." not in got["text"][3]:
+        failures.append(f"math: prose dollars changed: {got['text'][2:4]}")
+
+
 def main(site: str, out: str) -> int:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -71,6 +105,7 @@ def main(site: str, out: str) -> int:
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.goto(base)
         page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
+        check_math(page, failures)
         # the banner links the four repositories and opens the deploy workflow for a rebuild
         for width in (1280, 820, 390, 320):          # whichever row the header wraps it onto, the menu stays on screen
             page.set_viewport_size({"width": width, "height": 900})

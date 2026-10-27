@@ -53,6 +53,45 @@ function resolvePath(base, rel) {
   return parts.join("/");
 }
 
+// TeX math, as GitHub and pandoc read it: $$...$$ is display math, and $...$ is inline math when
+// the opening $ has a non-space on its right and the closing $ a non-space on its left and no
+// digit after it (so "$5 and $10" stays prose). \$ is a literal dollar. Tokenizing here keeps
+// marked's emphasis and escape rules off the TeX; the TeX goes out as escaped text, and KaTeX
+// renders it after DOMPurify (which would strip KaTeX's MathML).
+const MATH_INLINE = /^(?:\$\$((?:\\[^]|[^\\$`])+?)\$\$|\$(?![\s$])((?:\\[^]|[^\\$`])*?(?:\\[^]|[^\\\s$`]))\$(?!\d))/;
+const MATH_BLOCK = /^ {0,3}\$\$((?:\\[^]|[^\\$])+?)\$\$[ \t]*(?:\n+|$)/;
+const mathHtml = (tex, display, tag = "span") =>
+  `<${tag} class="tex${display ? " display" : ""}">${esc(tex.trim())}</${tag}>`;
+marked.use({ extensions: [
+  { name: "mathBlock", level: "block",
+    start(src) {
+      const m = /(?:^|\n) {0,3}\$\$/.exec(src);
+      return m ? m.index + (m[0].startsWith("\n") ? 1 : 0) : undefined;
+    },
+    tokenizer(src) { const m = MATH_BLOCK.exec(src); if (m) return { type: "mathBlock", raw: m[0], text: m[1] }; },
+    renderer: (t) => `${mathHtml(t.text, true, "div")}\n` },
+  { name: "mathInline", level: "inline",
+    start(src) {
+      for (let i = src.indexOf("$"); i !== -1; i = src.indexOf("$", i + 1)) {
+        if (src[i - 1] !== "\\" && MATH_INLINE.test(src.slice(i))) return i;
+      }
+    },
+    tokenizer(src) {
+      const m = MATH_INLINE.exec(src);
+      if (m) return { type: "mathInline", raw: m[0], text: m[1] ?? m[2], display: m[1] !== undefined };
+    },
+    renderer: (t) => mathHtml(t.text, t.display) },
+] });
+
+function renderMath(root) {
+  if (!window.katex) return;          // CDN down: the TeX source stays readable
+  for (const el of root.querySelectorAll(".tex")) {
+    try {
+      katex.render(el.textContent, el, { displayMode: el.classList.contains("display"), throwOnError: false });
+    } catch (e) { el.title = String(e.message || e); }
+  }
+}
+
 function findingsFor(prefix, { exact = false, levels = ["error", "warn"] } = {}) {
   return S.findings.filter((f) => levels.includes(f.level) &&
     (exact ? f.path === prefix : f.path === prefix || f.path.startsWith(prefix + "/")));
@@ -112,6 +151,7 @@ function renderMarkdown(md, basePath) {
       a.target = "_blank"; a.rel = "noopener";
     }
   }
+  renderMath(div);
   return div;
 }
 

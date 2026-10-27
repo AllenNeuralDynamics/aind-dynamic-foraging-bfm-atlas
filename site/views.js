@@ -99,7 +99,7 @@ document.addEventListener("atlas:ready", () => {
     if (!Object.keys(links).length) return;
     const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT);
     const nodes = [];
-    while (walker.nextNode()) if (!walker.currentNode.parentElement.closest("a, code, pre, .rb-head")) nodes.push(walker.currentNode);
+    while (walker.nextNode()) if (!walker.currentNode.parentElement.closest("a, code, pre, .rb-head, .tex")) nodes.push(walker.currentNode);
     for (const node of nodes) {
       const text = node.nodeValue;
       if (!NUMBER.test(text)) continue;
