@@ -124,16 +124,26 @@ def main(site: str, out: str) -> int:
         page.mouse.down()
         page.mouse.move(x0 + dx / 2, y0, steps=5)
         page.mouse.move(x0 + dx, y0, steps=5)
-        # mid-drag the tooltip waits in the top-left corner of the map's visible part, not over the study
-        tipbox, wrap = page.locator("#map .tip:not([hidden])").bounding_box(), page.locator("#map .map-wrap").bounding_box()
-        if not tipbox or abs(tipbox["x"] - wrap["x"] - 8) > 2 or abs(tipbox["y"] - max(wrap["y"], 0) - 8) > 2:
-            failures.append(f"study map: the tooltip is not docked in the map's corner ({tipbox} in {wrap})")
+        # mid-drag the tooltip waits in the top-left corner of the map's visible part, below the sticky
+        # header, not over the study; and stays there when the page scrolls
+        def docked(when):
+            tipbox, wrap = page.locator("#map .tip:not([hidden])").bounding_box(), page.locator("#map .map-wrap").bounding_box()
+            header = page.locator("header.top").bounding_box()
+            top = max(wrap["y"], header["y"] + header["height"])
+            if not tipbox or abs(tipbox["x"] - wrap["x"] - 8) > 2 or abs(tipbox["y"] - top - 8) > 2:
+                failures.append(f"study map: {when}, the tooltip is not docked in the map's corner ({tipbox} in {wrap})")
+        docked("mid-drag")
         page.mouse.up()
         page.wait_for_timeout(3500)
         box = node.bounding_box()
         kept = (box["x"] + box["width"] / 2 - x0) / dx
         if kept < 0.3:
             failures.append(f"study map: a dragged study kept only {kept:.0%} of the move")
+        page.locator("#study-map .node[data-id]:not(.issue)").nth(2).focus()     # keyboard focus, then scroll
+        page.evaluate("window.scrollBy(0, 200)")
+        page.wait_for_timeout(300)
+        docked("after scrolling with a study focused")
+        page.locator("#study-map .node[data-id]:not(.issue)").nth(2).blur()
         # islands cycle through the tag facets and off; a tag chip fades the studies it does not match
         btn = page.locator("#map-islands")
         labels = []

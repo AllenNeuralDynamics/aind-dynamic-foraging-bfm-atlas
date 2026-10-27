@@ -35,6 +35,21 @@ document.addEventListener("atlas:ready", () => {
     tip.addEventListener("pointerenter", () => clearTimeout(timer));
     tip.addEventListener("pointerleave", () => { timer = setTimeout(hideNow, 150); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !tip.hidden) hideNow(); });
+    // docked: the top-left of the part of the map on screen, below the sticky header, kept there on scroll
+    const place = () => {
+      const h = host.getBoundingClientRect(), d = dock.getBoundingClientRect();
+      const header = document.querySelector(".top")?.getBoundingClientRect().bottom ?? 0;
+      tip.style.left = `${d.left - h.left + 8}px`;
+      tip.style.top = `${Math.min(Math.max(d.top, header), d.bottom - tip.offsetHeight - 16) - h.top + 8}px`;
+    };
+    if (dock) {
+      const follow = () => {
+        if (!host.isConnected) { removeEventListener("scroll", follow); removeEventListener("resize", follow); }
+        else if (!tip.hidden) place();
+      };
+      addEventListener("scroll", follow, { passive: true });
+      addEventListener("resize", follow);
+    }
     return {
       show(target, html) {
         clearTimeout(timer);
@@ -43,14 +58,8 @@ document.addEventListener("atlas:ready", () => {
         if (current && current !== target) current.removeAttribute("aria-describedby");
         current = target;
         target.setAttribute("aria-describedby", tip.id);   // read out as the step's description
-        const h = host.getBoundingClientRect();
-        if (dock) {
-          const d = dock.getBoundingClientRect();     // the part of the map on screen, not below the fold
-          tip.style.left = `${d.left - h.left + 8}px`;
-          tip.style.top = `${Math.min(Math.max(d.top, 0), d.bottom - tip.offsetHeight - 16) - h.top + 8}px`;
-          return;
-        }
-        const b = target.getBoundingClientRect();
+        if (dock) return place();
+        const h = host.getBoundingClientRect(), b = target.getBoundingClientRect();
         const left = Math.min(Math.max(b.left - h.left + b.width / 2 - tip.offsetWidth / 2, 4),
                               Math.max(4, host.clientWidth - tip.offsetWidth - 4));
         const above = b.top - h.top - tip.offsetHeight - 8;
