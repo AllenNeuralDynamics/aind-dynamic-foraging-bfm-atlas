@@ -75,6 +75,11 @@ def main(site: str, out: str) -> int:
         page.click("#repos summary")
         if not page.locator(".repos-menu a").first.is_visible():
             failures.append("banner: the GitHub menu does not open")
+        page.locator("#study-map .node[data-id]:not(.issue)").first.dispatch_event("click")    # stops propagation
+        if page.evaluate("document.getElementById('repos').open"):
+            failures.append("banner: a click on a study leaves the GitHub menu open")
+        page.locator("#study-map .node[data-id]:not(.issue)").first.dispatch_event("click")    # undo the selection
+        page.click("#repos summary")
         page.focus(".repos-menu a")
         page.keyboard.press("Escape")
         if page.evaluate("!document.activeElement.matches('#repos summary') || document.getElementById('repos').open"):

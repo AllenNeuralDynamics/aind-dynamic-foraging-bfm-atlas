@@ -476,9 +476,10 @@ function syncNav() {
 document.querySelector(".drawer-close").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 
-// the banner's GitHub menu closes on a pick, a click elsewhere, or Escape
+// the banner's GitHub menu closes on a pick, a click elsewhere, or Escape; capture phase, since the
+// map and About graphs stop their clicks from bubbling
 const reposMenu = document.getElementById("repos");
-document.addEventListener("click", (e) => { if (reposMenu?.open && (!reposMenu.contains(e.target) || e.target.closest("a"))) reposMenu.open = false; });
+document.addEventListener("click", (e) => { if (reposMenu?.open && (!reposMenu.contains(e.target) || e.target.closest("a"))) reposMenu.open = false; }, true);
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !reposMenu?.open) return;
   const inside = reposMenu.contains(document.activeElement);
