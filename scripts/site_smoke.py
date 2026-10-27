@@ -71,6 +71,16 @@ def main(site: str, out: str) -> int:
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.goto(base)
         page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
+        # the banner links the four repositories and opens the deploy workflow for a rebuild
+        page.click("#repos summary")
+        if not page.locator(".repos-menu a").first.is_visible():
+            failures.append("banner: the GitHub menu does not open")
+        page.keyboard.press("Escape")
+        repos = page.locator(".top .repos a").evaluate_all("as => as.map(a => a.href.split('/').pop())")
+        if repos != [f"aind-dynamic-foraging-bfm-{r}" for r in ("atlas", "studies", "dispatcher", "wrapper")]:
+            failures.append(f"banner: repository links are {repos}")
+        if not (page.get_attribute("#rebuild", "href") or "").endswith("/actions/workflows/pages.yml"):
+            failures.append("banner: Rebuild does not open the deploy workflow")
         for view in OPTIONAL_VIEWS:
             if page.locator(f'.top nav a[data-view="{view}"]').is_visible():
                 views[view] = f"#/{view}"
