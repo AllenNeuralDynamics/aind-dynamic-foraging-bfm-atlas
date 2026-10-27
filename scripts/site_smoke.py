@@ -207,6 +207,15 @@ def main(site: str, out: str) -> int:
                 failures.append("about: the porting prompts' dispatcher links are not pinned, or not flagged as unpinned")
             if fw.get("skills") and page.locator("#fw-skills .skill-card").count() != len(fw["skills"]):
                 failures.append("about: not one card per skill")
+            # the dispatcher's stack diagram, when the build shipped it, renders inside its frame
+            if ((fw.get("sources") or {}).get("dispatcher") or {}).get("diagram"):
+                frame = page.locator("iframe.stack")
+                frame.scroll_into_view_if_needed()
+                try:
+                    frame.content_frame.locator("svg").first.wait_for(timeout=20000)
+                    frame.screenshot(path=str(out / "about-stack.png"))
+                except Exception as exc:          # noqa: BLE001 - any failure to render is the finding
+                    failures.append(f"about: the stack diagram did not render ({type(exc).__name__})")
             page.screenshot(path=str(out / "about.png"), full_page=True)
             check_export(page, "#fw-export", "framework map", out / "framework.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         # the study page's local graph: the study in the middle, its neighbours on either side
