@@ -92,6 +92,7 @@ th { color: var(--muted); font-weight: 600; }
 .prose { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 20px 16px; }
 .prose img { max-width: 100%; height: auto; border-radius: 4px; }
 .prose table { display: block; overflow-x: auto; }
+.prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }   /* a wide equation scrolls, the page does not */
 .result-block { position: relative; background: var(--block); border: 1px solid var(--block-line); border-radius: 8px;
   padding: 4px 14px 8px; margin: 14px 0; }
 .result-block .rb-head { display: flex; justify-content: space-between; align-items: center; gap: 8px;

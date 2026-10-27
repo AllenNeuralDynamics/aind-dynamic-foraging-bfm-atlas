@@ -4,8 +4,8 @@
     python scripts/site_smoke.py https://allenneuraldynamics.github.io/aind-dynamic-foraging-bfm-atlas/ shots/
 
 Serves <site> on a local port (or uses a deployed URL), opens the main views, saves a screenshot of each, and checks
-that a report's result-block "Provenance" button opens the drawer and that nothing scrolls
-sideways at phone width.
+that a report's result-block "Provenance" button opens the drawer, that markdown TeX math
+renders, and that nothing scrolls sideways at phone width.
 """
 import functools
 import http.server
@@ -31,6 +31,44 @@ def check_export(page, button, what, path, failures, sha):
             failures.append(f"{what} export: not a self-contained SVG with the studies stamp")
     except Exception as e:
         failures.append(f"{what} export: no download ({type(e).__name__})")
+
+
+# Markdown math, one paragraph per case; check_math says what each must render to
+MATH_MD = "\n\n".join([
+    r"inline $\alpha_t^+ = \beta_{t}*x$ here",              # _ and * stay TeX, not emphasis
+    r"asymmetric ($\alpha^+/\alpha^-$), as in study 01",    # closing $ before a bracket
+    r"costs $5 and $10, or $5-$10",                         # prices are prose
+    r"code `$x_t$` and escaped \$y$.",                      # neither is math
+    "$$\n\\sum_i x_i \\{a\\}\n$$",                          # display block, escaped braces
+    r"a line with $$E = mc^2$$ in it",                      # display math inside a paragraph
+    r"broken $\frac{$ shows an error",
+    r"*value $a*b$* and __$x_1$__",                         # emphasis around math, a delimiter inside
+])
+
+
+def check_math(page, failures):
+    """renderMarkdown turns $...$ and $$...$$ into KaTeX and leaves prose dollars alone."""
+    got = page.evaluate("""md => {
+      const d = window.Atlas.renderMarkdown(md, "math.md");
+      const ps = [...d.children];
+      return { inline: ps.map((p) => p.querySelectorAll(".katex:not(.katex-display .katex)").length),
+               display: d.querySelectorAll(".katex-display").length, em: ps.map((p) => p.querySelectorAll("em, strong").length),
+               emMath: d.querySelectorAll("em > .tex, strong > .tex").length,
+               mathml: d.querySelectorAll("annotation").length, errors: d.querySelectorAll(".katex-error").length,
+               text: ps.map((p) => p.textContent) };
+    }""", MATH_MD)
+    want_inline = [1, 1, 0, 0, 0, 0, 0, 2]
+    if got["inline"] != want_inline or got["display"] != 2:
+        failures.append(f"math: inline per paragraph {got['inline']} (want {want_inline}), display {got['display']} (want 2)")
+    if got["em"] != [0] * 7 + [2] or got["emMath"] != 2:
+        failures.append(f"math: emphasis per paragraph {got['em']} (want 0 but 2 in the last), "
+                        f"{got['emMath']} formulas inside it (want 2)")
+    if got["mathml"] < 4:
+        failures.append("math: KaTeX's MathML is missing (sanitized away?)")
+    if got["errors"] != 1:
+        failures.append(f"math: {got['errors']} KaTeX error spans (want 1, for the broken expression)")
+    if "$5 and $10, or $5-$10" not in got["text"][2] or "$x_t$" not in got["text"][3] or "$y$." not in got["text"][3]:
+        failures.append(f"math: prose dollars changed: {got['text'][2:4]}")
 
 
 def main(site: str, out: str) -> int:
@@ -71,6 +109,7 @@ def main(site: str, out: str) -> int:
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.goto(base)
         page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
+        check_math(page, failures)
         # the banner links the four repositories and opens the deploy workflow for a rebuild
         for width in (1280, 820, 390, 320):          # whichever row the header wraps it onto, the menu stays on screen
             page.set_viewport_size({"width": width, "height": 900})
