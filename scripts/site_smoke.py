@@ -75,7 +75,10 @@ def main(site: str, out: str) -> int:
         page.click("#repos summary")
         if not page.locator(".repos-menu a").first.is_visible():
             failures.append("banner: the GitHub menu does not open")
+        page.focus(".repos-menu a")
         page.keyboard.press("Escape")
+        if page.evaluate("!document.activeElement.matches('#repos summary') || document.getElementById('repos').open"):
+            failures.append("banner: Escape in the GitHub menu does not close it and return focus to its button")
         repos = page.locator(".top .repos a").evaluate_all("as => as.map(a => a.href.split('/').pop())")
         if repos != [f"aind-dynamic-foraging-bfm-{r}" for r in ("atlas", "studies", "dispatcher", "wrapper")]:
             failures.append(f"banner: repository links are {repos}")

@@ -479,7 +479,12 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawe
 // the banner's GitHub menu closes on a pick, a click elsewhere, or Escape
 const reposMenu = document.getElementById("repos");
 document.addEventListener("click", (e) => { if (reposMenu?.open && (!reposMenu.contains(e.target) || e.target.closest("a"))) reposMenu.open = false; });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && reposMenu?.open) reposMenu.open = false; });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !reposMenu?.open) return;
+  const inside = reposMenu.contains(document.activeElement);
+  reposMenu.open = false;
+  if (inside) reposMenu.querySelector("summary").focus();      // keep the keyboard user's place
+});
 
 fetch("data/catalog.json")
   .then((r) => { if (!r.ok) throw new Error(`catalog.json: HTTP ${r.status}`); return r.json(); })

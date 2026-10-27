@@ -334,4 +334,4 @@ a.lchip { color: var(--accent); }
   background: var(--surface); color: var(--text); padding: 2px 9px; cursor: pointer; }
 .about-foot { margin-top: 20px; font-size: 0.85rem; }
 .repos-menu a:hover { text-decoration: none; }
-@media (max-width: 600px) { .repos-menu { right: auto; left: 0; } }
+@media (max-width: 640px) { .repos-menu { right: auto; left: 0; } }   /* the header layout's breakpoint */
