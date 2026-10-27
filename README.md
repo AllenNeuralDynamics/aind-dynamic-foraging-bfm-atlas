@@ -55,9 +55,10 @@ dispatcher skills @ SHA ┘ (optional, About page)
 - `schema/catalog.schema.json` describes the catalog; CI builds it from studies `main` and
   checks it against that schema.
 - Markdown (reports, READMEs, variant notes) renders with marked, and TeX math with KaTeX:
-  `$...$` inline and `$$...$$` display, the syntax GitHub renders. As in pandoc, `$...$` is math
-  only when no space is just inside either `$` and no digit follows the closing one, so
-  `$5 and $10` stays prose; write `\$` for a literal dollar anywhere else.
+  `$...$` inline and `$$...$$` display, the delimiters GitHub renders. As in pandoc, `$...$` is
+  math only when no space is just inside either `$` and no digit follows the closing one, so
+  `$5 and $10` stays prose here; GitHub's own rules for a lone `$` may differ, so write `\$` for
+  a literal dollar anywhere else.
 
 ## Develop
 
