@@ -38,9 +38,12 @@ document.addEventListener("atlas:ready", () => {
     // docked: the top-left of the part of the map on screen, below the sticky header, kept there on scroll
     const place = () => {
       const h = host.getBoundingClientRect(), d = dock.getBoundingClientRect();
-      const header = document.querySelector(".top")?.getBoundingClientRect().bottom ?? 0;
+      // the header is sticky only on wide screens; on phones it scrolls away and the viewport's top is the edge
+      const edge = Math.max(0, document.querySelector(".top")?.getBoundingClientRect().bottom ?? 0);
+      // with little of the map left on screen it overhangs the map's bottom rather than cover the header
+      const top = Math.max(edge, Math.min(Math.max(d.top, edge), d.bottom - tip.offsetHeight - 16));
       tip.style.left = `${d.left - h.left + 8}px`;
-      tip.style.top = `${Math.min(Math.max(d.top, header), d.bottom - tip.offsetHeight - 16) - h.top + 8}px`;
+      tip.style.top = `${top - h.top + 8}px`;
     };
     if (dock) {
       const follow = () => {

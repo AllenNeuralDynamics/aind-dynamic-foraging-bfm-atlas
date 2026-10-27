@@ -129,7 +129,7 @@ def main(site: str, out: str) -> int:
         def docked(when):
             tipbox, wrap = page.locator("#map .tip:not([hidden])").bounding_box(), page.locator("#map .map-wrap").bounding_box()
             header = page.locator("header.top").bounding_box()
-            top = max(wrap["y"], header["y"] + header["height"])
+            top = max(wrap["y"], header["y"] + header["height"], 0)
             if not tipbox or abs(tipbox["x"] - wrap["x"] - 8) > 2 or abs(tipbox["y"] - top - 8) > 2:
                 failures.append(f"study map: {when}, the tooltip is not docked in the map's corner ({tipbox} in {wrap})")
         docked("mid-drag")
@@ -144,6 +144,14 @@ def main(site: str, out: str) -> int:
         page.wait_for_timeout(300)
         docked("after scrolling with a study focused")
         page.locator("#study-map .node[data-id]:not(.issue)").nth(2).blur()
+        # at phone width the header scrolls away: scrolled past the map's top, the tooltip stays on screen
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.locator("#study-map .node[data-id]:not(.issue)").nth(2).focus()
+        page.evaluate("window.scrollTo(0, document.querySelector('#map .map-wrap').getBoundingClientRect().top + scrollY + 120)")
+        page.wait_for_timeout(300)
+        docked("on a phone, scrolled past the map's top")
+        page.locator("#study-map .node[data-id]:not(.issue)").nth(2).blur()
+        page.set_viewport_size({"width": 1280, "height": 900})
         # islands cycle through the tag facets and off; a tag chip fades the studies it does not match
         btn = page.locator("#map-islands")
         labels = []
