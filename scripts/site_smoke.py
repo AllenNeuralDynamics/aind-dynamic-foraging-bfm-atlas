@@ -72,11 +72,12 @@ def main(site: str, out: str) -> int:
         page.goto(base)
         page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
         # the banner links the four repositories and opens the deploy workflow for a rebuild
-        for width in (1280, 820, 390):          # whichever row the header wraps it onto, the menu stays on screen
+        for width in (1280, 820, 390, 320):          # whichever row the header wraps it onto, the menu stays on screen
             page.set_viewport_size({"width": width, "height": 900})
             page.click("#repos summary")
             menu = page.locator(".repos-menu").bounding_box()
-            if not menu or menu["x"] < 0 or menu["x"] + menu["width"] > width:
+            vw = page.evaluate("document.documentElement.clientWidth")
+            if not menu or menu["x"] < 0 or menu["x"] + menu["width"] > vw:
                 failures.append(f"banner: at {width} px the GitHub menu is not on screen ({menu})")
             page.click("#repos summary")
         page.set_viewport_size({"width": 1280, "height": 900})

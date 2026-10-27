@@ -334,4 +334,3 @@ a.lchip { color: var(--accent); }
   background: var(--surface); color: var(--text); padding: 2px 9px; cursor: pointer; }
 .about-foot { margin-top: 20px; font-size: 0.85rem; }
 .repos-menu a:hover { text-decoration: none; }
-.repos-menu.from-left { right: auto; left: 0; }
