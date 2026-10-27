@@ -479,6 +479,12 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawe
 // the banner's GitHub menu closes on a pick, a click elsewhere, or Escape; capture phase, since the
 // map and About graphs stop their clicks from bubbling
 const reposMenu = document.getElementById("repos");
+// right-aligned to its button unless that would push it off the left edge (the header wraps at any width)
+reposMenu?.addEventListener("toggle", () => {
+  const menu = reposMenu.querySelector(".repos-menu");
+  menu.classList.remove("from-left");
+  if (reposMenu.open && menu.getBoundingClientRect().left < 8) menu.classList.add("from-left");
+});
 document.addEventListener("click", (e) => { if (reposMenu?.open && (!reposMenu.contains(e.target) || e.target.closest("a"))) reposMenu.open = false; }, true);
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !reposMenu?.open) return;
