@@ -96,6 +96,18 @@ def main(site: str, out: str) -> int:
             failures.append(f"banner: repository links are {repos}")
         if not (page.get_attribute("#rebuild", "href") or "").endswith("/actions/workflows/pages.yml"):
             failures.append("banner: Rebuild does not open the deploy workflow")
+        # the day/night switch flips the whole page's palette and survives a reload
+        bg = lambda: page.evaluate("getComputedStyle(document.body).backgroundColor")
+        before, first = bg(), page.evaluate("document.documentElement.dataset.theme || ''")
+        page.click("#theme")
+        chosen = page.evaluate("document.documentElement.dataset.theme")
+        if chosen not in ("light", "dark") or chosen == first or bg() == before:
+            failures.append(f"banner: the theme switch did not change the page ({first!r} -> {chosen!r})")
+        page.reload()
+        page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
+        if page.evaluate("document.documentElement.dataset.theme") != chosen:
+            failures.append("banner: the theme choice did not survive a reload")
+        page.click("#theme")                       # back to where it started, for the screenshots
         for view in OPTIONAL_VIEWS:
             if page.locator(f'.top nav a[data-view="{view}"]').is_visible():
                 views[view] = f"#/{view}"
