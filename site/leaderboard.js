@@ -11,8 +11,10 @@ document.addEventListener("atlas:ready", () => {
   const main = () => document.getElementById("main");
 
   // x units per category, in each panel; the layout follows the original matplotlib figure
-  const STEP = { cognitive: 1, glmhmm: 0.55, disrnn: 1, gru: 1.35 };
+  const STEP = { cognitive: 1, literature: 0.5, glmhmm: 0.55, disrnn: 1, gru: 1.35 };
   const GROUP_GAP = 0.4, PANEL_PAD = 0.65;
+  const EMPTY_SPAN = 5;          // x units an empty panel (its source not on main yet) keeps for its note
+  const PX_PER_UNIT = 44;        // the chart widens with its x range instead of squeezing every panel
   const H_ALL = [16, 64, 128, 256, 512];
   const H_DODGE = 0.15;          // x offset per hidden size, inside a GRU D column
   const HEXAGON = { draw(ctx, size) {          // d3 has no hexagon symbol
@@ -31,6 +33,7 @@ document.addEventListener("atlas:ready", () => {
     // circles so each marker stays selectable
     "glmhmm-refit": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dx: -0.09, hit: 5 },
     "glmhmm-zeroshot": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dash: "4 3", fill: "hollow", dx: 0.09, hit: 5 },
+    "literature-mle": { c: "--lb-lit", m: d3.symbolCircle, size: 40, noline: true },   // different models: no line
     "disrnn-b3e-4": { c: "--lb-dis-op", m: HEXAGON, dash: "5 3" },
     "disrnn-b1e-4": { c: "--lb-dis-best", m: HEXAGON },
     "gru-reservoir": { c: "--lb-res", m: d3.symbolTimes, dash: "4 2", stroke: true, size: 60 },
@@ -40,7 +43,9 @@ document.addEventListener("atlas:ready", () => {
   const colour = (s) => `var(${styleOf(s).c})`;
 
   const fmt = (v) => v.toFixed(4);
+  let rankOf = () => 0;          // set per draw from the literature panel's order
   const xText = (panel, x) => panel === "cognitive" ? x.replace(" MLE", ", per-mouse fit (MLE)").replace(" HB", ", hierarchical Bayes (HB)")
+    : panel === "literature" ? `${x}, rank ${rankOf(x)}`
     : panel === "glmhmm" ? `K = ${x} states` : `D = ${x} training mice`;
   const blockRoute = (b) => `#/report/${encodeURIComponent(b.study)}/${encodeURIComponent(b.report)}?block-${encodeURIComponent(b.block)}`;
   const lineageRoute = (b) => `#/lineage/${encodeURIComponent(b.study)}/${encodeURIComponent(b.report)}/${encodeURIComponent(b.block)}`;
@@ -57,7 +62,8 @@ document.addEventListener("atlas:ready", () => {
     <div class="table-wrap"><table>
       <thead><tr><th>Model</th><th>Learned from the training mice</th><th>Fitted to each held-out mouse</th></tr></thead>
       <tbody>
-        <tr><td>CTT, Hattori: MLE</td><td>nothing</td><td>all of its parameters, by maximum likelihood</td></tr>
+        <tr><td>CTT, Hattori, study 12's literature models: MLE</td><td>nothing</td><td>all of its parameters, by maximum
+          likelihood (no prior, nothing shared across mice)</td></tr>
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
           (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
         <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
@@ -81,6 +87,11 @@ document.addEventListener("atlas:ready", () => {
     for (const p of panels) {
       const step = STEP[p.id] || 1, start = x;
       const groups = p.groups || [{ label: null, x: p.x }];
+      if (!groups.some((g) => g.x.length)) {
+        spans.push({ id: p.id, label: p.label, x0: start, x1: start + EMPTY_SPAN, groups: [] });
+        x = start + EMPTY_SPAN + 2 * PANEL_PAD;
+        continue;
+      }
       const labels = [];
       groups.forEach((g, gi) => {
         if (gi) x += GROUP_GAP;
@@ -137,13 +148,19 @@ document.addEventListener("atlas:ready", () => {
     tipEl.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && active) { ev.stopPropagation(); active.focus(); } });
     const { pos, spans, xmax } = layout(L.panels);
     const series = L.series;
-    const W = 1100, M = { l: 70, r: 14, t: 16, b: 64 };
+    const M = { l: 70, r: 14, t: 16, b: 84 }, W = Math.round(M.l + M.r + xmax * PX_PER_UNIT);
+    host.style.setProperty("--lb-w", `${W + 2}px`);
+    const lit = L.panels.find((p) => p.id === "literature")?.x || [];
+    rankOf = (v) => lit.indexOf(v) + 1;
     // legend rows above the plot
     const perRow = 3, rowH = 18, legendH = Math.ceil(series.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
     const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0);
-    const all = series.flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
+    // the axis is set by every series but study 12's ranking, whose weakest models sit far below the rest;
+    // a point outside it is drawn at the edge (▼ / ▲) with its value in the card
+    const all = series.filter((s) => s.panel !== "literature")
+      .flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
     const [lo, hi] = d3.extent(all), pad = (hi - lo) * 0.06;
     const x = d3.scaleLinear([0, xmax], [M.l, W - M.r]);
     const y = d3.scaleLinear([lo - pad, hi + pad], [H - M.b, plotTop]).nice();
@@ -151,7 +168,7 @@ document.addEventListener("atlas:ready", () => {
     // axes, panel dividers, labels
     const ticks = L.panels.flatMap((p) =>
       (p.groups ? p.groups.flatMap((g) => g.x) : p.x).map((v) => ({ at: pos[`${p.id}|${v}`],
-        text: p.id === "cognitive" ? String(v).split(" ").pop() : String(v) })));
+        text: p.id === "cognitive" ? String(v).split(" ").pop() : p.id === "literature" ? String(rankOf(v)) : String(v) })));
     const g = svg.append("g").attr("class", "lb-axes");
     g.append("g").attr("transform", `translate(${M.l},0)`).call(d3.axisLeft(y).ticks(8).tickFormat(d3.format(".3f")));
     const xa = g.append("g").attr("transform", `translate(0,${H - M.b})`);
@@ -165,11 +182,23 @@ document.addEventListener("atlas:ready", () => {
         const xd = x((spans[i - 1].x1 + sp.x0) / 2);
         g.append("line").attr("x1", xd).attr("x2", xd).attr("y1", plotTop).attr("y2", H - M.b).attr("class", "lb-divider");
       }
-      g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", H - M.b + 38).attr("text-anchor", "middle")
-        .attr("class", "lb-panel").text(sp.label);
+      // a label wider than its panel (about 6.5 px a character) wraps at its parenthesis
+      const lab = g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", H - M.b + 38).attr("text-anchor", "middle")
+        .attr("class", "lb-panel");
+      const cut = sp.label.indexOf(" (");
+      if (sp.label.length * 6.5 > x(sp.x1) - x(sp.x0) + 40 && cut > 0) {
+        lab.append("tspan").attr("x", x((sp.x0 + sp.x1) / 2)).text(sp.label.slice(0, cut));
+        lab.append("tspan").attr("x", x((sp.x0 + sp.x1) / 2)).attr("dy", "1.2em").text(sp.label.slice(cut + 1));
+      } else lab.text(sp.label);
       if (!series.some((s) => s.panel === sp.id)) {     // every source of this panel is still off main
         g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", (plotTop + H - M.b) / 2).attr("text-anchor", "middle")
           .attr("class", "lb-pending").text("not on studies main yet");
+      }
+      const offAxis = series.filter((q) => q.panel === sp.id)
+        .some((q) => q.points.some((p) => p.mean < y.domain()[0] || p.mean > y.domain()[1]));
+      if (offAxis) {
+        g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", H - M.b + 70).attr("text-anchor", "middle")
+          .attr("class", "lb-pending").text("▼ below the axis: hover for the value");
       }
       for (const gl of sp.groups) {
         const s = series.find((q) => q.panel === sp.id && q.label.startsWith(gl.label));
@@ -203,18 +232,23 @@ document.addEventListener("atlas:ready", () => {
             .attr("d", `M${cx},${y(p.mean - p.sem)}V${y(p.mean + p.sem)}M${cx - 3},${y(p.mean - p.sem)}h6M${cx - 3},${y(p.mean + p.sem)}h6`);
         }
       }
-      lg_.append("path").attr("class", "lb-line").attr("stroke-dasharray", st.dash || null)
-        .attr("d", d3.line().x((p) => x(xAt(s, p))).y((p) => y(p.mean))(pts));
+      if (!st.noline) {
+        lg_.append("path").attr("class", "lb-line").attr("stroke-dasharray", st.dash || null)
+          .attr("d", d3.line().x((p) => x(xAt(s, p))).y((p) => y(p.mean))(pts));
+      }
+      const [y0, y1] = y.domain();
       for (const p of pts) {
+        const off = p.mean < y0 ? "below" : p.mean > y1 ? "above" : null;
         const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE"));
         const mk = mg.append("g").attr("class", "lb-mean").attr("tabindex", 0).attr("role", "link")
-          .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}`)
-          .attr("transform", `translate(${x(xAt(s, p))},${y(p.mean)})`);
+          .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}${off ? ` (${off} the axis)` : ""}`)
+          .attr("transform", `translate(${x(xAt(s, p))},${off === "below" ? y.range()[0] - 7 : off === "above" ? y.range()[1] + 7 : y(p.mean)})`);
         mk.append("circle").attr("r", st.hit || 9).attr("class", "lb-hit");
-        mk.append("path").attr("d", d3.symbol(st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
+        mk.append("path").attr("d", d3.symbol(off ? d3.symbolTriangle : st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
+          .attr("transform", off === "below" ? "rotate(180)" : null)
           .attr("class", st.stroke ? "lb-mk-x" : hollow ? "lb-mk-hollow" : "lb-mk");
         const open = () => { location.hash = blockRoute(p.block); };
-        mk.on("pointerenter focus", (ev) => tip.show(ev.currentTarget, card(s, p)))
+        mk.on("pointerenter focus", (ev) => tip.show(ev.currentTarget, card(s, p, undefined, off)))
           .on("pointerleave", () => tip.hide())
           .on("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
           .on("click", open)
@@ -242,13 +276,13 @@ document.addEventListener("atlas:ready", () => {
     });
   }
 
-  function card(s, p, seed) {
+  function card(s, p, seed, off) {
     const b = p.block;
     const value = seed !== undefined ? `seed ${seed + 1} of ${p.n}: <b>${fmt(p.values[seed])}</b> (mean ${fmt(p.mean)})`
       : p.n > 1 ? `<b>${fmt(p.mean)}</b> ± ${fmt(p.sem)} (mean ± SEM, ${p.n} seeds: ${p.values.map(fmt).join(", ")})`
       : `<b>${fmt(p.mean)}</b>`;
     return `<b>${esc(s.label)}</b><div>${esc(xText(s.panel, p.x))}</div>
-      <div class="lb-tip-value">${value}</div>
+      <div class="lb-tip-value">${value}${off ? ` <span class="tip-v">(${off} the axis, drawn at its edge)</span>` : ""}</div>
       <div class="tip-v">${esc(p.description)}</div>
       <div class="tip-v">Reported in study ${esc(studyNo(b.study))} ${esc(b.report)}, ${esc(b.block)};
         read from <span class="mono">${esc(p.source.path.split("/").pop())}</span></div>

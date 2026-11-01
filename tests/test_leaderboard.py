@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from bfm_atlas.catalog import build_catalog
-from bfm_atlas.leaderboard import S06, S10, S13, S14, SERIES, LeaderboardError, build_leaderboard, nominal_d
+from bfm_atlas.leaderboard import PANELS, S06, S10, S12, S13, S14, SERIES, LeaderboardError, build_leaderboard, nominal_d
 
 
 def put(root: Path, rel: str, data) -> None:
@@ -75,6 +75,24 @@ def test_a_study14_file_without_the_zero_shot_field_fails_the_build(tmp_path):
     put(tmp_path, f"{S14}/r1_round_1.json", {"scores": {"hurdle": scores}})
     with pytest.raises(LeaderboardError, match="LR_engaged_zero_shot"):
         build_leaderboard(tmp_path, reports(R1_14), lambda p: True)
+
+
+R1_12 = ("12-cognitive-literature-leaderboard", "r1")
+
+
+def test_literature_models_follow_their_rank_and_skip_the_unranked(tmp_path):
+    by_model = {"B": {"rank": 2, "pooled_heldout": 0.71}, "A": {"rank": 1, "pooled_heldout": 0.72},
+                "WSLS": {"rank": None, "pooled_heldout": 0.60}, "C": {"rank": 3, "pooled_heldout": 0.55}}
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": by_model})
+    lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
+    lit = next(s for s in lb["series"] if s["id"] == "literature-mle")
+    assert [(p["x"], p["mean"]) for p in lit["points"]] == [("A", 0.72), ("B", 0.71), ("C", 0.55)]
+    assert next(p for p in lb["panels"] if p["id"] == "literature")["x"] == ["A", "B", "C"]
+    assert next(p for p in PANELS if p["id"] == "literature")["x"] == []      # the module's spec is untouched
+    by_model["B"] = {"rank": 2}                                                 # a ranked entry without its value
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": by_model})
+    with pytest.raises(LeaderboardError, match="pooled_heldout"):
+        build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
 
 
 def test_drift_fails_the_build(tmp_path):
