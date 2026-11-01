@@ -64,6 +64,18 @@ def test_drift_fails_the_build(tmp_path):
         build_leaderboard(tmp_path, reports(R4, blocks=("result-2",)), lambda p: True)
 
 
+@pytest.mark.parametrize("bad", ["NaN", "inf"])
+def test_a_non_finite_score_fails_the_build(tmp_path, bad):
+    # json.dumps would write it as a bare NaN / Infinity token, which the browser rejects
+    put(tmp_path, f"{S06}/grid.csv", f"D,beta,mult,heldout_ll,heldout_backfilled\n30,0.0003,1,{bad},False\n")
+    with pytest.raises(LeaderboardError, match="finite"):
+        build_leaderboard(tmp_path, reports(R2), lambda p: True)
+    put(tmp_path, f"{S06}/grid.csv", "D,beta,mult,heldout_ll,heldout_backfilled\n30,0.0003,1,0.7,False\n")
+    put(tmp_path, f"{S13}/r4_ladder.json", '{"pooled": {"MLE": NaN, "full HB": 0.72}}')
+    with pytest.raises(LeaderboardError, match="finite"):
+        build_leaderboard(tmp_path, reports(R2, R4), lambda p: True)
+
+
 def test_an_untracked_file_counts_as_absent(tmp_path):
     put(tmp_path, f"{S13}/r4_ladder.json", {"pooled": {"MLE": 0.71, "full HB": 0.72}})
     lb = build_leaderboard(tmp_path, reports(R4), lambda p: False)

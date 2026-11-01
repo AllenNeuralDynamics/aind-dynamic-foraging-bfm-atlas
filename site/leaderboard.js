@@ -81,8 +81,10 @@ document.addEventListener("atlas:ready", () => {
         ${[...new Map(missing.map((m) => [`${m.series}|${m.path}`, m])).values()].map((m) =>
           `${esc(m.label || m.series)} (study ${esc(studyNo(m.block.study))} ${esc(m.block.report)}, <span class="mono">${esc(m.path.split("/").pop())}</span>)`).join("; ")}.</p>` : ""}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
-      <div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div>`;
-    draw(L, main().querySelector(".lb-wrap"));
+      <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>`;
+    // the hover card lives on the non-scrolling .lb-host: tooltip() places it from viewport bounds,
+    // which would be off by the scroll offset inside the horizontally scrolling .lb-wrap
+    draw(L, main().querySelector(".lb-host"));
     document.getElementById("lb-export").addEventListener("click", () =>
       A.downloadSvg(document.getElementById("leaderboard"), `leaderboard-${(S.sha || "main").slice(0, 8)}.svg`));
   };

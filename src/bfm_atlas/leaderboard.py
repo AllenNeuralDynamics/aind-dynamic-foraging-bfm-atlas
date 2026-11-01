@@ -59,8 +59,8 @@ def _pointer(doc: Any, pointer: str, path: str) -> Any:
 
 def _values(v: Any, path: str, where: str) -> list[float]:
     vs = v if isinstance(v, list) else [v]
-    if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in vs):
-        raise LeaderboardError(f"{path}: {where} is not a number or a list of numbers")
+    if not all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in vs):
+        raise LeaderboardError(f"{path}: {where} is not a finite number or a list of them")
     return [float(x) for x in vs]
 
 
@@ -117,7 +117,7 @@ def csv_by_d(value: str, where: dict[str, Callable[[str], bool]], xs: list, desc
             if all(test(r[c]) for c, test in where.items()) and r[value] != "":
                 x = nominal_d(float(r["D"]))
                 if x in xs:
-                    by_x.setdefault(x, []).append(float(r[value]))
+                    by_x.setdefault(x, []).extend(_values(float(r[value]), path, f"{value} = {r[value]!r}"))
         return [(x, by_x[x], f"{describe}, D → nominal {x}") for x in xs if x in by_x]
     return read
 
