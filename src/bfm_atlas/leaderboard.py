@@ -25,8 +25,8 @@ S13 = "studies/13-hb-subject-vs-gru-heldout/analysis"
 S14 = "studies/14-glmhmm-vs-gru-heldout/analysis"
 
 METRIC = ("Choice likelihood on 149 held-out mice, outside every model's training mice (geometric-mean "
-          "probability of each left/right choice). How a model is fitted to these mice differs by family; "
-          "each marker's card says how")
+          "probability of each left/right choice). What a model may fit to these mice before it is scored "
+          "differs by family; the notes below the chart say how")
 
 # x categories per panel, left to right; the site lays them out
 PANELS = [
@@ -140,7 +140,8 @@ SERIES = [
          "Best cognitive model, fitted per mouse by maximum likelihood (MLE); pooled over trials."),
         (f"{S13}/r6_ctt_ladder.json", json_scalar("/pooled/full HB", "CTT HB"),
          _block("13-hb-subject-vs-gru-heldout", "r6", "result-1"),
-         "CTT fitted by full hierarchical Bayes (HB): mice share a population prior; pooled over trials."),
+         "CTT fitted by hierarchical Bayes (HB), one mouse at a time: each session's parameters vary around "
+         "that mouse's own values, under a fixed prior (no population level); pooled over trials."),
     ]},
     {"id": "hattori", "panel": "cognitive", "label": "Hattori (asymmetric Q-learning)", "parts": [
         (f"{S13}/r4_ladder.json", json_scalar("/pooled/MLE", "Hattori MLE"),
@@ -148,12 +149,21 @@ SERIES = [
          "Hattori model fitted per mouse by maximum likelihood (MLE); pooled over trials."),
         (f"{S13}/r4_ladder.json", json_scalar("/pooled/full HB", "Hattori HB"),
          _block("13-hb-subject-vs-gru-heldout", "r4", "result-1"),
-         "Hattori model fitted by full hierarchical Bayes (HB); pooled over trials."),
+         "Hattori model fitted by hierarchical Bayes (HB), one mouse at a time: each session's parameters vary "
+         "around that mouse's own values, under a fixed prior (no population level); pooled over trials."),
     ]},
-    {"id": "glmhmm-hurdle", "panel": "glmhmm", "label": "GLM-HMM (hurdle emission)", "parts": [
+    {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),
          _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"),
-         "GLM-HMM with K hidden states, refitted per held-out mouse; left vs right on engaged trials. One seed."),
+         "GLM-HMM with K hidden states (hurdle emission). The shared fit from the training mice is "
+         "refitted to each held-out mouse's own sessions before scoring: study 14's matched protocol, "
+         "like the GRU's per-mouse embedding. Left vs right on engaged trials; one seed."),
+    ]},
+    {"id": "glmhmm-zeroshot", "panel": "glmhmm", "label": "GLM-HMM, zero-shot (shared fit only)", "parts": [
+        (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged_zero_shot", list(range(1, 11))),
+         _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"),
+         "The same GLM-HMM scored with the shared fit alone: nothing is fitted to the held-out mouse. "
+         "Left vs right on engaged trials; one seed."),
     ]},
     {"id": "disrnn-b3e-4", "panel": "disrnn", "label": "disRNN, β = 3e-4 (operating point)", "parts": [
         (f"{S06}/grid.csv", csv_by_d("heldout_ll", {"mult": eq(1), "beta": eq(3e-4), "heldout_backfilled": false},
