@@ -35,6 +35,14 @@ draws how they connect; the About page embeds it.
   example study 13's sampling explainer) gets that page shipped with the site; the link opens it
   so it runs, rather than as source on GitHub.
 - **Export SVG** on both, stamped with the studies commit, for slides.
+- **Leaderboard** (`#/leaderboard`): every model family's held-out choice likelihood on one axis:
+  cognitive models (MLE and hierarchical Bayes), GLM-HMM by number of states, disRNN and GRU by
+  training mice, GRU by hidden size, and the frozen-core reservoir GRU. Hover a marker for what it
+  is and its seeds; click it to open the result block that reports it. `src/bfm_atlas/leaderboard.py`
+  names each series' source file and block; the build reads every value from the studies
+  checkout. A series whose file is not on studies `main` yet is listed, not drawn; a file that
+  no longer holds the value, or a block the report no longer has, fails the build. It has its own
+  Export SVG.
 - **About** (`#/about`): the framework itself, for other ML projects to reuse. The stack
   diagram of the four repositories (the dispatcher's `docs/diagrams/bfm-stack.html`, read from the
   same dispatcher commit as the skills and shipped under `data/dispatcher/`); an interactive map

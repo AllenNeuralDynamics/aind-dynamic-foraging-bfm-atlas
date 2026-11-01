@@ -69,9 +69,10 @@ function healthBadges(prefix, opts) {
 }
 
 function renderMarkdown(md, basePath) {
-  // Wrap result blocks so they can carry provenance; marked keeps the raw div.
+  // Wrap result blocks so they can carry provenance; marked keeps the raw div. The id lets a
+  // "?block-<name>" route scroll to the block (the leaderboard links there).
   const wrapped = md.replace(/<!-- BEGIN ([\w.-]+) -->\n?([\s\S]*?)<!-- END \1 -->/g,
-    (_, name, body) => `\n<div class="result-block" data-block="${name}">\n\n${body}\n\n</div>\n`);
+    (_, name, body) => `\n<div class="result-block" id="block-${name}" data-block="${name}">\n\n${body}\n\n</div>\n`);
   const html = DOMPurify.sanitize(marked.parse(wrapped), { ADD_ATTR: ["target"] });
   const div = document.createElement("div");
   div.innerHTML = html;
