@@ -377,5 +377,7 @@ a.lchip { color: var(--accent); }
 .lb-legend-item { cursor: default; }
 .lb-focus .lb-series:not(.lb-on) { opacity: 0.15; }
 .lb-tip-value { margin-top: 4px; }
+.lb-notes { max-width: 860px; margin-top: 18px; }
+.lb-notes td:first-child { white-space: nowrap; }
 .lb-tip-links { margin-top: 6px; }
 .tip .lb-tip-links a { color: inherit; text-decoration: underline; }

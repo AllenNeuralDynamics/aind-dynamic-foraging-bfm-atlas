@@ -27,7 +27,8 @@ document.addEventListener("atlas:ready", () => {
   const STYLE = {
     "ctt": { c: "--lb-ctt", m: d3.symbolCircle, fill: "hb" },
     "hattori": { c: "--lb-hattori", m: d3.symbolSquare, fill: "hb" },
-    "glmhmm-hurdle": { c: "--lb-glm", m: d3.symbolCircle, size: 34 },
+    "glmhmm-refit": { c: "--lb-glm", m: d3.symbolCircle, size: 34 },
+    "glmhmm-zeroshot": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dash: "4 3", fill: "hollow" },
     "disrnn-b3e-4": { c: "--lb-dis-op", m: HEXAGON, dash: "5 3" },
     "disrnn-b1e-4": { c: "--lb-dis-best", m: HEXAGON },
     "gru-reservoir": { c: "--lb-res", m: d3.symbolTimes, dash: "4 2", stroke: true, size: 60 },
@@ -44,6 +45,33 @@ document.addEventListener("atlas:ready", () => {
   const studyNo = (id) => id.split("-")[0];
   // deterministic jitter, so a redraw does not move the seed dots
   const jitter = (key) => { let h = 0; for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) | 0; return ((h >>> 0) % 1000) / 1000 - 0.5; };
+
+  // what each family may fit to a held-out mouse before it is scored (wrapper and study docs:
+  // study 01 r4, study 13, study 14 r1); plain HTML, so it reads the same in every theme
+  const NOTES = `<section class="lb-notes">
+    <h2>How each model meets a held-out mouse</h2>
+    <p>Every model is scored on sessions of a held-out mouse that nothing was fitted to. Before that, a model may
+      learn from the mouse's other sessions, and how much it may learn differs by family:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Model</th><th>Learned from the training mice</th><th>Fitted to each held-out mouse</th></tr></thead>
+      <tbody>
+        <tr><td>CTT, Hattori: MLE</td><td>nothing</td><td>all of its parameters, by maximum likelihood</td></tr>
+        <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
+          (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
+        <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
+        <tr><td>GLM-HMM, zero-shot</td><td>one shared GLM-HMM</td><td>nothing: the shared fit predicts every mouse</td></tr>
+        <tr><td>disRNN, GRU</td><td>one shared network</td><td>a subject embedding (a short vector for that mouse); the
+          network stays as trained</td></tr>
+        <tr><td>GRU, reservoir only</td><td>embeddings and readout around a random, frozen core</td><td>a subject embedding</td></tr>
+      </tbody></table></div>
+    <p><b>Why the two GLM-HMM lines differ.</b> The refit line gives each held-out mouse its own model, as the GRU
+      and disRNN get their own embedding, so it is the like-for-like comparison. But each state adds parameters to
+      that per-mouse model, and from a few states on it fits the noise in the mouse's sessions: the refit score
+      peaks at a small K and then falls. The zero-shot line fits nothing per mouse, so extra states cannot overfit
+      one mouse; with more states the shared fit can hold more kinds of behaviour seen across the training mice
+      (study 14 finds side-biased states at large K), and it keeps rising. Study 14's
+      <a href="#/report/14-glmhmm-vs-gru-heldout/r1?block-result-1">r1</a> shows both scores.</p>
+  </section>`;
 
   function layout(panels) {
     const pos = {}, spans = [];
@@ -87,7 +115,8 @@ document.addEventListener("atlas:ready", () => {
         With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
-      <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>`;
+      <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>
+      ${NOTES}`;
     // the hover card lives on the non-scrolling .lb-host: tooltip() places it from viewport bounds,
     // which would be off by the scroll offset inside the horizontally scrolling .lb-wrap
     draw(L, main().querySelector(".lb-host"));
@@ -108,7 +137,7 @@ document.addEventListener("atlas:ready", () => {
     const series = L.series;
     const W = 1100, M = { l: 70, r: 14, t: 16, b: 64 };
     // legend rows above the plot
-    const perRow = 4, rowH = 18, legendH = Math.ceil(series.length / perRow) * rowH + 8;
+    const perRow = 3, rowH = 18, legendH = Math.ceil(series.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
     const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0);
@@ -175,7 +204,7 @@ document.addEventListener("atlas:ready", () => {
       lg_.append("path").attr("class", "lb-line").attr("stroke-dasharray", st.dash || null)
         .attr("d", d3.line().x((p) => x(xAt(s, p))).y((p) => y(p.mean))(pts));
       for (const p of pts) {
-        const hollow = st.fill === "hb" && String(p.x).endsWith("MLE");
+        const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE"));
         const mk = mg.append("g").attr("class", "lb-mean").attr("tabindex", 0).attr("role", "link")
           .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}`)
           .attr("transform", `translate(${x(xAt(s, p))},${y(p.mean)})`);
@@ -203,7 +232,7 @@ document.addEventListener("atlas:ready", () => {
         .attr("transform", `translate(${M.l + (i % perRow) * colW},${M.t + Math.floor(i / perRow) * rowH + 6})`);
       it.append("line").attr("x1", 0).attr("x2", 22).attr("class", "lb-line").attr("stroke-dasharray", st.dash || null);
       it.append("path").attr("transform", "translate(11,0)").attr("d", d3.symbol(st.m, st.size ? st.size * 0.8 : 36)())
-        .attr("class", st.stroke ? "lb-mk-x" : "lb-mk");
+        .attr("class", st.stroke ? "lb-mk-x" : st.fill === "hollow" ? "lb-mk-hollow" : "lb-mk");
       it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text").text(s.label);
       it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
           .classed("lb-on", function () { return this.dataset.series === s.id; }))

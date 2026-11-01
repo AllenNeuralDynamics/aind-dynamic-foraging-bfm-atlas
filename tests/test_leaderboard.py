@@ -40,7 +40,7 @@ def test_values_come_from_the_files_and_absent_files_are_listed(tmp_path):
     assert dis[0]["mean"] == pytest.approx(0.71) and dis[0]["sem"] == pytest.approx(0.01)
     assert dis[0]["block"] == {"study": R2[0], "report": "r2", "block": "result-1", "report_path": reports(R2)[R2]["path"]}
     assert by["hattori"]["points"][0]["sem"] is None
-    assert "ctt" not in by and {m["series"] for m in lb["missing"]} >= {"ctt", "glmhmm-hurdle", "gru-h16"}
+    assert "ctt" not in by and {m["series"] for m in lb["missing"]} >= {"ctt", "glmhmm-refit", "glmhmm-zeroshot", "gru-h16"}
 
 
 def test_points_follow_the_panel_order(tmp_path):
