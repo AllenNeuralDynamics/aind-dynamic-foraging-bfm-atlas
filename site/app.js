@@ -497,6 +497,27 @@ document.addEventListener("keydown", (e) => {
   if (inside) reposMenu.querySelector("summary").focus();      // keep the keyboard user's place
 });
 
+// the day/night switch: sets data-theme on <html> (style.css holds both palettes) and remembers the
+// choice; with no saved choice the page follows the system setting, as before
+const themeButton = document.getElementById("theme");
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+const currentTheme = () => document.documentElement.dataset.theme || (systemDark.matches ? "dark" : "light");
+function syncThemeButton() {
+  const dark = currentTheme() === "dark";
+  themeButton.textContent = dark ? "☀ Day" : "☾ Night";
+  // the label names the action, so no aria-pressed: a pressed "Day" would read as day mode on
+  themeButton.title = dark ? "Switch to day mode" : "Switch to night mode";
+  themeButton.setAttribute("aria-label", themeButton.title);
+}
+themeButton.addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("atlas-theme", next); } catch { /* storage blocked: this visit only */ }
+  syncThemeButton();
+});
+systemDark.addEventListener("change", syncThemeButton);
+syncThemeButton();
+
 // a ?block- route scrolls the block clear of the header: sticky (and wrapping) on wide screens, static on phones
 function syncHeaderOffset() {
   const top = document.querySelector(".top");

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Behavior Foundation Model Studies Atlas</title>
 <meta name="description" content="Provenance-traced browser for the dynamic foraging behavior foundation model studies: every report and number traced to its producer, frozen inputs, W&B group, launch record and commits.">
+<!-- the saved day/night choice, applied before the first paint so the page never flashes the other theme -->
+<script>try { const t = localStorage.getItem("atlas-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch { /* storage blocked: follow the system */ }</script>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -24,6 +26,7 @@
   <!-- a static page cannot start a workflow without a token: this opens the deploy workflow, one "Run workflow" click away -->
   <a class="rebuild" id="rebuild" href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas/actions/workflows/pages.yml"
     target="_blank" rel="noopener" title="Rebuild: opens the Deploy atlas workflow on GitHub; press Run workflow (needs write access) and the site redeploys in a few minutes">↻ Rebuild</a>
+  <button type="button" class="theme" id="theme">☾ Night</button>
   <details class="repos" id="repos"><summary title="Source repositories on GitHub">GitHub</summary>
     <div class="repos-menu">
       <a href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas" target="_blank" rel="noopener">atlas <span>this site</span></a>
