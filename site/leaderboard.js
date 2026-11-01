@@ -77,8 +77,8 @@ document.addEventListener("atlas:ready", () => {
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
         Large markers are the mean ± SEM over seeds; small dots are single seeds.
         <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it.</p>
-      ${missing.length ? `<p class="muted lb-missing">Not on studies <span class="mono">main</span> yet, so not drawn:
-        ${[...new Map(missing.map((m) => [m.series, m])).values()].map((m) =>
+      ${missing.length ? `<p class="muted lb-missing">Not on studies <span class="mono">main</span> yet, so left out:
+        ${[...new Map(missing.map((m) => [`${m.series}|${m.path}`, m])).values()].map((m) =>
           `${esc(m.label || m.series)} (study ${esc(studyNo(m.block.study))} ${esc(m.block.report)}, <span class="mono">${esc(m.path.split("/").pop())}</span>)`).join("; ")}.</p>` : ""}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div>`;
