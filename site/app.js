@@ -504,8 +504,9 @@ const currentTheme = () => document.documentElement.dataset.theme || (systemDark
 function syncThemeButton() {
   const dark = currentTheme() === "dark";
   themeButton.textContent = dark ? "☀ Day" : "☾ Night";
+  // the label names the action, so no aria-pressed: a pressed "Day" would read as day mode on
   themeButton.title = dark ? "Switch to day mode" : "Switch to night mode";
-  themeButton.setAttribute("aria-pressed", String(dark));     // pressed = night mode on
+  themeButton.setAttribute("aria-label", themeButton.title);
 }
 themeButton.addEventListener("click", () => {
   const next = currentTheme() === "dark" ? "light" : "dark";
