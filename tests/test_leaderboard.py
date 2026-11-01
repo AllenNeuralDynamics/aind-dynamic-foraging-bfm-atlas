@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from bfm_atlas.catalog import build_catalog
-from bfm_atlas.leaderboard import S06, S10, S13, SERIES, LeaderboardError, build_leaderboard, nominal_d
+from bfm_atlas.leaderboard import S06, S10, S13, S14, SERIES, LeaderboardError, build_leaderboard, nominal_d
 
 
 def put(root: Path, rel: str, data) -> None:
@@ -53,6 +53,28 @@ def test_points_follow_the_panel_order(tmp_path):
     h128 = next(s for s in lb["series"] if s["id"] == "gru-h128")
     assert [p["x"] for p in h128["points"]] == [10, 30, 100, 300, 614]
     assert h128["points"][3]["n"] == 2
+
+
+R1_14 = ("14-glmhmm-vs-gru-heldout", "r1")
+
+
+def test_glmhmm_reads_refit_and_zero_shot_from_their_own_fields(tmp_path):
+    scores = {str(k): {"LR_engaged": 0.70 + k / 1000, "LR_engaged_zero_shot": 0.60 + k / 1000} for k in range(1, 11)}
+    put(tmp_path, f"{S14}/r1_round_1.json", {"scores": {"hurdle": scores}})
+    by = {s["id"]: s for s in build_leaderboard(tmp_path, reports(R1_14), lambda p: True)["series"]}
+    for sid, base in (("glmhmm-refit", 0.70), ("glmhmm-zeroshot", 0.60)):
+        pts = by[sid]["points"]
+        assert [p["x"] for p in pts] == list(range(1, 11))
+        assert [p["mean"] for p in pts] == pytest.approx([base + k / 1000 for k in range(1, 11)])
+        assert {(p["block"]["study"], p["block"]["report"], p["block"]["block"]) for p in pts} == {(*R1_14, "result-1")}
+
+
+def test_a_study14_file_without_the_zero_shot_field_fails_the_build(tmp_path):
+    # the merge-order guard: an r1 file from before studies#85 has only the refit score
+    scores = {str(k): {"LR_engaged": 0.72} for k in range(1, 11)}
+    put(tmp_path, f"{S14}/r1_round_1.json", {"scores": {"hurdle": scores}})
+    with pytest.raises(LeaderboardError, match="LR_engaged_zero_shot"):
+        build_leaderboard(tmp_path, reports(R1_14), lambda p: True)
 
 
 def test_drift_fails_the_build(tmp_path):
