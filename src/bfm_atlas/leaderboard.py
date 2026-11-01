@@ -24,8 +24,9 @@ S10 = "studies/10-gru-reservoir-ablation"
 S13 = "studies/13-hb-subject-vs-gru-heldout/analysis"
 S14 = "studies/14-glmhmm-vs-gru-heldout/analysis"
 
-METRIC = ("Choice likelihood on held-out mice (149 mice never trained on; geometric-mean probability "
-          "of the mouse's left/right choice)")
+METRIC = ("Choice likelihood on 149 held-out mice, outside every model's training mice (geometric-mean "
+          "probability of each left/right choice). How a model is fitted to these mice differs by family; "
+          "each marker's card says how")
 
 # x categories per panel, left to right; the site lays them out
 PANELS = [

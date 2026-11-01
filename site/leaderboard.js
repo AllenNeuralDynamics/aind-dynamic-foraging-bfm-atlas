@@ -91,6 +91,9 @@ document.addEventListener("atlas:ready", () => {
 
   function draw(L, host) {
     const tip = A.tooltip(host);
+    // keyboard users Tab from a marker into its card's links: hide the card only once focus leaves it
+    const tipEl = host.querySelector(".tip");
+    tipEl.addEventListener("focusout", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
     const { pos, spans, xmax } = layout(L.panels);
     const series = L.series;
     const W = 1100, M = { l: 70, r: 14, t: 16, b: 64 };
@@ -171,7 +174,8 @@ document.addEventListener("atlas:ready", () => {
           .attr("class", st.stroke ? "lb-mk-x" : hollow ? "lb-mk-hollow" : "lb-mk");
         const open = () => { location.hash = blockRoute(p.block); };
         mk.on("pointerenter focus", (ev) => tip.show(ev.currentTarget, card(s, p)))
-          .on("pointerleave blur", () => tip.hide())
+          .on("pointerleave", () => tip.hide())
+          .on("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
           .on("click", open)
           .on("keydown", (ev) => { if (ev.key === "Enter") open(); });
       }
