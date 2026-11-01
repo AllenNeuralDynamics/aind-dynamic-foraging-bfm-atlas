@@ -101,7 +101,7 @@ th { color: var(--muted); font-weight: 600; }
 .prose img { max-width: 100%; height: auto; border-radius: 4px; }
 .prose table { display: block; overflow-x: auto; }
 .result-block { position: relative; background: var(--block); border: 1px solid var(--block-line); border-radius: 8px;
-  padding: 4px 14px 8px; margin: 14px 0; scroll-margin-top: 64px; }   /* clears the sticky header on a ?block- route */
+  padding: 4px 14px 8px; margin: 14px 0; scroll-margin-top: var(--header-offset, 64px); }   /* clears the sticky header on a ?block- route */
 .result-block .rb-head { display: flex; justify-content: space-between; align-items: center; gap: 8px;
   font-size: 0.8em; color: var(--muted); margin: 6px 0 2px; }
 .rb-head button, .btn { font: inherit; font-size: 0.95em; padding: 2px 10px; border-radius: 6px; cursor: pointer;

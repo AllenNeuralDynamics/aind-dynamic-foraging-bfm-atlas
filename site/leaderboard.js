@@ -67,19 +67,25 @@ document.addEventListener("atlas:ready", () => {
 
   VIEWS.leaderboard = () => {
     const L = S.cat.leaderboard;
-    if (!L || !L.available) {
-      main().innerHTML = `<h1>Leaderboard</h1><p class="muted">This catalog has no leaderboard data${L ? "" : " (built by an older bfm-atlas)"}.</p>`;
+    if (!L) {
+      main().innerHTML = `<h1>Leaderboard</h1><p class="muted">This catalog has no leaderboard data (built by an older bfm-atlas).</p>`;
       return;
     }
     const missing = L.missing || [];
+    const missingNote = missing.length ? `<p class="muted lb-missing">Not on studies <span class="mono">main</span> yet, so left out:
+        ${[...new Map(missing.map((m) => [`${m.series}|${m.path}`, m])).values()].map((m) =>
+          `${esc(m.label || m.series)} (study ${esc(studyNo(m.block.study))} ${esc(m.block.report)}, <span class="mono">${esc(m.path.split("/").pop())}</span>)`).join("; ")}.</p>` : "";
+    if (!L.available) {
+      main().innerHTML = `<h1>Leaderboard</h1><p class="muted">This catalog has no leaderboard data.</p>${missingNote}`;
+      return;
+    }
     main().innerHTML = `
       <h1>Leaderboard</h1>
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
         Large markers are the mean ± SEM over seeds; small dots are single seeds.
-        <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it.</p>
-      ${missing.length ? `<p class="muted lb-missing">Not on studies <span class="mono">main</span> yet, so left out:
-        ${[...new Map(missing.map((m) => [`${m.series}|${m.path}`, m])).values()].map((m) =>
-          `${esc(m.label || m.series)} (study ${esc(studyNo(m.block.study))} ${esc(m.block.report)}, <span class="mono">${esc(m.path.split("/").pop())}</span>)`).join("; ")}.</p>` : ""}
+        <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it.
+        With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
+      ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>`;
     // the hover card lives on the non-scrolling .lb-host: tooltip() places it from viewport bounds,
@@ -94,6 +100,10 @@ document.addEventListener("atlas:ready", () => {
     // keyboard users Tab from a marker into its card's links: hide the card only once focus leaves it
     const tipEl = host.querySelector(".tip");
     tipEl.addEventListener("focusout", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
+    // Down arrow on a marker enters its card (the card sits after the whole chart in Tab order);
+    // Escape inside the card returns to that marker
+    let active = null;
+    tipEl.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && active) { ev.stopPropagation(); active.focus(); } });
     const { pos, spans, xmax } = layout(L.panels);
     const series = L.series;
     const W = 1100, M = { l: 70, r: 14, t: 16, b: 64 };
@@ -177,7 +187,10 @@ document.addEventListener("atlas:ready", () => {
           .on("pointerleave", () => tip.hide())
           .on("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
           .on("click", open)
-          .on("keydown", (ev) => { if (ev.key === "Enter") open(); });
+          .on("keydown", (ev) => {
+            if (ev.key === "Enter") open();
+            if (ev.key === "ArrowDown") { ev.preventDefault(); active = ev.currentTarget; tipEl.querySelector("a")?.focus(); }
+          });
       }
     }
 

@@ -497,6 +497,15 @@ document.addEventListener("keydown", (e) => {
   if (inside) reposMenu.querySelector("summary").focus();      // keep the keyboard user's place
 });
 
+// a ?block- route scrolls the block clear of the header: sticky (and wrapping) on wide screens, static on phones
+function syncHeaderOffset() {
+  const top = document.querySelector(".top");
+  const sticky = getComputedStyle(top).position === "sticky";
+  document.documentElement.style.setProperty("--header-offset", `${(sticky ? top.offsetHeight : 0) + 12}px`);
+}
+window.addEventListener("resize", syncHeaderOffset);
+syncHeaderOffset();
+
 fetch("data/catalog.json")
   .then((r) => { if (!r.ok) throw new Error(`catalog.json: HTTP ${r.status}`); return r.json(); })
   .then((cat) => {
