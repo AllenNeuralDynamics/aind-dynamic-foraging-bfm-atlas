@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 import yaml
 
 from .framework import build_framework
+from .leaderboard import build_leaderboard
 
 CATALOG_SCHEMA_VERSION = 1
 PT = ZoneInfo("America/Los_Angeles")
@@ -811,6 +812,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         "studies": studies,
         "tags": tag_vocabulary(root, ok),
         "framework": framework,
+        "leaderboard": build_leaderboard(root, {(s["id"], r["id"]): r for s in studies for r in s["reports"]}, ok),
         "wandb_groups": dict(sorted(groups.items())),
         "dependencies": dependencies,
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},
