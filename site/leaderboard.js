@@ -157,10 +157,10 @@ document.addEventListener("atlas:ready", () => {
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
     const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0);
-    // the axis is set by every series but study 12's ranking, whose weakest models sit far below the rest;
-    // a point outside it is drawn at the edge (▼ / ▲) with its value in the card
-    const all = series.filter((s) => s.panel !== "literature")
-      .flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
+    // the axis is set by every series but study 12's ranking, whose weakest models sit far below the rest
+    // (unless it is the only one); a point outside it is drawn at the edge (▼ / ▲) with its value in the card
+    const axisSeries = series.some((s) => s.panel !== "literature") ? series.filter((s) => s.panel !== "literature") : series;
+    const all = axisSeries.flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
     const [lo, hi] = d3.extent(all), pad = (hi - lo) * 0.06;
     const x = d3.scaleLinear([0, xmax], [M.l, W - M.r]);
     const y = d3.scaleLinear([lo - pad, hi + pad], [H - M.b, plotTop]).nice();
