@@ -82,7 +82,8 @@ R1_12 = ("12-cognitive-literature-leaderboard", "r1")
 
 def test_literature_models_follow_their_rank_and_skip_the_unranked(tmp_path):
     by_model = {"B": {"rank": 2, "pooled_heldout": 0.71}, "A": {"rank": 1, "pooled_heldout": 0.72},
-                "WSLS": {"rank": None, "pooled_heldout": 0.60}, "C": {"rank": 3, "pooled_heldout": 0.55}}
+                "WSLS": {"rank": None, "pooled_heldout": 0.60}, "C": {"rank": 3, "pooled_heldout": 0.55},
+                "Unscored": {"rank": None}}                                      # unranked needs no score
     put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": by_model})
     lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
     lit = next(s for s in lb["series"] if s["id"] == "literature-mle")

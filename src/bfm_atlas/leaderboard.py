@@ -119,10 +119,13 @@ def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
             raise LeaderboardError(f"{path}: {pointer} is not an object")
         ranked = []
         for name, e in entries.items():
-            if not isinstance(e, dict) or rank not in e or value not in e:
-                raise LeaderboardError(f"{path}: {pointer}/{name} lacks {rank} or {value}")
-            if e[rank] is not None:              # an unranked entry (e.g. a strawman) is left out
-                ranked.append((e[rank], name, _values(e[value], path, f"{pointer}/{name}/{value}")))
+            if not isinstance(e, dict) or rank not in e:
+                raise LeaderboardError(f"{path}: {pointer}/{name} lacks {rank}")
+            if e[rank] is None:                  # an unranked entry (e.g. a strawman) is left out, score or not
+                continue
+            if value not in e:
+                raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {value}")
+            ranked.append((e[rank], name, _values(e[value], path, f"{pointer}/{name}/{value}")))
         return [(name, vs, f"{pointer}/{name}/{value}") for _, name, vs in sorted(ranked)]
     return read
 
