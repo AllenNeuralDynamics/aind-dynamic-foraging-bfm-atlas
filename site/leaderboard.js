@@ -27,8 +27,10 @@ document.addEventListener("atlas:ready", () => {
   const STYLE = {
     "ctt": { c: "--lb-ctt", m: d3.symbolCircle, fill: "hb" },
     "hattori": { c: "--lb-hattori", m: d3.symbolSquare, fill: "hb" },
-    "glmhmm-refit": { c: "--lb-glm", m: d3.symbolCircle, size: 34 },
-    "glmhmm-zeroshot": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dash: "4 3", fill: "hollow" },
+    // the two GLM-HMM protocols share x and cross near K = 5: nudge them apart and shrink their hover
+    // circles so each marker stays selectable
+    "glmhmm-refit": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dx: -0.09, hit: 5 },
+    "glmhmm-zeroshot": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dash: "4 3", fill: "hollow", dx: 0.09, hit: 5 },
     "disrnn-b3e-4": { c: "--lb-dis-op", m: HEXAGON, dash: "5 3" },
     "disrnn-b1e-4": { c: "--lb-dis-best", m: HEXAGON },
     "gru-reservoir": { c: "--lb-res", m: d3.symbolTimes, dash: "4 2", stroke: true, size: 60 },
@@ -140,7 +142,7 @@ document.addEventListener("atlas:ready", () => {
     const perRow = 3, rowH = 18, legendH = Math.ceil(series.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
-    const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0);
+    const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0);
     const all = series.flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
     const [lo, hi] = d3.extent(all), pad = (hi - lo) * 0.06;
     const x = d3.scaleLinear([0, xmax], [M.l, W - M.r]);
@@ -208,7 +210,7 @@ document.addEventListener("atlas:ready", () => {
         const mk = mg.append("g").attr("class", "lb-mean").attr("tabindex", 0).attr("role", "link")
           .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}`)
           .attr("transform", `translate(${x(xAt(s, p))},${y(p.mean)})`);
-        mk.append("circle").attr("r", 9).attr("class", "lb-hit");
+        mk.append("circle").attr("r", st.hit || 9).attr("class", "lb-hit");
         mk.append("path").attr("d", d3.symbol(st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
           .attr("class", st.stroke ? "lb-mk-x" : hollow ? "lb-mk-hollow" : "lb-mk");
         const open = () => { location.hash = blockRoute(p.block); };
