@@ -114,7 +114,7 @@ def json_rows_by_d(pointer: str, d_key: str, value_key: str, xs: list, where: di
 
 # per-model text a ranked source must carry, and text it may carry (shown in the card and model panel)
 MODEL_REQUIRED = ("family", "summary")
-MODEL_OPTIONAL = ("equations", "paper", "code")
+MODEL_OPTIONAL = ("family_note", "equations", "paper", "code")
 
 
 def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:

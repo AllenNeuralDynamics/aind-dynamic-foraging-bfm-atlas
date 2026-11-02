@@ -314,6 +314,7 @@ document.addEventListener("atlas:ready", () => {
       <div class="k muted">Literature model · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
       <h2 style="margin-top:0">${esc(p.x)}</h2>
       <p>${A.chip(s.label)} rank ${esc(p.rank)} · held-out likelihood <b>${fmt(p.mean)}</b></p>
+      ${p.family_note ? `<p class="muted">${esc(p.family_note)}</p>` : ""}
       <p>${esc(p.summary)}</p>
       <h3>Equations</h3><div class="lb-model-eq">${p.equations ? "" : `<p class="muted">Not written yet.</p>`}</div>
       <h3>How it was fitted</h3><p>${esc(p.description)}</p>

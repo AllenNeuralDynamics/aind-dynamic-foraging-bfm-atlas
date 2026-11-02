@@ -651,6 +651,9 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "family_note": {
+                      "type": "string"
                     }
                   }
                 }
