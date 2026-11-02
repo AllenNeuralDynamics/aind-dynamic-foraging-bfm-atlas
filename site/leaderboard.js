@@ -51,7 +51,9 @@ document.addEventListener("atlas:ready", () => {
 
   // what each family may fit to a held-out mouse before it is scored (wrapper and study docs:
   // study 01 r4, study 13, study 14 r1); plain HTML, so it reads the same in every theme
-  const NOTES = `<section class="lb-notes">
+  // the pooled-refit row and sentence appear only when that series is drawn (its source, study 14's r2,
+  // may not be on studies main yet)
+  const notes = (pooled) => `<section class="lb-notes">
     <h2>How each model meets a held-out mouse</h2>
     <p>Every model is scored on sessions of a held-out mouse that nothing was fitted to. Before that, a model may
       learn from the mouse's other sessions, and how much it may learn differs by family:</p>
@@ -62,24 +64,26 @@ document.addEventListener("atlas:ready", () => {
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
           (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
         <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
-        <tr><td>GLM-HMM, refit pooled</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, with its weights and
-          transitions pulled toward the shared fit; how hard is picked on the training mice</td></tr>
+        ${pooled ? `<tr><td>GLM-HMM, refit pooled</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, with its weights
+          pulled toward the shared fit (and, at larger K, its transitions); how hard is picked on the training
+          mice</td></tr>` : ""}
         <tr><td>GLM-HMM, zero-shot</td><td>one shared GLM-HMM</td><td>nothing: the shared fit predicts every mouse</td></tr>
         <tr><td>disRNN, GRU</td><td>one shared network</td><td>a subject embedding (a short vector for that mouse); the
           network stays as trained</td></tr>
         <tr><td>GRU, reservoir only</td><td>embeddings and readout around a random, frozen core</td><td>a subject embedding</td></tr>
       </tbody></table></div>
-    <p><b>Why the two GLM-HMM lines differ.</b> The refit line gives each held-out mouse its own model, as the GRU
+    <p><b>Why the ${pooled ? "three" : "two"} GLM-HMM lines differ.</b> The refit line gives each held-out mouse its own model, as the GRU
       and disRNN get their own embedding, so it is the like-for-like comparison. But each state adds parameters to
       that per-mouse model, and from a few states on it fits the noise in the mouse's sessions: the refit score
       peaks at a small K and then falls. The zero-shot line fits nothing per mouse, so extra states cannot overfit
       one mouse; with more states the shared fit can hold more kinds of behaviour seen across the training mice
       (study 14 finds side-biased states at large K), and it keeps rising. Study 14's
-      <a href="#/report/14-glmhmm-vs-gru-heldout/r1?block-result-1">r1</a> shows both scores.
-      The pooled line keeps the per-mouse refit but pulls it toward the shared fit, so a mouse moves only as far
-      as its own sessions support. It scores above the zero-shot line at every K and keeps rising with K, so the
-      early peak of the plain refit came from overfitting each mouse
-      (<a href="#/report/14-glmhmm-vs-gru-heldout/r2?block-result-2">r2</a>).</p>
+      <a href="#/report/14-glmhmm-vs-gru-heldout/r1?block-result-1">r1</a> shows both scores.${pooled ? `
+      The pooled line keeps the per-mouse refit but pulls its weights toward the shared fit (and, where the
+      training mice's score prefers it, its transitions too), so a mouse moves only as far as its own sessions
+      support. It scores above the zero-shot line at every K and keeps rising with K, so the early peak of the
+      plain refit came from overfitting each mouse
+      (<a href="#/report/14-glmhmm-vs-gru-heldout/r2?block-result-2">r2</a>).` : ""}</p>
   </section>`;
 
   function layout(panels) {
@@ -125,7 +129,7 @@ document.addEventListener("atlas:ready", () => {
       ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>
-      ${NOTES}`;
+      ${notes(L.series.some((s) => s.id === "glmhmm-pooled"))}`;
     // the hover card lives on the non-scrolling .lb-host: tooltip() places it from viewport bounds,
     // which would be off by the scroll offset inside the horizontally scrolling .lb-wrap
     draw(L, main().querySelector(".lb-host"));
