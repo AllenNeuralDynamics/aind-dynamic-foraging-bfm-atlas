@@ -40,7 +40,7 @@ def test_values_come_from_the_files_and_absent_files_are_listed(tmp_path):
     assert dis[0]["mean"] == pytest.approx(0.71) and dis[0]["sem"] == pytest.approx(0.01)
     assert dis[0]["block"] == {"study": R2[0], "report": "r2", "block": "result-1", "report_path": reports(R2)[R2]["path"]}
     assert by["hattori"]["points"][0]["sem"] is None
-    assert "ctt" not in by and {m["series"] for m in lb["missing"]} >= {"ctt", "glmhmm-refit", "glmhmm-zeroshot", "gru-h16"}
+    assert "ctt" not in by and {m["series"] for m in lb["missing"]} >= {"ctt", "glmhmm-refit", "glmhmm-pooled", "glmhmm-zeroshot", "gru-h16"}
 
 
 def test_points_follow_the_panel_order(tmp_path):
@@ -67,6 +67,20 @@ def test_glmhmm_reads_refit_and_zero_shot_from_their_own_fields(tmp_path):
         assert [p["x"] for p in pts] == list(range(1, 11))
         assert [p["mean"] for p in pts] == pytest.approx([base + k / 1000 for k in range(1, 11)])
         assert {(p["block"]["study"], p["block"]["report"], p["block"]["block"]) for p in pts} == {(*R1_14, "result-1")}
+
+
+R2_14 = ("14-glmhmm-vs-gru-heldout", "r2")
+
+
+def test_glmhmm_pooled_reads_round_2s_best_prior_per_k(tmp_path):
+    best = {str(k): {"LR_engaged": 0.71 + k / 1000, "sigma": 0.25, "c": 1000.0} for k in range(1, 11)}
+    put(tmp_path, f"{S14}/r2_refit_prior.json", {"best_by_k": {"hurdle": best}})
+    by = {s["id"]: s for s in build_leaderboard(tmp_path, reports(R2_14, blocks=("result-1", "result-2")),
+                                                 lambda p: True)["series"]}
+    pts = by["glmhmm-pooled"]["points"]
+    assert [p["x"] for p in pts] == list(range(1, 11))
+    assert [p["mean"] for p in pts] == pytest.approx([0.71 + k / 1000 for k in range(1, 11)])
+    assert {(p["block"]["study"], p["block"]["report"], p["block"]["block"]) for p in pts} == {(*R2_14, "result-2")}
 
 
 def test_a_study14_file_without_the_zero_shot_field_fails_the_build(tmp_path):
