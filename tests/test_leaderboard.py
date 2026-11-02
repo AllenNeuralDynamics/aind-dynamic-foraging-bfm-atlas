@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from bfm_atlas.catalog import build_catalog
-from bfm_atlas.leaderboard import PANELS, S06, S10, S12, S13, S14, SERIES, LeaderboardError, build_leaderboard, nominal_d
+from bfm_atlas.leaderboard import (IGNORE_BOARDS, PANELS, S02, S06, S10, S12, S13, S14, SERIES, LeaderboardError,
+                                   build_ignore_leaderboards, build_leaderboard, nominal_d)
 
 
 def put(root: Path, rel: str, data) -> None:
@@ -190,3 +191,48 @@ def test_the_fixture_catalog_lists_every_series_as_missing(studies):
     lb = build_catalog(studies)["leaderboard"]
     assert lb["available"] is False and lb["series"] == []
     assert {m["series"] for m in lb["missing"]} == {s["id"] for s in SERIES}
+
+
+R4_02 = ("02-gru-scaling-law-ignore", "r4")
+
+
+def three_way_files(root):
+    scores = {str(k): {"matched": 0.61 + k / 1000, "zero_shot": 0.60 + k / 1000, "engage": 0.82 + k / 1000}
+              for k in range(1, 11)}
+    put(root, f"{S14}/r1_round_1.json", {"scores": {"hurdle": scores}})
+    put(root, f"{S14}/r2_refit_prior.json", {"best_by_k": {"hurdle": {str(k): {"matched": 0.615} for k in range(1, 11)}}})
+    grid = {m: {str(h): {str(d): {"seeds": [base + h / 1e5, base + h / 1e5 + 0.002]} for d in (10, 30, 100, 614)}
+                for h in (16, 64, 128, 256)} for m, base in (("three_way", 0.62), ("engage", 0.83))}
+    put(root, f"{S02}/r4_three_way_engagement.json", {"grid": grid})
+
+
+def test_the_ignore_boards_read_three_way_and_engagement_scores(tmp_path):
+    three_way_files(tmp_path)
+    rep = reports(R1_14, R4_02) | reports(R2_14, blocks=("result-2",))
+    three, engage = build_ignore_leaderboards(tmp_path, rep, lambda p: True)
+    assert [three["id"], engage["id"]] == ["three_way", "engage"] and three["ylabel"] and three["title"]
+    by = {s["id"]: s for s in three["series"]}
+    assert set(by) == {"glmhmm-refit", "glmhmm-pooled", "glmhmm-zeroshot", "gru-h16", "gru-h64", "gru-h128", "gru-h256"}
+    assert [p["mean"] for p in by["glmhmm-refit"]["points"]] == pytest.approx([0.61 + k / 1000 for k in range(1, 11)])
+    assert [p["mean"] for p in by["glmhmm-zeroshot"]["points"]] == pytest.approx([0.60 + k / 1000 for k in range(1, 11)])
+    gru = by["gru-h64"]["points"]
+    assert [p["x"] for p in gru] == [10, 30, 100, 614] and gru[0]["n"] == 2 and gru[0]["mean"] == pytest.approx(0.62164)
+    assert gru[0]["block"]["study"] == R4_02[0] and gru[0]["source"]["where"] == "/grid/three_way/64/10/seeds"
+    eby = {s["id"]: s for s in engage["series"]}
+    assert set(eby) == {"glmhmm-refit", "gru-h16", "gru-h64", "gru-h128", "gru-h256"}   # no pooled or zero-shot engagement
+    assert eby["glmhmm-refit"]["points"][0]["mean"] == pytest.approx(0.821)
+    assert eby["gru-h256"]["points"][-1]["mean"] == pytest.approx(0.83356)
+
+
+def test_the_ignore_boards_list_study_02_as_missing_until_it_lands(tmp_path):
+    three_way_files(tmp_path)
+    (tmp_path / S02 / "r4_three_way_engagement.json").unlink()
+    three, _ = build_ignore_leaderboards(tmp_path, reports(R1_14) | reports(R2_14, blocks=("result-2",)), lambda p: True)
+    assert {s["id"] for s in three["series"]} == {"glmhmm-refit", "glmhmm-pooled", "glmhmm-zeroshot"}
+    assert {m["series"] for m in three["missing"]} == {"gru-h16", "gru-h64", "gru-h128", "gru-h256"}
+
+
+def test_the_fixture_catalog_has_both_ignore_boards(studies):
+    boards = build_catalog(studies)["leaderboard_ignore"]
+    assert [b["id"] for b in boards] == [b["id"] for b in IGNORE_BOARDS]
+    assert all(b["available"] is False and b["series"] == [] for b in boards)

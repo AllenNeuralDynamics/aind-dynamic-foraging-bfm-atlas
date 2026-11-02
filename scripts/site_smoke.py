@@ -287,6 +287,15 @@ def main(site: str, out: str) -> int:
             block = page.evaluate("location.hash").split("?block-")[-1]
             if not page.locator(f'.result-block[id="block-{block}"]').count():
                 failures.append(f"leaderboard: a click did not open its result block ({page.evaluate('location.hash')})")
+        # the boards with ignored trials: one marker per point, and the tab of the board shown is the current one
+        for board in [b for b in cat.get("leaderboard_ignore") or [] if b.get("available")]:
+            page.goto(base + f"#/leaderboard/{board['id']}")
+            page.wait_for_selector("#leaderboard .lb-mean", timeout=20000)
+            if page.locator("#leaderboard .lb-mean").count() != sum(len(s["points"]) for s in board["series"]):
+                failures.append(f"leaderboard {board['id']}: not one marker per point")
+            if page.locator(".lb-tabs a[aria-current='page']").inner_text().strip() != board["title"]:
+                failures.append(f"leaderboard {board['id']}: its tab is not the current one")
+            page.screenshot(path=str(out / f"leaderboard-{board['id']}.png"), full_page=True)
         # the study page's local graph: the study in the middle, its neighbours on either side
         # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
         cross = [d for d in cat["dependencies"] if d["from"] != d["to"]]
