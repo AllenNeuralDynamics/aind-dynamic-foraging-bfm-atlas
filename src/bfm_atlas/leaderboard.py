@@ -9,9 +9,11 @@ A series whose source file is absent (e.g. a report still on an open PR) is left
 """
 from __future__ import annotations
 
+import copy
 import csv
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -19,6 +21,7 @@ D_NOMINAL = (10, 30, 100, 300, 614)
 H_GRID = (16, 64, 128, 256, 512)
 
 S01 = "studies/01-gru-scaling-law/analysis"
+S12 = "studies/12-cognitive-literature-leaderboard/analysis"
 S06 = "studies/06-disrnn-operating-point-at-scale/analysis"
 S10 = "studies/10-gru-reservoir-ablation"
 S13 = "studies/13-hb-subject-vs-gru-heldout/analysis"
@@ -32,6 +35,8 @@ METRIC = ("Choice likelihood on 149 held-out mice, outside every model's trainin
 PANELS = [
     {"id": "cognitive", "label": "Cognitive models (MLE / HB)",
      "groups": [{"label": "CTT", "x": ["CTT MLE", "CTT HB"]}, {"label": "Hattori", "x": ["Hattori MLE", "Hattori HB"]}]},
+    # x is filled at build time from the source's ranks, which move as models are added
+    {"id": "literature", "label": "Literature models, per-mouse MLE (ranked; study 12)", "x": [], "from_data": True},
     {"id": "glmhmm", "label": "GLM-HMM (hurdle), states K", "x": list(range(1, 11))},
     {"id": "disrnn", "label": "disRNN, training mice D", "x": [30, 100, 300, 614]},
     {"id": "gru", "label": "GRU, hidden size H, training mice D", "x": list(D_NOMINAL)},
@@ -107,6 +112,36 @@ def json_rows_by_d(pointer: str, d_key: str, value_key: str, xs: list, where: di
     return read
 
 
+# per-model text a ranked source must carry, and text it may carry (shown in the card and model panel)
+MODEL_REQUIRED = ("family", "summary")
+MODEL_OPTIONAL = ("family_note", "equations", "paper", "code")
+
+
+def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
+    """Every entry of the dict at `pointer` that has a rank, in rank order; x is the entry's key.
+
+    Each point also carries the entry's rank and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
+    """
+    def read(doc, path):
+        entries = _pointer(doc, pointer, path)
+        if not isinstance(entries, dict):
+            raise LeaderboardError(f"{path}: {pointer} is not an object")
+        ranked = []
+        for name, e in entries.items():
+            if not isinstance(e, dict) or rank not in e:
+                raise LeaderboardError(f"{path}: {pointer}/{name} lacks {rank}")
+            if e[rank] is None:                  # an unranked entry (e.g. a strawman) is left out, score or not
+                continue
+            # the score must be present (0.0 is a valid score; _values checks it); the text must be non-empty
+            lacking = ([value] if value not in e else []) + [k for k in MODEL_REQUIRED if not e.get(k)]
+            if lacking:
+                raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {', '.join(lacking)}")
+            info = {"rank": e[rank], **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
+            ranked.append((e[rank], name, _values(e[value], path, f"{pointer}/{name}/{value}"), info))
+        return [(name, vs, f"{pointer}/{name}/{value}", info) for _, name, vs, info in sorted(ranked)]
+    return read
+
+
 def csv_by_d(value: str, where: dict[str, Callable[[str], bool]], xs: list, describe: str) -> Callable:
     """Rows passing every `where` test, grouped by nominal D; rows with an empty `value` are skipped."""
     def read(rows, path):
@@ -151,6 +186,16 @@ SERIES = [
          _block("13-hb-subject-vs-gru-heldout", "r4", "result-1"),
          "Hattori model fitted by hierarchical Bayes (HB), one mouse at a time: each session's parameters vary "
          "around that mouse's own values, under a fixed prior (no population level); pooled over trials."),
+    ]},
+    # split into one series per family; worst to best within a family, families by their best model
+    {"id": "literature", "panel": "literature", "label": "Literature models, per-mouse MLE (study 12)",
+     "split": "family", "parts": [
+        (f"{S12}/r1_leaderboard.json", json_ranked("/by_model", "pooled_heldout"),
+         _block("12-cognitive-literature-leaderboard", "r1", "result-1"),
+         "A cognitive model from the literature. Every parameter is fitted to the held-out mouse alone, by "
+         "maximum likelihood on its even sessions (no prior, nothing shared across mice); scored on its odd "
+         "sessions. CompareToThreshold and Hattori2019 are the same fits as the cognitive panel's CTT and "
+         "Hattori MLE."),
     ]},
     {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),
@@ -220,12 +265,34 @@ def _stats(vs: list[float]) -> tuple[float, float | None]:
     return mean, math.sqrt(sum((v - mean) ** 2 for v in vs) / (n - 1) / n)
 
 
+def _split(spec: dict, points: list[dict], panel: dict) -> list[dict]:
+    """One series per value of spec["split"] (e.g. family), filling the panel's groups.
+
+    Worst to best inside a group; groups ordered by their best member, so the best group is last.
+    """
+    key = spec["split"]
+    groups: dict[str, list[dict]] = {}
+    for pt in points:
+        groups.setdefault(pt[key], []).append(pt)
+    ordered = sorted(groups.items(), key=lambda kv: max(p["mean"] for p in kv[1]))
+    panel["groups"] = []
+    out = []
+    for name, pts in ordered:
+        pts.sort(key=lambda p: p["mean"])
+        panel["groups"].append({"label": name, "x": [p["x"] for p in pts]})
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        out.append({"id": f"{spec['id']}-{slug}", "panel": spec["panel"], "label": name, key: name, "points": pts})
+    panel["x"] = [x for g in panel["groups"] for x in g["x"]]
+    return out
+
+
 def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked: Callable[[Path], bool]) -> dict:
     """catalog.leaderboard for a studies checkout.
 
     `reports` maps (study id, report id) to the catalog's report, so each point's block is checked to
     exist; `tracked` says whether a file is committed (an untracked file is treated as absent).
     """
+    panels = copy.deepcopy(PANELS)            # a from_data panel's x is filled per build
     series, missing, cache = [], [], {}
     for spec in SERIES:
         points = []
@@ -243,14 +310,20 @@ def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked:
             got = read(cache[path], path)
             if not got:
                 raise LeaderboardError(f"{spec['id']}: no values in {path}")
-            for x, vs, where in got:
+            for x, vs, where, *info in got:
                 mean, sem = _stats(vs)
                 points.append({"x": x, "values": vs, "mean": mean, "sem": sem, "n": len(vs),
                                "source": {"path": path, "where": where},
-                               "block": {**block, "report_path": r["path"]}, "description": description})
-        if points:
-            panel = next(p for p in PANELS if p["id"] == spec["panel"])
-            order = [x for g in panel.get("groups", [panel]) for x in g["x"]]
-            points.sort(key=lambda pt: order.index(pt["x"]))
+                               "block": {**block, "report_path": r["path"]}, "description": description,
+                               **(info[0] if info else {})})
+        if points and spec.get("split"):
+            series += _split(spec, points, next(p for p in panels if p["id"] == spec["panel"]))
+        elif points:
+            panel = next(p for p in panels if p["id"] == spec["panel"])
+            if panel.get("from_data"):         # the reader's order (rank) is the panel's order
+                panel["x"] = [pt["x"] for pt in points]
+            else:
+                order = [x for g in panel.get("groups", [panel]) for x in g["x"]]
+                points.sort(key=lambda pt: order.index(pt["x"]))
             series.append({k: spec[k] for k in ("id", "panel", "label", "h") if k in spec} | {"points": points})
-    return {"available": bool(series), "metric": METRIC, "panels": PANELS, "series": series, "missing": missing}
+    return {"available": bool(series), "metric": METRIC, "panels": panels, "series": series, "missing": missing}

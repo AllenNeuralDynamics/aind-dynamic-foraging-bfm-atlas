@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from bfm_atlas.catalog import build_catalog
-from bfm_atlas.leaderboard import S06, S10, S13, S14, SERIES, LeaderboardError, build_leaderboard, nominal_d
+from bfm_atlas.leaderboard import PANELS, S06, S10, S12, S13, S14, SERIES, LeaderboardError, build_leaderboard, nominal_d
 
 
 def put(root: Path, rel: str, data) -> None:
@@ -89,6 +89,47 @@ def test_a_study14_file_without_the_zero_shot_field_fails_the_build(tmp_path):
     put(tmp_path, f"{S14}/r1_round_1.json", {"scores": {"hurdle": scores}})
     with pytest.raises(LeaderboardError, match="LR_engaged_zero_shot"):
         build_leaderboard(tmp_path, reports(R1_14), lambda p: True)
+
+
+R1_12 = ("12-cognitive-literature-leaderboard", "r1")
+
+
+def model(rank, value, family="Q-learning", **more):
+    return {"rank": rank, "pooled_heldout": value, "family": family, "summary": f"model ranked {rank}", **more}
+
+
+def test_literature_models_split_by_family_worst_to_best(tmp_path):
+    by_model = {"A": model(1, 0.72, "Choice history"), "B": model(2, 0.71), "C": model(3, 0.70, "Choice history"),
+                "D": model(4, 0.55, equations="$Q$", paper={"cite": "X 2020", "url": "https://doi.org/x"}),
+                "WSLS": {"rank": None, "pooled_heldout": 0.60}, "Unscored": {"rank": None}}   # unranked: left out
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": by_model})
+    lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
+    lit = {s["family"]: s for s in lb["series"] if s["panel"] == "literature"}
+    assert set(lit) == {"Q-learning", "Choice history"}
+    assert [p["x"] for p in lit["Q-learning"]["points"]] == ["D", "B"]            # worst to best
+    assert [p["x"] for p in lit["Choice history"]["points"]] == ["C", "A"]
+    panel = next(p for p in lb["panels"] if p["id"] == "literature")
+    assert [g["label"] for g in panel["groups"]] == ["Q-learning", "Choice history"]  # best family last
+    assert panel["x"] == ["D", "B", "C", "A"]
+    d = lit["Q-learning"]["points"][0]
+    assert (d["rank"], d["summary"], d["equations"], d["paper"]["cite"]) == (4, "model ranked 4", "$Q$", "X 2020")
+    assert "equations" not in lit["Q-learning"]["points"][1]                       # optional text stays optional
+    assert next(p for p in PANELS if p["id"] == "literature")["x"] == []      # the module's spec is untouched
+
+
+def test_a_zero_score_is_a_score(tmp_path):
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": model(1, 0.0)}})
+    lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
+    assert [p["mean"] for s in lb["series"] if s["panel"] == "literature" for p in s["points"]] == [0.0]
+
+
+@pytest.mark.parametrize("drop", ["pooled_heldout", "family", "summary"])
+def test_a_ranked_literature_model_without_its_value_or_text_fails(tmp_path, drop):
+    entry = model(1, 0.72)
+    entry.pop(drop)
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": entry}})
+    with pytest.raises(LeaderboardError, match=drop):
+        build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
 
 
 def test_drift_fails_the_build(tmp_path):

@@ -11,8 +11,10 @@ document.addEventListener("atlas:ready", () => {
   const main = () => document.getElementById("main");
 
   // x units per category, in each panel; the layout follows the original matplotlib figure
-  const STEP = { cognitive: 1, glmhmm: 0.55, disrnn: 1, gru: 1.35 };
+  const STEP = { cognitive: 1, literature: 0.5, glmhmm: 0.55, disrnn: 1, gru: 1.35 };
   const GROUP_GAP = 0.4, PANEL_PAD = 0.65;
+  const EMPTY_SPAN = 5;          // x units an empty panel (its source not on main yet) keeps for its note
+  const PX_PER_UNIT = 44;        // the chart widens with its x range instead of squeezing every panel
   const H_ALL = [16, 64, 128, 256, 512];
   const H_DODGE = 0.15;          // x offset per hidden size, inside a GRU D column
   const HEXAGON = { draw(ctx, size) {          // d3 has no hexagon symbol
@@ -37,11 +39,19 @@ document.addEventListener("atlas:ready", () => {
     "gru-reservoir": { c: "--lb-res", m: d3.symbolTimes, dash: "4 2", stroke: true, size: 60 },
     ...Object.fromEntries(H_ALL.map((h) => [`gru-h${h}`, { c: `--lb-h${h}`, m: d3.symbolDiamond }])),
   };
-  const styleOf = (s) => STYLE[s.id] || { c: "--m-other", m: d3.symbolCircle };
+  // study 12's families: a colour each, in the panel's family order; different models, so no line
+  let familyIndex = () => 0;     // set per draw
+  const styleOf = (s) => s.family ? { c: `--lb-fam${(familyIndex(s.family) % 6) + 1}`, m: d3.symbolCircle, size: 40, noline: true }
+    : STYLE[s.id] || { c: "--m-other", m: d3.symbolCircle };
+  const legendLabel = (s) => s.family ? `Literature: ${s.label}` : s.label;
+  const FORAGING_MODELS = "https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-models";
+  const httpsOnly = (u) => (/^https:\/\//.test(u || "") ? u : null);
   const colour = (s) => `var(${styleOf(s).c})`;
 
   const fmt = (v) => v.toFixed(4);
+  let rankOf = () => 0;          // set per draw from the literature panel's order
   const xText = (panel, x) => panel === "cognitive" ? x.replace(" MLE", ", per-mouse fit (MLE)").replace(" HB", ", hierarchical Bayes (HB)")
+    : panel === "literature" ? `${x}, rank ${rankOf(x)}`
     : panel === "glmhmm" ? `K = ${x} states` : `D = ${x} training mice`;
   const blockRoute = (b) => `#/report/${encodeURIComponent(b.study)}/${encodeURIComponent(b.report)}?block-${encodeURIComponent(b.block)}`;
   const lineageRoute = (b) => `#/lineage/${encodeURIComponent(b.study)}/${encodeURIComponent(b.report)}/${encodeURIComponent(b.block)}`;
@@ -60,7 +70,8 @@ document.addEventListener("atlas:ready", () => {
     <div class="table-wrap"><table>
       <thead><tr><th>Model</th><th>Learned from the training mice</th><th>Fitted to each held-out mouse</th></tr></thead>
       <tbody>
-        <tr><td>CTT, Hattori: MLE</td><td>nothing</td><td>all of its parameters, by maximum likelihood</td></tr>
+        <tr><td>CTT, Hattori, study 12's literature models: MLE</td><td>nothing</td><td>all of its parameters, by maximum
+          likelihood (no prior, nothing shared across mice)</td></tr>
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
           (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
         <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
@@ -92,12 +103,17 @@ document.addEventListener("atlas:ready", () => {
     for (const p of panels) {
       const step = STEP[p.id] || 1, start = x;
       const groups = p.groups || [{ label: null, x: p.x }];
+      if (!groups.some((g) => g.x.length)) {
+        spans.push({ id: p.id, label: p.label, x0: start, x1: start + EMPTY_SPAN, groups: [] });
+        x = start + EMPTY_SPAN + 2 * PANEL_PAD;
+        continue;
+      }
       const labels = [];
       groups.forEach((g, gi) => {
         if (gi) x += GROUP_GAP;
         const g0 = x;
         for (const v of g.x) { pos[`${p.id}|${v}`] = x; x += step; }
-        if (g.label) labels.push({ label: g.label, at: (g0 + x - step) / 2 });
+        if (g.label) labels.push({ label: g.label, at: (g0 + x - step) / 2, width: p.id === "literature" ? x - g0 : undefined });
       });
       x -= step;
       spans.push({ id: p.id, label: p.label, x0: start, x1: x, groups: labels });
@@ -124,7 +140,8 @@ document.addEventListener("atlas:ready", () => {
       <h1>Leaderboard</h1>
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
         Large markers are the mean ± SEM over seeds; small dots are single seeds.
-        <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it.
+        <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it
+        (a literature model opens its own panel: what it is, its equations, paper and code).
         With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
@@ -148,13 +165,21 @@ document.addEventListener("atlas:ready", () => {
     tipEl.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && active) { ev.stopPropagation(); active.focus(); } });
     const { pos, spans, xmax } = layout(L.panels);
     const series = L.series;
-    const W = 1100, M = { l: 70, r: 14, t: 16, b: 64 };
+    const M = { l: 70, r: 14, t: 16, b: 84 }, W = Math.round(M.l + M.r + xmax * PX_PER_UNIT);
+    host.style.setProperty("--lb-w", `${W + 2}px`);
+    const litPanel = L.panels.find((p) => p.id === "literature");
+    const ranks = new Map(series.filter((s) => s.family).flatMap((s) => s.points.map((p) => [p.x, p.rank])));
+    rankOf = (v) => ranks.get(v) || 0;
+    familyIndex = (f) => Math.max(0, (litPanel?.groups || []).findIndex((g) => g.label === f));
     // legend rows above the plot
     const perRow = 3, rowH = 18, legendH = Math.ceil(series.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
     const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0);
-    const all = series.flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
+    // the axis is set by every series but study 12's ranking, whose weakest models sit far below the rest
+    // (unless it is the only one); a point outside it is drawn at the edge (▼ / ▲) with its value in the card
+    const axisSeries = series.some((s) => s.panel !== "literature") ? series.filter((s) => s.panel !== "literature") : series;
+    const all = axisSeries.flatMap((s) => s.points.flatMap((p) => [...p.values, p.mean - (p.sem || 0), p.mean + (p.sem || 0)]));
     const [lo, hi] = d3.extent(all), pad = (hi - lo) * 0.06;
     const x = d3.scaleLinear([0, xmax], [M.l, W - M.r]);
     const y = d3.scaleLinear([lo - pad, hi + pad], [H - M.b, plotTop]).nice();
@@ -162,7 +187,7 @@ document.addEventListener("atlas:ready", () => {
     // axes, panel dividers, labels
     const ticks = L.panels.flatMap((p) =>
       (p.groups ? p.groups.flatMap((g) => g.x) : p.x).map((v) => ({ at: pos[`${p.id}|${v}`],
-        text: p.id === "cognitive" ? String(v).split(" ").pop() : String(v) })));
+        text: p.id === "cognitive" ? String(v).split(" ").pop() : p.id === "literature" ? String(rankOf(v)) : String(v) })));
     const g = svg.append("g").attr("class", "lb-axes");
     g.append("g").attr("transform", `translate(${M.l},0)`).call(d3.axisLeft(y).ticks(8).tickFormat(d3.format(".3f")));
     const xa = g.append("g").attr("transform", `translate(0,${H - M.b})`);
@@ -176,15 +201,31 @@ document.addEventListener("atlas:ready", () => {
         const xd = x((spans[i - 1].x1 + sp.x0) / 2);
         g.append("line").attr("x1", xd).attr("x2", xd).attr("y1", plotTop).attr("y2", H - M.b).attr("class", "lb-divider");
       }
-      g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", H - M.b + 38).attr("text-anchor", "middle")
-        .attr("class", "lb-panel").text(sp.label);
+      // a label wider than its panel (about 6.5 px a character) wraps at its parenthesis
+      const lab = g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", H - M.b + 38).attr("text-anchor", "middle")
+        .attr("class", "lb-panel");
+      const cut = sp.label.indexOf(" (");
+      if (sp.label.length * 6.5 > x(sp.x1) - x(sp.x0) + 40 && cut > 0) {
+        lab.append("tspan").attr("x", x((sp.x0 + sp.x1) / 2)).text(sp.label.slice(0, cut));
+        lab.append("tspan").attr("x", x((sp.x0 + sp.x1) / 2)).attr("dy", "1.2em").text(sp.label.slice(cut + 1));
+      } else lab.text(sp.label);
       if (!series.some((s) => s.panel === sp.id)) {     // every source of this panel is still off main
         g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", (plotTop + H - M.b) / 2).attr("text-anchor", "middle")
           .attr("class", "lb-pending").text("not on studies main yet");
       }
+      const offAxis = series.filter((q) => q.panel === sp.id)
+        .some((q) => q.points.some((p) => p.mean < y.domain()[0] || p.mean > y.domain()[1]));
+      if (offAxis) {
+        g.append("text").attr("x", x((sp.x0 + sp.x1) / 2)).attr("y", H - M.b + 70).attr("text-anchor", "middle")
+          .attr("class", "lb-pending").text("▼ below the axis: hover for the value");
+      }
       for (const gl of sp.groups) {
         const s = series.find((q) => q.panel === sp.id && q.label.startsWith(gl.label));
-        g.append("text").attr("x", x(gl.at)).attr("y", H - M.b - 8).attr("text-anchor", "middle").attr("class", "lb-group")
+        // a family label wider than its group (about 6 px a character) is left to the legend
+        if (gl.width !== undefined && gl.label.length * 6 > x(gl.width) - x(0) + 14) continue;
+        // study 12's family labels go at the top, clear of the ▼ markers at the bottom edge
+        g.append("text").attr("x", x(gl.at)).attr("y", sp.id === "literature" ? plotTop + 12 : H - M.b - 8)
+          .attr("text-anchor", "middle").attr("class", "lb-group")
           .style("fill", s ? colour(s) : null).text(gl.label);
       }
     });
@@ -214,18 +255,24 @@ document.addEventListener("atlas:ready", () => {
             .attr("d", `M${cx},${y(p.mean - p.sem)}V${y(p.mean + p.sem)}M${cx - 3},${y(p.mean - p.sem)}h6M${cx - 3},${y(p.mean + p.sem)}h6`);
         }
       }
-      lg_.append("path").attr("class", "lb-line").attr("stroke-dasharray", st.dash || null)
-        .attr("d", d3.line().x((p) => x(xAt(s, p))).y((p) => y(p.mean))(pts));
+      if (!st.noline) {
+        lg_.append("path").attr("class", "lb-line").attr("stroke-dasharray", st.dash || null)
+          .attr("d", d3.line().x((p) => x(xAt(s, p))).y((p) => y(p.mean))(pts));
+      }
+      const [y0, y1] = y.domain();
       for (const p of pts) {
+        const off = p.mean < y0 ? "below" : p.mean > y1 ? "above" : null;
         const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE"));
         const mk = mg.append("g").attr("class", "lb-mean").attr("tabindex", 0).attr("role", "link")
-          .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}`)
-          .attr("transform", `translate(${x(xAt(s, p))},${y(p.mean)})`);
+          .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}${off ? ` (${off} the axis)` : ""}`)
+          .attr("transform", `translate(${x(xAt(s, p))},${off === "below" ? y.range()[0] - 7 : off === "above" ? y.range()[1] + 7 : y(p.mean)})`);
         mk.append("circle").attr("r", st.hit || 9).attr("class", "lb-hit");
-        mk.append("path").attr("d", d3.symbol(st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
+        mk.append("path").attr("d", d3.symbol(off ? d3.symbolTriangle : st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
+          .attr("transform", off === "below" ? "rotate(180)" : null)
           .attr("class", st.stroke ? "lb-mk-x" : hollow ? "lb-mk-hollow" : "lb-mk");
-        const open = () => { location.hash = blockRoute(p.block); };
-        mk.on("pointerenter focus", (ev) => tip.show(ev.currentTarget, card(s, p)))
+        // a literature model opens its model panel (equations, paper, code); every other point its result block
+        const open = () => { if (p.summary) openModel(s, p); else location.hash = blockRoute(p.block); };
+        mk.on("pointerenter focus", (ev) => tip.show(ev.currentTarget, card(s, p, undefined, off)))
           .on("pointerleave", () => tip.hide())
           .on("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
           .on("click", open)
@@ -246,23 +293,52 @@ document.addEventListener("atlas:ready", () => {
       it.append("line").attr("x1", 0).attr("x2", 22).attr("class", "lb-line").attr("stroke-dasharray", st.dash || null);
       it.append("path").attr("transform", "translate(11,0)").attr("d", d3.symbol(st.m, st.size ? st.size * 0.8 : 36)())
         .attr("class", st.stroke ? "lb-mk-x" : st.fill === "hollow" ? "lb-mk-hollow" : "lb-mk");
-      it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text").text(s.label);
+      it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text").text(legendLabel(s));
       it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
           .classed("lb-on", function () { return this.dataset.series === s.id; }))
         .on("pointerleave", () => layer.classed("lb-focus", false));
     });
   }
 
-  function card(s, p, seed) {
+  function card(s, p, seed, off) {
     const b = p.block;
     const value = seed !== undefined ? `seed ${seed + 1} of ${p.n}: <b>${fmt(p.values[seed])}</b> (mean ${fmt(p.mean)})`
       : p.n > 1 ? `<b>${fmt(p.mean)}</b> ± ${fmt(p.sem)} (mean ± SEM, ${p.n} seeds: ${p.values.map(fmt).join(", ")})`
       : `<b>${fmt(p.mean)}</b>`;
-    return `<b>${esc(s.label)}</b><div>${esc(xText(s.panel, p.x))}</div>
-      <div class="lb-tip-value">${value}</div>
-      <div class="tip-v">${esc(p.description)}</div>
+    const head = p.summary ? `<b>${esc(p.x)}</b><div>${esc(s.label)} · rank ${esc(p.rank)}</div>`
+      : `<b>${esc(s.label)}</b><div>${esc(xText(s.panel, p.x))}</div>`;
+    return `${head}
+      <div class="lb-tip-value">${value}${off ? ` <span class="tip-v">(${off} the axis, drawn at its edge)</span>` : ""}</div>
+      ${p.summary ? `<div class="lb-tip-summary">${esc(p.summary)}</div>`        // its fitting text is in the model panel
+        : `<div class="tip-v">${esc(p.description)}</div>`}
       <div class="tip-v">Reported in study ${esc(studyNo(b.study))} ${esc(b.report)}, ${esc(b.block)};
         read from <span class="mono">${esc(p.source.path.split("/").pop())}</span></div>
-      <div class="lb-tip-links"><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
+      <div class="lb-tip-links">${p.summary ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
+  }
+
+  // a literature model's panel, in the page's drawer: what it is, its equations, paper and code
+  function openModel(s, p) {
+    const b = p.block, paper = p.paper || {}, code = p.code || {};
+    const body = document.getElementById("drawer-body");
+    const codeUrl = code.path && code.commit ? `${FORAGING_MODELS}/blob/${encodeURIComponent(code.commit)}/${code.path.split("/").map(encodeURIComponent).join("/")}` : null;
+    body.innerHTML = `
+      <div class="k muted">Literature model · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
+      <h2 style="margin-top:0">${esc(p.x)}</h2>
+      <p>${A.chip(s.label)} rank ${esc(p.rank)} · held-out likelihood <b>${fmt(p.mean)}</b></p>
+      ${p.family_note ? `<p class="muted">${esc(p.family_note)}</p>` : ""}
+      <p>${esc(p.summary)}</p>
+      <h3>Equations</h3><div class="lb-model-eq">${p.equations ? "" : `<p class="muted">Not written yet.</p>`}</div>
+      <h3>How it was fitted</h3><p>${esc(p.description)}</p>
+      <h3>Sources</h3><ul>
+        <li>Paper: ${httpsOnly(paper.url) ? `<a href="${esc(paper.url)}" target="_blank" rel="noopener">${esc(paper.cite || paper.url)}</a>` : esc(paper.cite || "not given")}</li>
+        <li>Code: ${codeUrl ? `<a href="${esc(codeUrl)}" target="_blank" rel="noopener"><code>${esc(code.agent_class || code.path)}</code></a> in aind-dynamic-foraging-models @ <span class="mono">${esc(String(code.commit).slice(0, 8))}</span>`
+          : code.agent_class ? `<code>${esc(code.agent_class)}</code>` : "not given"}</li>
+      </ul>
+      <p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`;
+    if (p.equations) body.querySelector(".lb-model-eq").append(A.renderMarkdown(p.equations, b.report_path));
+    const drawer = document.getElementById("drawer");
+    if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
+    drawer.hidden = false;
+    drawer.focus();
   }
 });

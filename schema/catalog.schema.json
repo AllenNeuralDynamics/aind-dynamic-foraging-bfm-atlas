@@ -503,6 +503,9 @@
                     }
                   }
                 }
+              },
+              "from_data": {
+                "type": "boolean"
               }
             }
           }
@@ -611,9 +614,52 @@
                     },
                     "description": {
                       "type": "string"
+                    },
+                    "rank": {
+                      "type": "integer"
+                    },
+                    "family": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "equations": {
+                      "type": "string"
+                    },
+                    "paper": {
+                      "type": "object",
+                      "properties": {
+                        "cite": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "code": {
+                      "type": "object",
+                      "properties": {
+                        "agent_class": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "commit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "family_note": {
+                      "type": "string"
                     }
                   }
                 }
+              },
+              "family": {
+                "type": "string"
               }
             }
           }
