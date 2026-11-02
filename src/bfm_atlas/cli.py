@@ -7,6 +7,7 @@ from collections import Counter
 from pathlib import Path
 
 from .catalog import build_catalog, copy_figures
+from .framework import copy_stack_diagram
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,11 +31,13 @@ def main(argv: list[str] | None = None) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")))
     figures = 0 if args.no_figures else copy_figures(catalog, args.studies, args.out.parent / "files")
+    diagram = copy_stack_diagram(catalog, args.skills, args.out.parent)
     h = catalog["health"]
     levels = dict(Counter(f.get("level") for f in h["findings"]))
     print(f"wrote {args.out}: {len(catalog['studies'])} studies @ "
           f"{(catalog['_meta']['studies_git_sha'] or 'unknown')[:12]}, "
-          f"{args.out.stat().st_size // 1024} KiB, {figures} figures; checker "
+          f"{args.out.stat().st_size // 1024} KiB, {figures} figures, "
+          f"{'a' if diagram else 'no'} stack diagram; checker "
           + (f"{levels}" if h["ran"] else f"not run ({h['error']})"))
     return 0
 

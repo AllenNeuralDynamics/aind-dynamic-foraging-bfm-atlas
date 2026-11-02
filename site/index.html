@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Behavior Foundation Model Studies Atlas</title>
 <meta name="description" content="Provenance-traced browser for the dynamic foraging behavior foundation model studies: every report and number traced to its producer, frozen inputs, W&B group, launch record and commits.">
+<!-- the saved day/night choice, applied before the first paint so the page never flashes the other theme -->
+<script>try { const t = localStorage.getItem("atlas-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch { /* storage blocked: follow the system */ }</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.0/katex.min.css">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -18,6 +20,7 @@
   <nav>
     <a href="#/">Studies</a>
     <a href="#/timeline" data-view="timeline" hidden>Timeline</a>
+    <a href="#/leaderboard" data-view="leaderboard" hidden>Leaderboard</a>
     <a href="#/health">Health</a>
     <a href="#/about" data-view="about" hidden>About</a>
   </nav>
@@ -25,6 +28,7 @@
   <!-- a static page cannot start a workflow without a token: this opens the deploy workflow, one "Run workflow" click away -->
   <a class="rebuild" id="rebuild" href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas/actions/workflows/pages.yml"
     target="_blank" rel="noopener" title="Rebuild: opens the Deploy atlas workflow on GitHub; press Run workflow (needs write access) and the site redeploys in a few minutes">↻ Rebuild</a>
+  <button type="button" class="theme" id="theme">☾ Night</button>
   <details class="repos" id="repos"><summary title="Source repositories on GitHub">GitHub</summary>
     <div class="repos-menu">
       <a href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas" target="_blank" rel="noopener">atlas <span>this site</span></a>
@@ -39,11 +43,12 @@
   <button class="drawer-close" type="button" aria-label="Close provenance">×</button>
   <div id="drawer-body"></div>
 </aside>
-<!-- views.js, map.js and about.js first: their atlas:ready listeners must exist before app.js fires the event;
-     about.js after map.js, whose tooltip and Export SVG it uses -->
+<!-- views.js, map.js, about.js and leaderboard.js first: their atlas:ready listeners must exist before app.js fires
+     the event; about.js and leaderboard.js after map.js, whose tooltip and Export SVG they use -->
 <script src="views.js"></script>
 <script src="map.js"></script>
 <script src="about.js"></script>
+<script src="leaderboard.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

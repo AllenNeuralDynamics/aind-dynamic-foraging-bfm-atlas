@@ -303,6 +303,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "diagram": {
+                      "description": "Dispatcher-relative path of the interactive stack diagram the build shipped under data/dispatcher/, or null when that commit has none.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -431,6 +438,307 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "leaderboard": {
+      "description": "The leaderboard view (leaderboard.py): each model family's held-out choice likelihood, read at build time from the studies files that hold it, with the result block that reports each point.",
+      "type": "object",
+      "required": [
+        "available",
+        "series",
+        "missing"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "panels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "x": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "string",
+                    "integer"
+                  ]
+                }
+              },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "x"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "x": {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "string",
+                          "integer"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "from_data": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "panel",
+              "label",
+              "points"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "panel": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "h": {
+                "type": "integer"
+              },
+              "points": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "x",
+                    "values",
+                    "mean",
+                    "sem",
+                    "n",
+                    "source",
+                    "block",
+                    "description"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "mean": {
+                      "type": "number"
+                    },
+                    "sem": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "n": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "source": {
+                      "type": "object",
+                      "required": [
+                        "path",
+                        "where"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "where": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "block": {
+                      "type": "object",
+                      "required": [
+                        "study",
+                        "report",
+                        "block"
+                      ],
+                      "properties": {
+                        "study": {
+                          "type": "string"
+                        },
+                        "report": {
+                          "type": "string"
+                        },
+                        "block": {
+                          "type": "string"
+                        },
+                        "report_path": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "rank": {
+                      "type": "integer"
+                    },
+                    "family": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "equations": {
+                      "type": "string"
+                    },
+                    "paper": {
+                      "type": "object",
+                      "properties": {
+                        "cite": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "code": {
+                      "type": "object",
+                      "properties": {
+                        "agent_class": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "commit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "family_note": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "literature_model": {
+                      "type": "string"
+                    },
+                    "fit_flag": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "fit": {
+                      "type": "string"
+                    },
+                    "fit_kind": {
+                      "enum": [
+                        "em",
+                        "per_subject"
+                      ]
+                    },
+                    "short_name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "family": {
+                "type": "string"
+              },
+              "overlay": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "series",
+              "path",
+              "block"
+            ],
+            "properties": {
+              "series": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "block": {
+                "type": "object",
+                "required": [
+                  "study",
+                  "report",
+                  "block"
+                ],
+                "properties": {
+                  "study": {
+                    "type": "string"
+                  },
+                  "report": {
+                    "type": "string"
+                  },
+                  "block": {
+                    "type": "string"
+                  },
+                  "report_path": {
+                    "type": "string"
+                  }
+                }
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     }

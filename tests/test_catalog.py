@@ -458,7 +458,7 @@ def test_an_untracked_vocabulary_is_not_read(studies):
 
 
 # --- About page: the framework model ------------------------------------------------------------
-from bfm_atlas.framework import OBJECTS, SKILLS, FrameworkError  # noqa: E402
+from bfm_atlas.framework import OBJECTS, SKILLS, STACK_DIAGRAM, FrameworkError  # noqa: E402
 
 
 def add_framework_sources(root: Path, drop_term: str | None = None) -> None:
@@ -548,6 +548,32 @@ def test_cli_build_with_skills(studies, tmp_path, capsys):
     out = tmp_path / "data" / "catalog.json"
     assert main(["build", "--studies", str(studies), "--out", str(out), "--no-validate", "--skills", str(pack)]) == 0
     assert len(json.loads(out.read_text())["framework"]["skills"]) == 2
+
+
+def test_cli_ships_the_stack_diagram_from_the_dispatcher_commit(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    diagram = tmp_path / "dispatcher" / STACK_DIAGRAM
+    diagram.parent.mkdir(parents=True)
+    diagram.write_text("<html>committed</html>")
+    git(tmp_path / "dispatcher", "add", "-A")
+    git(tmp_path / "dispatcher", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "diagram")
+    diagram.write_text("<html>local edit</html>")                    # not in the recorded commit
+    out = tmp_path / "data" / "catalog.json"
+    assert main(["build", "--studies", str(studies), "--out", str(out), "--no-validate", "--skills", str(pack)]) == 0
+    cat = json.loads(out.read_text())
+    assert cat["framework"]["sources"]["dispatcher"]["diagram"] == STACK_DIAGRAM
+    assert (out.parent / "dispatcher" / STACK_DIAGRAM).read_text() == "<html>committed</html>"
+    assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
+
+
+def test_no_stack_diagram_when_the_dispatcher_commit_has_none(studies, tmp_path):
+    add_framework_sources(studies)
+    pack = make_skills(tmp_path / "dispatcher")
+    out = tmp_path / "data" / "catalog.json"
+    assert main(["build", "--studies", str(studies), "--out", str(out), "--no-validate", "--skills", str(pack)]) == 0
+    assert json.loads(out.read_text())["framework"]["sources"]["dispatcher"]["diagram"] is None
+    assert not (out.parent / "dispatcher").exists()
 
 
 def test_skills_are_read_from_the_dispatcher_commit_only(studies, tmp_path):

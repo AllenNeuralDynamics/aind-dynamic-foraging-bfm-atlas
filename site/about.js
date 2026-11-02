@@ -56,6 +56,7 @@ document.addEventListener("atlas:ready", () => {
         <div><b>One checker, in CI</b>Schemas and a single checker hold the rules; old findings sit in a baseline
           that may only shrink.</div>
       </div>
+      ${stack(fw, L)}
       <h2>How it fits together</h2>
       <p class="muted">Each box is an object the framework defines, in the stage of a run's life where it appears; dashed
         boxes are fields of the launch record. Select one for its definition, its schema, the checker rules about it and
@@ -88,6 +89,24 @@ document.addEventListener("atlas:ready", () => {
     drawSchemas(fw, L);
     drawPorting(L);
   };
+
+  // ------------------------------------------------------------ the stack diagram
+  // The dispatcher's interactive diagram of the four repositories, shipped by the build from the
+  // dispatcher commit the skills were read at (framework.copy_stack_diagram), so it is pinned too.
+  function stack(fw, L) {
+    const path = fw.sources?.dispatcher?.diagram;
+    if (!path) return "";
+    const src = `data/dispatcher/${path}`;
+    return `
+      <h2>The stack</h2>
+      <p class="muted">Where the framework runs: four repositories and the services between them. A variant's manifests
+        go to the dispatcher's launchers, which write its launch record and submit the job; the wrapper trains and logs to
+        W&amp;B; the study freezes what it needs, its producers compute the reports, and this site publishes them. Drawn in
+        the dispatcher's ${ext(`${L.dispatcher}/docs/diagrams/README.md`, "docs/diagrams/")}${L.dsha ? ` at ${esc(short(L.dsha))}` : ""};
+        ${ext(src, "open it full screen")} to pan, zoom and trace one relationship.</p>
+      <div class="stack-wrap"><iframe class="stack" src="${esc(src)}" title="The behavioral foundation model stack across its four repositories"
+        loading="lazy"></iframe></div>`;
+  }
 
   // ------------------------------------------------------------ the map
   function drawMap(fw, L) {

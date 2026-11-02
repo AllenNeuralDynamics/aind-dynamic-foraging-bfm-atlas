@@ -17,7 +17,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-OPTIONAL_VIEWS = ("timeline", "about")   # visited when the nav shows them
+OPTIONAL_VIEWS = ("timeline", "about", "leaderboard")   # visited when the nav shows them
 
 
 def check_export(page, button, what, path, failures, sha):
@@ -135,6 +135,18 @@ def main(site: str, out: str) -> int:
             failures.append(f"banner: repository links are {repos}")
         if not (page.get_attribute("#rebuild", "href") or "").endswith("/actions/workflows/pages.yml"):
             failures.append("banner: Rebuild does not open the deploy workflow")
+        # the day/night switch flips the whole page's palette and survives a reload
+        bg = lambda: page.evaluate("getComputedStyle(document.body).backgroundColor")
+        before, first = bg(), page.evaluate("document.documentElement.dataset.theme || ''")
+        page.click("#theme")
+        chosen = page.evaluate("document.documentElement.dataset.theme")
+        if chosen not in ("light", "dark") or chosen == first or bg() == before:
+            failures.append(f"banner: the theme switch did not change the page ({first!r} -> {chosen!r})")
+        page.reload()
+        page.wait_for_function("window.Atlas && window.Atlas.S && window.Atlas.S.cat", timeout=20000)
+        if page.evaluate("document.documentElement.dataset.theme") != chosen:
+            failures.append("banner: the theme choice did not survive a reload")
+        page.click("#theme")                       # back to where it started, for the screenshots
         for view in OPTIONAL_VIEWS:
             if page.locator(f'.top nav a[data-view="{view}"]').is_visible():
                 views[view] = f"#/{view}"
@@ -246,8 +258,35 @@ def main(site: str, out: str) -> int:
                 failures.append("about: the porting prompts' dispatcher links are not pinned, or not flagged as unpinned")
             if fw.get("skills") and page.locator("#fw-skills .skill-card").count() != len(fw["skills"]):
                 failures.append("about: not one card per skill")
+            # the dispatcher's stack diagram, when the build shipped it, renders inside its frame
+            if ((fw.get("sources") or {}).get("dispatcher") or {}).get("diagram"):
+                frame = page.locator("iframe.stack")
+                frame.scroll_into_view_if_needed()
+                try:
+                    frame.content_frame.locator("svg").first.wait_for(timeout=20000)
+                    frame.screenshot(path=str(out / "about-stack.png"))
+                except Exception as exc:          # noqa: BLE001 - any failure to render is the finding
+                    failures.append(f"about: the stack diagram did not render ({type(exc).__name__})")
             page.screenshot(path=str(out / "about.png"), full_page=True)
             check_export(page, "#fw-export", "framework map", out / "framework.svg", failures, sha=cat["_meta"]["studies_git_sha"])
+        # the leaderboard: one marker per point; hover shows its card, a click opens the result block
+        lb = cat.get("leaderboard") or {}
+        if lb.get("available"):
+            page.goto(base + "#/leaderboard")
+            page.wait_for_selector("#leaderboard .lb-mean", timeout=20000)
+            if page.locator("#leaderboard .lb-mean").count() != sum(len(s["points"]) for s in lb["series"]):
+                failures.append("leaderboard: not one marker per point")
+            page.locator("#leaderboard .lb-mean").first.hover()
+            if not page.locator(".tip:visible a[href*='?block-']").count():
+                failures.append("leaderboard: hovering a marker shows no link to its result block")
+            check_export(page, "#lb-export", "leaderboard", out / "leaderboard.svg", failures, sha=cat["_meta"]["studies_git_sha"])
+            page.screenshot(path=str(out / "leaderboard.png"), full_page=True)
+            page.mouse.move(1, 1)
+            page.locator("#leaderboard .lb-mean").first.click()
+            page.wait_for_timeout(500)
+            block = page.evaluate("location.hash").split("?block-")[-1]
+            if not page.locator(f'.result-block[id="block-{block}"]').count():
+                failures.append(f"leaderboard: a click did not open its result block ({page.evaluate('location.hash')})")
         # the study page's local graph: the study in the middle, its neighbours on either side
         # a study's links to itself (an in-study correction) draw nothing, so pick one with another study
         cross = [d for d in cat["dependencies"] if d["from"] != d["to"]]
