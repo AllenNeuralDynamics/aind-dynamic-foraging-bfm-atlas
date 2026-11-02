@@ -265,6 +265,14 @@ document.addEventListener("atlas:ready", () => {
 
     // series in three layers, so no line covers another series' markers: lines and error bars,
     // then seed dots, then the mean markers on top (a marker's card lists its seeds)
+    // hovering a dot draws a dashed line at its value, in its colour, across the plot (under the data)
+    const guide = svg.append("line").attr("class", "lb-guide").attr("x1", M.l).attr("x2", W - M.r).style("display", "none");
+    const showGuide = (v, c) => {
+      const [g0, g1] = y.domain();
+      if (v < g0 || v > g1) return;     // a point drawn at the axis edge has no true height to mark
+      guide.attr("y1", y(v)).attr("y2", y(v)).style("stroke", c).style("display", null);
+    };
+    const hideGuide = () => guide.style("display", "none");
     const layer = svg.append("g").attr("class", "lb-data");
     const [lines, seeds, marks] = ["lb-lines", "lb-seeds", "lb-marks"].map((c) => layer.append("g").attr("class", c));
     for (const s of series) {
@@ -276,8 +284,8 @@ document.addEventListener("atlas:ready", () => {
           if (p.n < 2) return;            // a single value is the marker itself
           sg_.append("circle").attr("class", "lb-seed").attr("r", 2.4)
             .attr("cx", x(xAt(s, p) + 0.16 * jitter(`${s.id}|${p.x}|${i}`))).attr("cy", y(v))
-            .on("pointerenter", (ev) => tip.show(ev.currentTarget, card(s, p, i)))
-            .on("pointerleave", () => tip.hide())
+            .on("pointerenter", (ev) => { tip.show(ev.currentTarget, card(s, p, i)); showGuide(v, c); })
+            .on("pointerleave", () => { tip.hide(); hideGuide(); })
             .on("click", () => { location.hash = blockRoute(p.block); });
         });
         if (p.sem) {
@@ -311,9 +319,9 @@ document.addEventListener("atlas:ready", () => {
           .attr("class", st.stroke ? "lb-mk-x" : hollow ? "lb-mk-hollow" : "lb-mk");
         // a literature model opens its model panel (equations, paper, code); every other point its result block
         const open = () => { if (p.summary) openModel(s, p); else location.hash = blockRoute(p.block); };
-        mk.on("pointerenter focus", (ev) => tip.show(ev.currentTarget, card(s, p, undefined, off)))
-          .on("pointerleave", () => tip.hide())
-          .on("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
+        mk.on("pointerenter focus", (ev) => { tip.show(ev.currentTarget, card(s, p, undefined, off)); showGuide(p.mean, c); })
+          .on("pointerleave", () => { tip.hide(); hideGuide(); })
+          .on("blur", (ev) => { hideGuide(); if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
           .on("click", open)
           .on("keydown", (ev) => {
             if (ev.key === "Enter") open();
