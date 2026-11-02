@@ -390,6 +390,7 @@ a.lchip { color: var(--accent); }
 .lb-tip-summary { margin-top: 4px; }
 .lb-tip-flag { margin-top: 4px; font-weight: 600; }
 .lb-twin { stroke: currentColor; stroke-width: 1.2; stroke-opacity: 0.55; }
+.lb-guide { stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
 .lb-pair-names { pointer-events: none; }
 .lb-pair-name { font-size: 9px; }
 .lb-model-eq { overflow-x: auto; }
