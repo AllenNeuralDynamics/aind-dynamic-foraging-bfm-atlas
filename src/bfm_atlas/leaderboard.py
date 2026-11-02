@@ -159,6 +159,14 @@ SERIES = [
          "refitted to each held-out mouse's own sessions before scoring: study 14's matched protocol, "
          "like the GRU's per-mouse embedding. Left vs right on engaged trials; one seed."),
     ]},
+    {"id": "glmhmm-pooled", "panel": "glmhmm", "label": "GLM-HMM, refit pooled toward the shared fit", "parts": [
+        (f"{S14}/r2_refit_prior.json", json_by_x("/best_by_k/hurdle/{x}/LR_engaged", list(range(1, 11))),
+         _block("14-glmhmm-vs-gru-heldout", "r2", "result-2"),
+         "GLM-HMM refitted to each held-out mouse with its weights pulled toward the shared fit, and its "
+         "transitions too where the training mice's score prefers it (study 14's round 2). At each K the "
+         "prior is the one that selection score picks; held-out mice never choose it. Left vs right on engaged "
+         "trials; one seed."),
+    ]},
     {"id": "glmhmm-zeroshot", "panel": "glmhmm", "label": "GLM-HMM, zero-shot (shared fit only)", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged_zero_shot", list(range(1, 11))),
          _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"),
