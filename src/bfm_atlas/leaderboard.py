@@ -326,8 +326,8 @@ IGNORE_BOARDS = [
              _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_ZEROSHOT)]},
         *_gru_3way("three_way"),
     ]},
-    # study 14 publishes the engagement score of the per-mouse refit only (r1); the pooled refit's is in r2's
-    # JSON and the zero-shot one in r1's freeze (frozen_round1.json), but neither is in a result block
+    # study 14's r1 publishes the engagement score of the refit and of the zero-shot fit; the pooled refit's is
+    # in r2's JSON but in no result block, so it is not drawn
     {"id": "engage", "title": "Engagement (respond vs ignore)", "ylabel": "Engagement likelihood, held-out mice",
      "metric": ("Engagement likelihood on 149 held-out mice (geometric-mean probability of whether the mouse "
                 "responds or ignores, on every trial; chance 1/2)"),
@@ -335,6 +335,9 @@ IGNORE_BOARDS = [
         {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
             (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/engage", list(range(1, 11))),
              _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_REFIT)]},
+        {"id": "glmhmm-zeroshot", "panel": "glmhmm", "label": "GLM-HMM, zero-shot (shared fit only)", "parts": [
+            (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/engage_zero_shot", list(range(1, 11))),
+             _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_ZEROSHOT)]},
         *_gru_3way("engage"),
     ]},
 ]

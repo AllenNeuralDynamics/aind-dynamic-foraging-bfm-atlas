@@ -124,8 +124,8 @@ document.addEventListener("atlas:ready", () => {
       </tbody></table></div>
     <p>A held-out mouse meets each model as on the choice board: the GRU fits only a subject embedding; the GLM-HMM is
       refitted to the mouse (refit), refitted with its weights pulled toward the shared fit (pooled), or not fitted at
-      all (zero-shot).${L.id === "engage" ? ` On this board the GLM-HMM has the refit line only: study 14 reports the
-      engagement score of its pooled refit and of its zero-shot fit in no result block.` : ""}</p>
+      all (zero-shot).${L.id === "engage" ? ` On this board the GLM-HMM has no pooled line: study 14 reports the
+      engagement score of its pooled refit in no result block.` : ""}</p>
   </section>`;
 
   function layout(panels) {

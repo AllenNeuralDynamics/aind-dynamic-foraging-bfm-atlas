@@ -197,7 +197,8 @@ R4_02 = ("02-gru-scaling-law-ignore", "r4")
 
 
 def three_way_files(root):
-    scores = {str(k): {"matched": 0.61 + k / 1000, "zero_shot": 0.60 + k / 1000, "engage": 0.82 + k / 1000}
+    scores = {str(k): {"matched": 0.61 + k / 1000, "zero_shot": 0.60 + k / 1000, "engage": 0.82 + k / 1000,
+                         "engage_zero_shot": 0.81 + k / 1000}
               for k in range(1, 11)}
     put(root, f"{S14}/r1_round_1.json", {"scores": {"hurdle": scores}})
     put(root, f"{S14}/r2_refit_prior.json", {"best_by_k": {"hurdle": {str(k): {"matched": 0.615} for k in range(1, 11)}}})
@@ -219,8 +220,9 @@ def test_the_ignore_boards_read_three_way_and_engagement_scores(tmp_path):
     assert [p["x"] for p in gru] == [10, 30, 100, 614] and gru[0]["n"] == 2 and gru[0]["mean"] == pytest.approx(0.62164)
     assert gru[0]["block"]["study"] == R4_02[0] and gru[0]["source"]["where"] == "/grid/three_way/64/10/seeds"
     eby = {s["id"]: s for s in engage["series"]}
-    assert set(eby) == {"glmhmm-refit", "gru-h16", "gru-h64", "gru-h128", "gru-h256"}   # no pooled or zero-shot engagement
+    assert set(eby) == {"glmhmm-refit", "glmhmm-zeroshot", "gru-h16", "gru-h64", "gru-h128", "gru-h256"}   # no pooled
     assert eby["glmhmm-refit"]["points"][0]["mean"] == pytest.approx(0.821)
+    assert eby["glmhmm-zeroshot"]["points"][0]["mean"] == pytest.approx(0.811)
     assert eby["gru-h256"]["points"][-1]["mean"] == pytest.approx(0.83356)
 
 
