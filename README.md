@@ -37,7 +37,7 @@ draws how they connect; the About page embeds it.
 - **Export SVG** on both, stamped with the studies commit, for slides.
 - **Leaderboard** (`#/leaderboard`): every model family's held-out choice likelihood on one axis:
   cognitive models (MLE and hierarchical Bayes), GLM-HMM by number of states (refit per held-out
-  mouse, and zero-shot), disRNN and GRU by training mice, GRU by hidden size, and the frozen-core
+  mouse, refit pooled toward the shared fit, and zero-shot), disRNN and GRU by training mice, GRU by hidden size, and the frozen-core
   reservoir GRU. Hover a marker for what it is and its seeds; click it to open the result block
   that reports it. Notes under the chart say what each family may fit to a held-out mouse before
   it is scored. `src/bfm_atlas/leaderboard.py`

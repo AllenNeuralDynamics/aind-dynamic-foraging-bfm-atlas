@@ -27,10 +27,11 @@ document.addEventListener("atlas:ready", () => {
   const STYLE = {
     "ctt": { c: "--lb-ctt", m: d3.symbolCircle, fill: "hb" },
     "hattori": { c: "--lb-hattori", m: d3.symbolSquare, fill: "hb" },
-    // the two GLM-HMM protocols share x and cross near K = 5: nudge them apart and shrink their hover
-    // circles so each marker stays selectable
-    "glmhmm-refit": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dx: -0.09, hit: 5 },
-    "glmhmm-zeroshot": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dash: "4 3", fill: "hollow", dx: 0.09, hit: 5 },
+    // the three GLM-HMM protocols share x and cross near K = 3-5: nudge them apart and shrink their
+    // hover circles so each marker stays selectable
+    "glmhmm-refit": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dx: -0.12, hit: 5 },
+    "glmhmm-pooled": { c: "--lb-glm-pooled", m: d3.symbolSquare, size: 30, dx: 0, hit: 5 },
+    "glmhmm-zeroshot": { c: "--lb-glm", m: d3.symbolCircle, size: 34, dash: "4 3", fill: "hollow", dx: 0.12, hit: 5 },
     "disrnn-b3e-4": { c: "--lb-dis-op", m: HEXAGON, dash: "5 3" },
     "disrnn-b1e-4": { c: "--lb-dis-best", m: HEXAGON },
     "gru-reservoir": { c: "--lb-res", m: d3.symbolTimes, dash: "4 2", stroke: true, size: 60 },
@@ -61,6 +62,8 @@ document.addEventListener("atlas:ready", () => {
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
           (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
         <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
+        <tr><td>GLM-HMM, refit pooled</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, with its weights and
+          transitions pulled toward the shared fit; how hard is picked on the training mice</td></tr>
         <tr><td>GLM-HMM, zero-shot</td><td>one shared GLM-HMM</td><td>nothing: the shared fit predicts every mouse</td></tr>
         <tr><td>disRNN, GRU</td><td>one shared network</td><td>a subject embedding (a short vector for that mouse); the
           network stays as trained</td></tr>
@@ -72,7 +75,11 @@ document.addEventListener("atlas:ready", () => {
       peaks at a small K and then falls. The zero-shot line fits nothing per mouse, so extra states cannot overfit
       one mouse; with more states the shared fit can hold more kinds of behaviour seen across the training mice
       (study 14 finds side-biased states at large K), and it keeps rising. Study 14's
-      <a href="#/report/14-glmhmm-vs-gru-heldout/r1?block-result-1">r1</a> shows both scores.</p>
+      <a href="#/report/14-glmhmm-vs-gru-heldout/r1?block-result-1">r1</a> shows both scores.
+      The pooled line keeps the per-mouse refit but pulls it toward the shared fit, so a mouse moves only as far
+      as its own sessions support. It scores above the zero-shot line at every K and keeps rising with K, so the
+      early peak of the plain refit came from overfitting each mouse
+      (<a href="#/report/14-glmhmm-vs-gru-heldout/r2?block-result-2">r2</a>).</p>
   </section>`;
 
   function layout(panels) {
