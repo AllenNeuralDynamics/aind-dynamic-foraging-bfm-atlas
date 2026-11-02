@@ -204,7 +204,7 @@ SERIES = [
          "around that mouse's own values, under a fixed prior (no population level); pooled over trials."),
     ]},
     # study 12's headline ranking (r3): each model's 2-level EM score, or its per-subject score where study 12
-    # found the 2-level fit failed; one series per family, worst to best within a family, families by their best
+    # found its 2-level score below its per-subject one; one series per family, worst to best within a family, families by their best
     {"id": "literature", "panel": "literature", "label": "Literature models, headline score (study 12)",
      "split": "family", "parts": [
         (f"{S12}/r3_2level_em.json",
@@ -212,20 +212,20 @@ SERIES = [
          _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
          "Study 12's headline score: the model fitted per mouse with a session level (2-level EM: each session's "
          "parameters vary around the mouse's own typical values under a fixed prior, nothing shared across "
-         "mice), or its per-subject MLE fit where study 12 found the 2-level fit failed. Fitted on even "
+         "mice), or its per-subject MLE fit where its 2-level score is below its per-subject one. Fitted on even "
          "sessions, scored on odd ones."),
     ]},
     # the same model's other fit, drawn hollow over it: per-subject where the headline is 2-level EM, and the
-    # failed 2-level fit where the headline is per-subject
+    # 2-level fit where the headline is per-subject (its 2-level score is the lower one)
     {"id": "literature-other", "panel": "literature", "label": "Literature models, the other fit (study 12)",
      "split": "family", "overlay": "literature_model", "parts": [
         (f"{S12}/r3_2level_em.json",
          json_ranked("/by_model", lambda e: "pooled_heldout_per_subject" if _headline_is_em(e) else "pooled_heldout",
                      x_key="literature_model",
-                     fit=lambda e: "per-subject fit" if _headline_is_em(e) else "failed 2-level EM fit"),
+                     fit=lambda e: "per-subject fit" if _headline_is_em(e) else "2-level EM fit (below per-subject)"),
          _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
          "The same model's other fit: per-subject MLE (every parameter fitted to the mouse alone, no prior), or, "
-         "where that is the headline, the 2-level EM fit that study 12 found failed."),
+         "where that is the headline, the 2-level EM fit, whose score is below it (study 12's flag says why)."),
     ]},
     {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),

@@ -128,18 +128,18 @@ def test_literature_headline_split_by_family_worst_to_best(tmp_path):
 
 def test_the_other_fit_sits_on_its_headline_marker(tmp_path):
     # Good: headline is 2-level EM, so the hollow marker is the per-subject fit.
-    # Failed: headline is per-subject, so the hollow marker is the failed 2-level fit.
+    # Lower: headline is per-subject, so the hollow marker is the 2-level fit, whose score is below it.
     lb = r3(tmp_path, Good=model(1, 0.724, em=0.724, per_subject=0.717),
-            Failed=model(2, 0.713, em=0.709, per_subject=0.713, source="per subject (2-level fit failed)",
-                         fit_flag={"kind": "laplace_failed", "reason": "below its per-subject fit"}))
+            Lower=model(2, 0.713, em=0.709, per_subject=0.713, source="per subject (2-level score below per subject)",
+                         fit_flag={"kind": "below_per_subject", "reason": "below its per-subject fit"}))
     head = {p["x"]: p for s in lb["series"] if s["panel"] == "literature" and not s.get("overlay") for p in s["points"]}
     other = {p["x"]: p for s in lb["series"] if s.get("overlay") for p in s["points"]}
     assert {x: (p["mean"], p["fit"]) for x, p in head.items()} == {
-        "Good": (0.724, "2-level EM"), "Failed": (0.713, "per subject (2-level fit failed)")}
+        "Good": (0.724, "2-level EM"), "Lower": (0.713, "per subject (2-level score below per subject)")}
     assert {x: (p["mean"], p["fit"]) for x, p in other.items()} == {
-        "Good": (0.717, "per-subject fit"), "Failed": (0.709, "failed 2-level EM fit")}
-    assert other["Failed"]["fit_flag"]["kind"] == "laplace_failed"
-    assert next(p for p in lb["panels"] if p["id"] == "literature")["x"] == ["Failed", "Good"]
+        "Good": (0.717, "per-subject fit"), "Lower": (0.709, "2-level EM fit (below per-subject)")}
+    assert other["Lower"]["fit_flag"]["kind"] == "below_per_subject"
+    assert next(p for p in lb["panels"] if p["id"] == "literature")["x"] == ["Lower", "Good"]
 
 
 def test_a_zero_score_is_a_score(tmp_path):

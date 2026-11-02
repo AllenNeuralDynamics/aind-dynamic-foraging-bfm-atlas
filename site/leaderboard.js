@@ -150,7 +150,7 @@ document.addEventListener("atlas:ready", () => {
         <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it
         (a literature model opens its own panel: what it is, its equations, paper and code).
         In the literature panel, a filled marker is the model's headline score in study 12 (its 2-level EM fit, or its
-        per-subject fit where study 12 found the 2-level fit failed); the hollow marker joined to it is the other fit. With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
+        per-subject fit where its 2-level score is the lower one); the hollow marker joined to it is the other fit. With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>
@@ -313,7 +313,7 @@ document.addEventListener("atlas:ready", () => {
         it.append("line").attr("x1", 4).attr("x2", 18).attr("y1", 4).attr("y2", -4).attr("class", "lb-twin");
         it.append("path").attr("transform", "translate(18,-4)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk-hollow");
         it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text")
-          .text("Literature, the other fit (hollow): per-subject, or the failed 2-level fit");
+          .text("Literature, the other fit (hollow): per-subject, or the lower 2-level fit");
         it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
             .classed("lb-on", function () { return this.dataset.series.startsWith("literature-other-"); }))
           .on("pointerleave", () => layer.classed("lb-focus", false));
