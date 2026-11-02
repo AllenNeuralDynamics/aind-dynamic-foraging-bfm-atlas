@@ -55,13 +55,16 @@ function resolvePath(base, rel) {
 
 // TeX math, with GitHub's delimiters and pandoc's dollar rule: $$...$$ is display math, and $...$
 // is inline math when the opening $ has a non-space on its right and the closing $ a non-space on
-// its left and no digit after it (so "$5 and $10" stays prose). \$ is a literal dollar.
+// its left and no digit after it (so "$5 and $10" stays prose). \$ is a literal dollar. Backticks may
+// appear inside math (TeX quotes, \text{``a''}); a $ inside a code span never starts math, since marked
+// reads the code span from its opening backtick first.
 // Tokenizing here keeps marked's emphasis and escape rules off the TeX; the TeX goes out as
 // escaped text, and KaTeX renders it after DOMPurify (which would strip KaTeX's MathML).
-const MATH_INLINE = /^(?:\$\$((?:\\[^]|[^\\$`])+?)\$\$|\$(?![\s$])((?:\\[^]|[^\\$`])*?(?:\\[^]|[^\\\s$`]))\$(?!\d))/;
+const MATH_INLINE = /^(?:\$\$((?:\\[^]|[^\\$])+?)\$\$|\$(?![\s$])((?:\\[^]|[^\\$])*?(?:\\[^]|[^\\\s$]))\$(?!\d))/;
 const MATH_BLOCK = /^ {0,3}\$\$((?:\\[^]|[^\\$])+?)\$\$[ \t]*(?:\n+|$)/;
+// outer whitespace is trimmed, except a trailing space escaped by a backslash (TeX's "\ " space command)
 const mathHtml = (tex, display, tag = "span") =>
-  `<${tag} class="tex${display ? " display" : ""}">${esc(tex.trim())}</${tag}>`;
+  `<${tag} class="tex${display ? " display" : ""}">${esc(tex.replace(/^\s+/, "").replace(/(?<!\\)\s+$/, ""))}</${tag}>`;
 marked.use({ extensions: [
   { name: "mathBlock", level: "block",
     start(src) {
