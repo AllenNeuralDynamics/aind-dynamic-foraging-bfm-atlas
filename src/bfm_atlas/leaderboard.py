@@ -132,7 +132,8 @@ def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
                 raise LeaderboardError(f"{path}: {pointer}/{name} lacks {rank}")
             if e[rank] is None:                  # an unranked entry (e.g. a strawman) is left out, score or not
                 continue
-            lacking = [k for k in (value, *MODEL_REQUIRED) if not e.get(k)]
+            # the score must be present (0.0 is a valid score; _values checks it); the text must be non-empty
+            lacking = ([value] if value not in e else []) + [k for k in MODEL_REQUIRED if not e.get(k)]
             if lacking:
                 raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {', '.join(lacking)}")
             info = {"rank": e[rank], **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}

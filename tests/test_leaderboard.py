@@ -103,6 +103,12 @@ def test_literature_models_split_by_family_worst_to_best(tmp_path):
     assert next(p for p in PANELS if p["id"] == "literature")["x"] == []      # the module's spec is untouched
 
 
+def test_a_zero_score_is_a_score(tmp_path):
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": model(1, 0.0)}})
+    lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
+    assert [p["mean"] for s in lb["series"] if s["panel"] == "literature" for p in s["points"]] == [0.0]
+
+
 @pytest.mark.parametrize("drop", ["pooled_heldout", "family", "summary"])
 def test_a_ranked_literature_model_without_its_value_or_text_fails(tmp_path, drop):
     entry = model(1, 0.72)
