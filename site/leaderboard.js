@@ -105,6 +105,19 @@ document.addEventListener("atlas:ready", () => {
       (<a href="#/report/14-glmhmm-vs-gru-heldout/r2?block-result-2">r2</a>).` : ""}</p>
   </section>`;
 
+  // a family name on at most two lines, broken at the space that leaves the shorter longest line
+  const LABEL_PX = 6.2;          // about one character of the 11 px bold group label
+  function wrapLabel(label) {
+    const words = label.split(" ");
+    if (label.length <= 14 || words.length < 2) return [label];
+    let best = [label];
+    for (let i = 1; i < words.length; i++) {
+      const cut = [words.slice(0, i).join(" "), words.slice(i).join(" ")];
+      if (Math.max(...cut.map((l) => l.length)) < Math.max(...best.map((l) => l.length))) best = cut;
+    }
+    return best;
+  }
+
   function layout(panels) {
     const pos = {}, spans = [];
     let x = PANEL_PAD;
@@ -119,9 +132,14 @@ document.addEventListener("atlas:ready", () => {
       const labels = [];
       groups.forEach((g, gi) => {
         if (gi) x += GROUP_GAP;
+        // a study 12 family is at least as wide as its name (up to two lines), its models centred under it
+        const lines = p.id === "literature" && g.label ? wrapLabel(g.label) : null;
+        const natural = (g.x.length - 1) * step;
+        const w = Math.max(natural, lines ? Math.max(...lines.map((l) => l.length)) * LABEL_PX / PX_PER_UNIT : 0);
         const g0 = x;
-        for (const v of g.x) { pos[`${p.id}|${v}`] = x; x += step; }
-        if (g.label) labels.push({ label: g.label, at: (g0 + x - step) / 2, width: p.id === "literature" ? x - g0 : undefined });
+        g.x.forEach((v, i) => { pos[`${p.id}|${v}`] = g0 + (w - natural) / 2 + i * step; });
+        if (g.label) labels.push({ label: g.label, lines, at: g0 + w / 2 });
+        x = g0 + w + step;
       });
       x -= step;
       spans.push({ id: p.id, label: p.label, x0: start, x1: x, groups: labels });
@@ -235,12 +253,11 @@ document.addEventListener("atlas:ready", () => {
       }
       for (const gl of sp.groups) {
         const s = series.find((q) => q.panel === sp.id && q.label.startsWith(gl.label));
-        // a family label wider than its group (about 6 px a character) is left to the legend
-        if (gl.width !== undefined && gl.label.length * 6 > x(gl.width) - x(0) + 14) continue;
         // study 12's family labels go at the top, clear of the ▼ markers at the bottom edge
-        g.append("text").attr("x", x(gl.at)).attr("y", sp.id === "literature" ? plotTop + 12 : H - M.b - 8)
-          .attr("text-anchor", "middle").attr("class", "lb-group")
-          .style("fill", s ? colour(s) : null).text(gl.label);
+        const lab = g.append("text").attr("x", x(gl.at)).attr("y", sp.id === "literature" ? plotTop + 12 : H - M.b - 8)
+          .attr("text-anchor", "middle").attr("class", "lb-group").style("fill", s ? colour(s) : null);
+        if (gl.lines) gl.lines.forEach((l, i) => lab.append("tspan").attr("x", x(gl.at)).attr("dy", i ? "1.15em" : 0).text(l));
+        else lab.text(gl.label);
       }
     });
     g.append("text").attr("transform", `translate(16,${(plotTop + H - M.b) / 2}) rotate(-90)`).attr("text-anchor", "middle")
