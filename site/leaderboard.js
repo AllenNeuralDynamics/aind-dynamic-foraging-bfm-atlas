@@ -331,7 +331,7 @@ document.addEventListener("atlas:ready", () => {
         it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text")
           .text("Literature pair: per-subject fit (hollow, left), 2-level EM fit (filled, right)");
         it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
-            .classed("lb-on", function () { return this.dataset.series.startsWith("literature-other-"); }))
+            .classed("lb-on", function () { return this.dataset.series.startsWith("literature-"); }))   // both fits of every pair
           .on("pointerleave", () => layer.classed("lb-focus", false));
         return;
       }
