@@ -654,12 +654,32 @@
                     },
                     "family_note": {
                       "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "literature_model": {
+                      "type": "string"
+                    },
+                    "fit_flag": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
                     }
                   }
                 }
               },
               "family": {
                 "type": "string"
+              },
+              "overlay": {
+                "type": "boolean"
               }
             }
           }

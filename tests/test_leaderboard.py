@@ -117,6 +117,33 @@ def test_literature_models_split_by_family_worst_to_best(tmp_path):
     assert next(p for p in PANELS if p["id"] == "literature")["x"] == []      # the module's spec is untouched
 
 
+def test_2level_em_points_sit_on_their_per_subject_twins(tmp_path):
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": model(1, 0.72, "Choice history"), "B": model(2, 0.71)}})
+    em = {"EM-B": model(1, 0.73, literature_model="B", fit_flag=None),
+          "EM-A": model(2, 0.70, "Choice history", literature_model="A",
+                        fit_flag={"kind": "laplace_failed", "reason": "below its per-subject fit"})}
+    put(tmp_path, f"{S12}/r3_2level_em.json", {"by_model": em})
+    lb = build_leaderboard(tmp_path, reports(R1_12, ("12-cognitive-literature-leaderboard", "r3")), lambda p: True)
+    over = {p["name"]: p for s in lb["series"] if s.get("overlay") for p in s["points"]}
+    assert {n: (p["x"], p["rank"]) for n, p in over.items()} == {"EM-B": ("B", 1), "EM-A": ("A", 2)}
+    assert over["EM-A"]["fit_flag"]["kind"] == "laplace_failed" and "fit_flag" not in over["EM-B"]
+    assert next(p for p in lb["panels"] if p["id"] == "literature")["x"] == ["B", "A"]   # r1's order stands
+
+
+def test_a_2level_em_model_without_a_drawn_twin_fails(tmp_path):
+    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": model(1, 0.72)}})
+    put(tmp_path, f"{S12}/r3_2level_em.json", {"by_model": {"EM-Z": model(1, 0.73, literature_model="Z")}})
+    with pytest.raises(LeaderboardError, match="EM-Z"):
+        build_leaderboard(tmp_path, reports(R1_12, ("12-cognitive-literature-leaderboard", "r3")), lambda p: True)
+
+
+def test_2level_em_without_r1_is_listed_not_drawn(tmp_path):
+    put(tmp_path, f"{S12}/r3_2level_em.json", {"by_model": {"EM-A": model(1, 0.73, literature_model="A")}})
+    lb = build_leaderboard(tmp_path, reports(("12-cognitive-literature-leaderboard", "r3")), lambda p: True)
+    assert not any(s.get("overlay") for s in lb["series"])
+    assert {"literature", "literature-em"} <= {m["series"] for m in lb["missing"]}
+
+
 def test_a_zero_score_is_a_score(tmp_path):
     put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": model(1, 0.0)}})
     lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)

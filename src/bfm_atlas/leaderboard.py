@@ -114,7 +114,7 @@ def json_rows_by_d(pointer: str, d_key: str, value_key: str, xs: list, where: di
 
 # per-model text a ranked source must carry, and text it may carry (shown in the card and model panel)
 MODEL_REQUIRED = ("family", "summary")
-MODEL_OPTIONAL = ("family_note", "equations", "paper", "code")
+MODEL_OPTIONAL = ("family_note", "equations", "paper", "code", "fit_flag", "literature_model")
 
 
 def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
@@ -136,7 +136,8 @@ def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
             lacking = ([value] if value not in e else []) + [k for k in MODEL_REQUIRED if not e.get(k)]
             if lacking:
                 raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {', '.join(lacking)}")
-            info = {"rank": e[rank], **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
+            info = {"rank": e[rank], "name": name,
+                    **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
             ranked.append((e[rank], name, _values(e[value], path, f"{pointer}/{name}/{value}"), info))
         return [(name, vs, f"{pointer}/{name}/{value}", info) for _, name, vs, info in sorted(ranked)]
     return read
@@ -196,6 +197,15 @@ SERIES = [
          "maximum likelihood on its even sessions (no prior, nothing shared across mice); scored on its odd "
          "sessions. CompareToThreshold and Hattori2019 are the same fits as the cognitive panel's CTT and "
          "Hattori MLE."),
+    ]},
+    # drawn over the per-subject panel: each point at its r1 twin's x (overlay key), the panel's order untouched
+    {"id": "literature-em", "panel": "literature", "label": "Literature models, 2-level EM (study 12)",
+     "split": "family", "overlay": "literature_model", "parts": [
+        (f"{S12}/r3_2level_em.json", json_ranked("/by_model", "pooled_heldout"),
+         _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
+         "The same literature model, fitted with a second level: each session's parameters vary around the "
+         "mouse's own typical values under a fixed prior (no population level, nothing shared across mice), by "
+         "Laplace-EM on its even sessions; its odd sessions are scored by the session marginal."),
     ]},
     {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),
@@ -286,6 +296,26 @@ def _split(spec: dict, points: list[dict], panel: dict) -> list[dict]:
     return out
 
 
+def _overlay(spec: dict, points: list[dict], panel: dict) -> list[dict]:
+    """One series per spec["split"] value, each point placed at its twin's x (spec["overlay"]).
+
+    The panel's groups and order stay as the series it overlays set them.
+    """
+    key, twin = spec["split"], spec["overlay"]
+    out: dict[str, dict] = {}
+    for pt in points:
+        if pt.get(twin) not in panel["x"]:
+            raise LeaderboardError(f"{spec['id']}: {pt['name']}'s {twin} {pt.get(twin)!r} is not in the "
+                                   f"{panel['id']} panel")
+        pt["x"] = pt[twin]
+        slug = re.sub(r"[^a-z0-9]+", "-", pt[key].lower()).strip("-")
+        out.setdefault(pt[key], {"id": f"{spec['id']}-{slug}", "panel": spec["panel"], "label": pt[key],
+                                 key: pt[key], "overlay": True, "points": []})["points"].append(pt)
+    for s in out.values():
+        s["points"].sort(key=lambda p: panel["x"].index(p["x"]))
+    return list(out.values())
+
+
 def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked: Callable[[Path], bool]) -> dict:
     """catalog.leaderboard for a studies checkout.
 
@@ -316,10 +346,15 @@ def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked:
                                "source": {"path": path, "where": where},
                                "block": {**block, "report_path": r["path"]}, "description": description,
                                **(info[0] if info else {})})
-        if points and spec.get("split"):
-            series += _split(spec, points, next(p for p in panels if p["id"] == spec["panel"]))
+        panel = next(p for p in panels if p["id"] == spec["panel"])
+        if points and spec.get("overlay") and not panel["x"]:   # the twins it is drawn over are not drawn
+            missing += [{"series": spec["id"], "label": spec["label"], "path": part[0], "block": part[2]}
+                        for part in spec["parts"]]
+        elif points and spec.get("overlay"):
+            series += _overlay(spec, points, panel)
+        elif points and spec.get("split"):
+            series += _split(spec, points, panel)
         elif points:
-            panel = next(p for p in panels if p["id"] == spec["panel"])
             if panel.get("from_data"):         # the reader's order (rank) is the panel's order
                 panel["x"] = [pt["x"] for pt in points]
             else:

@@ -41,9 +41,13 @@ document.addEventListener("atlas:ready", () => {
   };
   // study 12's families: a colour each, in the panel's family order; different models, so no line
   let familyIndex = () => 0;     // set per draw
-  const styleOf = (s) => s.family ? { c: `--lb-fam${(familyIndex(s.family) % 6) + 1}`, m: d3.symbolCircle, size: 40, noline: true }
+  // a 2-level EM fit (overlay) is hollow, just right of its per-subject twin
+  const styleOf = (s) => s.family ? { c: `--lb-fam${(familyIndex(s.family) % 6) + 1}`, m: d3.symbolCircle, size: 40, noline: true,
+    hit: 6, ...(s.overlay ? { fill: "hollow", dx: 0.14 } : {}) }
     : STYLE[s.id] || { c: "--m-other", m: d3.symbolCircle };
-  const legendLabel = (s) => s.family ? `Literature: ${s.label}` : s.label;
+  const legendLabel = (s) => s.overlay ? `Literature (2-level EM): ${s.label}` : s.family ? `Literature: ${s.label}` : s.label;
+  const signed = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
+  let twinOf = new Map(), emOf = new Map();     // per draw: literature model -> its per-subject / 2-level EM point
   const FORAGING_MODELS = "https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-models";
   const httpsOnly = (u) => (/^https:\/\//.test(u || "") ? u : null);
   const colour = (s) => `var(${styleOf(s).c})`;
@@ -72,6 +76,9 @@ document.addEventListener("atlas:ready", () => {
       <tbody>
         <tr><td>CTT, Hattori, study 12's literature models: MLE</td><td>nothing</td><td>all of its parameters, by maximum
           likelihood (no prior, nothing shared across mice)</td></tr>
+        <tr><td>Study 12's literature models: 2-level EM</td><td>nothing</td><td>its own typical parameters, with each
+          session's parameters varying around them under a fixed prior (Laplace-EM on its even sessions; odd sessions
+          scored by the session marginal)</td></tr>
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
           (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
         <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
@@ -142,7 +149,8 @@ document.addEventListener("atlas:ready", () => {
         Large markers are the mean ± SEM over seeds; small dots are single seeds.
         <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it
         (a literature model opens its own panel: what it is, its equations, paper and code).
-        With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
+        In the literature panel, hollow markers are the same models fitted with a session level (2-level EM), joined
+        to their per-subject fit. With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>
@@ -168,11 +176,15 @@ document.addEventListener("atlas:ready", () => {
     const M = { l: 70, r: 14, t: 16, b: 84 }, W = Math.round(M.l + M.r + xmax * PX_PER_UNIT);
     host.style.setProperty("--lb-w", `${W + 2}px`);
     const litPanel = L.panels.find((p) => p.id === "literature");
-    const ranks = new Map(series.filter((s) => s.family).flatMap((s) => s.points.map((p) => [p.x, p.rank])));
+    const ranks = new Map(series.filter((s) => s.family && !s.overlay).flatMap((s) => s.points.map((p) => [p.x, p.rank])));
+    twinOf = new Map(series.filter((s) => s.family && !s.overlay).flatMap((s) => s.points.map((p) => [p.x, p])));
+    emOf = new Map(series.filter((s) => s.overlay).flatMap((s) => s.points.map((p) => [p.x, p])));
     rankOf = (v) => ranks.get(v) || 0;
     familyIndex = (f) => Math.max(0, (litPanel?.groups || []).findIndex((g) => g.label === f));
     // legend rows above the plot
-    const perRow = 3, rowH = 18, legendH = Math.ceil(series.length / perRow) * rowH + 8;
+    // the 2-level EM series share one legend entry
+    const legendItems = [...series.filter((s) => !s.overlay), ...(series.some((s) => s.overlay) ? [{ em: true }] : [])];
+    const perRow = 3, rowH = 18, legendH = Math.ceil(legendItems.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
     const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0);
@@ -260,11 +272,19 @@ document.addEventListener("atlas:ready", () => {
           .attr("d", d3.line().x((p) => x(xAt(s, p))).y((p) => y(p.mean))(pts));
       }
       const [y0, y1] = y.domain();
+      const yPos = (v) => (v < y0 ? y.range()[0] - 7 : v > y1 ? y.range()[1] + 7 : y(v));
+      if (s.overlay) {                   // what the 2-level layer adds: a line from the per-subject twin
+        for (const p of pts) {
+          const base = twinOf.get(p.x);
+          if (base) lg_.append("line").attr("class", "lb-twin")
+            .attr("x1", x(pos[`${s.panel}|${p.x}`])).attr("y1", yPos(base.mean)).attr("x2", x(xAt(s, p))).attr("y2", yPos(p.mean));
+        }
+      }
       for (const p of pts) {
         const off = p.mean < y0 ? "below" : p.mean > y1 ? "above" : null;
         const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE"));
         const mk = mg.append("g").attr("class", "lb-mean").attr("tabindex", 0).attr("role", "link")
-          .attr("aria-label", `${s.label}, ${xText(s.panel, p.x)}: ${fmt(p.mean)}${off ? ` (${off} the axis)` : ""}`)
+          .attr("aria-label", `${s.overlay ? `${legendLabel(s)}, ${p.name}, rank ${p.rank}` : `${s.label}, ${xText(s.panel, p.x)}`}: ${fmt(p.mean)}${off ? ` (${off} the axis)` : ""}`)
           .attr("transform", `translate(${x(xAt(s, p))},${off === "below" ? y.range()[0] - 7 : off === "above" ? y.range()[1] + 7 : y(p.mean)})`);
         mk.append("circle").attr("r", st.hit || 9).attr("class", "lb-hit");
         mk.append("path").attr("d", d3.symbol(off ? d3.symbolTriangle : st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
@@ -286,7 +306,19 @@ document.addEventListener("atlas:ready", () => {
     // legend: hover an entry to bring its series forward
     const lg = svg.append("g").attr("class", "lb-legend");
     const colW = (W - M.l - M.r) / perRow;
-    series.forEach((s, i) => {
+    legendItems.forEach((s, i) => {
+      if (s.em) {
+        const it = lg.append("g").attr("class", "lb-legend-item").style("color", "var(--muted)")
+          .attr("transform", `translate(${M.l + (i % perRow) * colW},${M.t + Math.floor(i / perRow) * rowH + 6})`);
+        it.append("line").attr("x1", 4).attr("x2", 18).attr("y1", 4).attr("y2", -4).attr("class", "lb-twin");
+        it.append("path").attr("transform", "translate(18,-4)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk-hollow");
+        it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text")
+          .text("Literature, 2-level EM (hollow, family colour; line from its per-subject fit)");
+        it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
+            .classed("lb-on", function () { return this.dataset.series.startsWith("literature-em-"); }))
+          .on("pointerleave", () => layer.classed("lb-focus", false));
+        return;
+      }
       const st = styleOf(s);
       const it = lg.append("g").attr("class", "lb-legend-item").style("color", colour(s))
         .attr("transform", `translate(${M.l + (i % perRow) * colW},${M.t + Math.floor(i / perRow) * rowH + 6})`);
@@ -305,15 +337,28 @@ document.addEventListener("atlas:ready", () => {
     const value = seed !== undefined ? `seed ${seed + 1} of ${p.n}: <b>${fmt(p.values[seed])}</b> (mean ${fmt(p.mean)})`
       : p.n > 1 ? `<b>${fmt(p.mean)}</b> ± ${fmt(p.sem)} (mean ± SEM, ${p.n} seeds: ${p.values.map(fmt).join(", ")})`
       : `<b>${fmt(p.mean)}</b>`;
-    const head = p.summary ? `<b>${esc(p.x)}</b><div>${esc(s.label)} · rank ${esc(p.rank)}</div>`
+    const head = s.overlay ? `<b>${esc(p.name)}</b><div>${esc(s.label)} · 2-level EM · rank ${esc(p.rank)} of the EM fits</div>`
+      : p.summary ? `<b>${esc(p.x)}</b><div>${esc(s.label)} · rank ${esc(p.rank)}</div>`
       : `<b>${esc(s.label)}</b><div>${esc(xText(s.panel, p.x))}</div>`;
     return `${head}
       <div class="lb-tip-value">${value}${off ? ` <span class="tip-v">(${off} the axis, drawn at its edge)</span>` : ""}</div>
+      ${twinLine(s, p)}
+      ${p.fit_flag ? `<div class="lb-tip-flag">Flagged by study 12: ${esc(p.fit_flag.reason || p.fit_flag.kind)}</div>` : ""}
       ${p.summary ? `<div class="lb-tip-summary">${esc(p.summary)}</div>`        // its fitting text is in the model panel
         : `<div class="tip-v">${esc(p.description)}</div>`}
       <div class="tip-v">Reported in study ${esc(studyNo(b.study))} ${esc(b.report)}, ${esc(b.block)};
         read from <span class="mono">${esc(p.source.path.split("/").pop())}</span></div>
       <div class="lb-tip-links">${p.summary ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
+  }
+
+  // a literature model's other fit: the per-subject twin of a 2-level EM point, or the other way round
+  function twinLine(s, p) {
+    if (s.overlay) {
+      const base = twinOf.get(p.x);
+      return base ? `<div class="tip-v">Per-subject fit (${esc(p.x)}): ${fmt(base.mean)}; the 2-level layer adds ${signed(p.mean - base.mean)}</div>` : "";
+    }
+    const em = s.family ? emOf.get(p.x) : null;
+    return em ? `<div class="tip-v">2-level EM fit (${esc(em.name)}): ${fmt(em.mean)} (${signed(em.mean - p.mean)})</div>` : "";
   }
 
   // a literature model's panel, in the page's drawer: what it is, its equations, paper and code
@@ -322,10 +367,12 @@ document.addEventListener("atlas:ready", () => {
     const body = document.getElementById("drawer-body");
     const codeUrl = code.path && code.commit ? `${FORAGING_MODELS}/blob/${encodeURIComponent(code.commit)}/${code.path.split("/").map(encodeURIComponent).join("/")}` : null;
     body.innerHTML = `
-      <div class="k muted">Literature model · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
-      <h2 style="margin-top:0">${esc(p.x)}</h2>
+      <div class="k muted">Literature model${s.overlay ? ", 2-level EM" : ""} · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
+      <h2 style="margin-top:0">${esc(p.name || p.x)}</h2>
       <p>${A.chip(s.label)} rank ${esc(p.rank)} · held-out likelihood <b>${fmt(p.mean)}</b></p>
       ${p.family_note ? `<p class="muted">${esc(p.family_note)}</p>` : ""}
+      ${twinLine(s, p)}
+      ${p.fit_flag ? `<p><b>Flagged by study 12:</b> ${esc(p.fit_flag.reason || p.fit_flag.kind)}</p>` : ""}
       <p>${esc(p.summary)}</p>
       <h3>Equations</h3><div class="lb-model-eq">${p.equations ? "" : `<p class="muted">Not written yet.</p>`}</div>
       <h3>How it was fitted</h3><p>${esc(p.description)}</p>

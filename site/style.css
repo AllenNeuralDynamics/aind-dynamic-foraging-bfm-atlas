@@ -383,6 +383,8 @@ a.lchip { color: var(--accent); }
 .lb-focus .lb-series:not(.lb-on) { opacity: 0.15; }
 .lb-tip-value { margin-top: 4px; }
 .lb-tip-summary { margin-top: 4px; }
+.lb-tip-flag { margin-top: 4px; font-weight: 600; }
+.lb-twin { stroke: currentColor; stroke-width: 1.2; stroke-opacity: 0.55; }
 .lb-model-eq { overflow-x: auto; }
 .lb-notes { max-width: 860px; margin-top: 18px; }
 .lb-notes td:first-child { white-space: nowrap; }
