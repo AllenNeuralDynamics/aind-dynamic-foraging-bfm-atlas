@@ -91,20 +91,29 @@ def test_a_study14_file_without_the_zero_shot_field_fails_the_build(tmp_path):
         build_leaderboard(tmp_path, reports(R1_14), lambda p: True)
 
 
-R1_12 = ("12-cognitive-literature-leaderboard", "r1")
+R3_12 = ("12-cognitive-literature-leaderboard", "r3")
 
 
-def model(rank, value, family="Q-learning", **more):
-    return {"rank": rank, "pooled_heldout": value, "family": family, "summary": f"model ranked {rank}", **more}
+def model(rank, headline, family="Q-learning", em=None, per_subject=None, source="2-level EM", name=None, **more):
+    """A study 12 r3 entry: headline score, both fits, and the model text the atlas requires."""
+    return {"rank": rank, "literature_model": name, "headline_score": headline, "headline_source": source,
+            "pooled_heldout": headline if em is None else em,
+            "pooled_heldout_per_subject": headline - 0.005 if per_subject is None else per_subject,
+            "family": family, "summary": f"model ranked {rank}", **more}
 
 
-def test_literature_models_split_by_family_worst_to_best(tmp_path):
-    by_model = {"A": model(1, 0.72, "Choice history"), "B": model(2, 0.71), "C": model(3, 0.70, "Choice history"),
-                "D": model(4, 0.55, equations="$Q$", paper={"cite": "X 2020", "url": "https://doi.org/x"}),
-                "WSLS": {"rank": None, "pooled_heldout": 0.60}, "Unscored": {"rank": None}}   # unranked: left out
-    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": by_model})
-    lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
-    lit = {s["family"]: s for s in lb["series"] if s["panel"] == "literature"}
+def r3(tmp_path, **entries):
+    """Write r3_2level_em.json with these entries (label -> entry), naming each model after its label."""
+    put(tmp_path, f"{S12}/r3_2level_em.json",
+        {"by_model": {k: {**v, "literature_model": v.get("literature_model") or k} for k, v in entries.items()}})
+    return build_leaderboard(tmp_path, reports(R3_12), lambda p: True)
+
+
+def test_literature_headline_split_by_family_worst_to_best(tmp_path):
+    lb = r3(tmp_path, A=model(1, 0.72, "Choice history"), B=model(2, 0.71), C=model(3, 0.70, "Choice history"),
+            D=model(4, 0.55, equations="$Q$", paper={"cite": "X 2020", "url": "https://doi.org/x"}),
+            WSLS={"rank": None, "headline_score": 0.60}, Unscored={"rank": None})       # unranked: left out
+    lit = {s["family"]: s for s in lb["series"] if s["panel"] == "literature" and not s.get("overlay")}
     assert set(lit) == {"Q-learning", "Choice history"}
     assert [p["x"] for p in lit["Q-learning"]["points"]] == ["D", "B"]            # worst to best
     assert [p["x"] for p in lit["Choice history"]["points"]] == ["C", "A"]
@@ -112,24 +121,42 @@ def test_literature_models_split_by_family_worst_to_best(tmp_path):
     assert [g["label"] for g in panel["groups"]] == ["Q-learning", "Choice history"]  # best family last
     assert panel["x"] == ["D", "B", "C", "A"]
     d = lit["Q-learning"]["points"][0]
-    assert (d["rank"], d["summary"], d["equations"], d["paper"]["cite"]) == (4, "model ranked 4", "$Q$", "X 2020")
+    assert (d["rank"], d["fit"], d["summary"], d["equations"], d["paper"]["cite"]) == (4, "2-level EM", "model ranked 4", "$Q$", "X 2020")
     assert "equations" not in lit["Q-learning"]["points"][1]                       # optional text stays optional
     assert next(p for p in PANELS if p["id"] == "literature")["x"] == []      # the module's spec is untouched
 
 
+def test_the_other_fit_sits_on_its_headline_marker(tmp_path):
+    # Good: headline is 2-level EM, so the hollow marker is the per-subject fit.
+    # Lower: headline is per-subject, so the hollow marker is the 2-level fit, whose score is below it.
+    lb = r3(tmp_path, Good=model(1, 0.724, em=0.724, per_subject=0.717),
+            Lower=model(2, 0.713, em=0.709, per_subject=0.713, source="per subject (2-level score below per subject)",
+                         fit_flag={"kind": "below_per_subject", "reason": "below its per-subject fit"}))
+    head = {p["x"]: p for s in lb["series"] if s["panel"] == "literature" and not s.get("overlay") for p in s["points"]}
+    other = {p["x"]: p for s in lb["series"] if s.get("overlay") for p in s["points"]}
+    assert {x: (p["mean"], p["fit"]) for x, p in head.items()} == {
+        "Good": (0.724, "2-level EM"), "Lower": (0.713, "per subject (2-level score below per subject)")}
+    assert {x: (p["mean"], p["fit"]) for x, p in other.items()} == {
+        "Good": (0.717, "per-subject fit"), "Lower": (0.709, "2-level EM fit (below per-subject)")}
+    assert other["Lower"]["fit_flag"]["kind"] == "below_per_subject"
+    # the page places a pair by fit kind (per-subject left, 2-level EM right) and fills the 2-level EM marker
+    assert {(x, p["fit_kind"]) for x, p in head.items()} == {("Good", "em"), ("Lower", "per_subject")}
+    assert {(x, p["fit_kind"]) for x, p in other.items()} == {("Good", "per_subject"), ("Lower", "em")}
+    assert next(p for p in lb["panels"] if p["id"] == "literature")["x"] == ["Lower", "Good"]
+
+
 def test_a_zero_score_is_a_score(tmp_path):
-    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": model(1, 0.0)}})
-    lb = build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
-    assert [p["mean"] for s in lb["series"] if s["panel"] == "literature" for p in s["points"]] == [0.0]
+    lb = r3(tmp_path, A=model(1, 0.0, per_subject=0.0))
+    assert [p["mean"] for s in lb["series"] if s["panel"] == "literature" for p in s["points"]] == [0.0, 0.0]
 
 
-@pytest.mark.parametrize("drop", ["pooled_heldout", "family", "summary"])
+@pytest.mark.parametrize("drop", ["headline_score", "headline_source", "family", "summary", "literature_model"])
 def test_a_ranked_literature_model_without_its_value_or_text_fails(tmp_path, drop):
-    entry = model(1, 0.72)
+    entry = model(1, 0.72, name="A")
     entry.pop(drop)
-    put(tmp_path, f"{S12}/r1_leaderboard.json", {"by_model": {"A": entry}})
+    put(tmp_path, f"{S12}/r3_2level_em.json", {"by_model": {"A": entry}})
     with pytest.raises(LeaderboardError, match=drop):
-        build_leaderboard(tmp_path, reports(R1_12), lambda p: True)
+        build_leaderboard(tmp_path, reports(R3_12), lambda p: True)
 
 
 def test_drift_fails_the_build(tmp_path):

@@ -654,12 +654,44 @@
                     },
                     "family_note": {
                       "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "literature_model": {
+                      "type": "string"
+                    },
+                    "fit_flag": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "fit": {
+                      "type": "string"
+                    },
+                    "fit_kind": {
+                      "enum": [
+                        "em",
+                        "per_subject"
+                      ]
+                    },
+                    "short_name": {
+                      "type": "string"
                     }
                   }
                 }
               },
               "family": {
                 "type": "string"
+              },
+              "overlay": {
+                "type": "boolean"
               }
             }
           }

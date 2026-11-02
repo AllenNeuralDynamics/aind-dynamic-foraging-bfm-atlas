@@ -36,7 +36,7 @@ PANELS = [
     {"id": "cognitive", "label": "Cognitive models (MLE / HB)",
      "groups": [{"label": "CTT", "x": ["CTT MLE", "CTT HB"]}, {"label": "Hattori", "x": ["Hattori MLE", "Hattori HB"]}]},
     # x is filled at build time from the source's ranks, which move as models are added
-    {"id": "literature", "label": "Literature models, per-mouse MLE (ranked; study 12)", "x": [], "from_data": True},
+    {"id": "literature", "label": "Literature models, headline score (ranked; study 12)", "x": [], "from_data": True},
     {"id": "glmhmm", "label": "GLM-HMM (hurdle), states K", "x": list(range(1, 11))},
     {"id": "disrnn", "label": "disRNN, training mice D", "x": [30, 100, 300, 614]},
     {"id": "gru", "label": "GRU, hidden size H, training mice D", "x": list(D_NOMINAL)},
@@ -112,15 +112,23 @@ def json_rows_by_d(pointer: str, d_key: str, value_key: str, xs: list, where: di
     return read
 
 
+def _headline_is_em(e: dict) -> bool:
+    """Whether study 12's headline score for this model is its 2-level EM fit (else its per-subject fit)."""
+    return e["headline_source"] == "2-level EM"
+
+
 # per-model text a ranked source must carry, and text it may carry (shown in the card and model panel)
 MODEL_REQUIRED = ("family", "summary")
-MODEL_OPTIONAL = ("family_note", "equations", "paper", "code")
+MODEL_OPTIONAL = ("family_note", "equations", "paper", "code", "fit_flag", "literature_model", "short_name")
 
 
-def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
-    """Every entry of the dict at `pointer` that has a rank, in rank order; x is the entry's key.
+def json_ranked(pointer: str, value: str | Callable[[dict], str], rank: str = "rank", x_key: str | None = None,
+                fit: Callable[[dict], dict] | None = None) -> Callable:
+    """Every entry of the dict at `pointer` that has a rank, in rank order.
 
-    Each point also carries the entry's rank and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
+    `value` names the score field, or picks it per entry (a function of the entry). A point's x is the
+    entry's key, or its `x_key` field; `fit` says which fit the score is ({"fit": label, "fit_kind": ...}).
+    Each point also carries the entry's rank and name, and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
     """
     def read(doc, path):
         entries = _pointer(doc, pointer, path)
@@ -132,13 +140,21 @@ def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
                 raise LeaderboardError(f"{path}: {pointer}/{name} lacks {rank}")
             if e[rank] is None:                  # an unranked entry (e.g. a strawman) is left out, score or not
                 continue
+            try:
+                field = value(e) if callable(value) else value
+                which = fit(e) if fit else {}
+            except KeyError as k:
+                raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {k}") from None
             # the score must be present (0.0 is a valid score; _values checks it); the text must be non-empty
-            lacking = ([value] if value not in e else []) + [k for k in MODEL_REQUIRED if not e.get(k)]
+            lacking = ([field] if field not in e else []) + [k for k in (*MODEL_REQUIRED, *([x_key] if x_key else []))
+                                                             if not e.get(k)]
             if lacking:
                 raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {', '.join(lacking)}")
-            info = {"rank": e[rank], **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
-            ranked.append((e[rank], name, _values(e[value], path, f"{pointer}/{name}/{value}"), info))
-        return [(name, vs, f"{pointer}/{name}/{value}", info) for _, name, vs, info in sorted(ranked)]
+            info = {"rank": e[rank], "name": name, **which,
+                    **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
+            ranked.append((e[rank], e[x_key] if x_key else name, _values(e[field], path, f"{pointer}/{name}/{field}"),
+                           f"{pointer}/{name}/{field}", info))
+        return [(x, vs, where, info) for _, x, vs, where, info in sorted(ranked, key=lambda r: r[0])]
     return read
 
 
@@ -187,15 +203,31 @@ SERIES = [
          "Hattori model fitted by hierarchical Bayes (HB), one mouse at a time: each session's parameters vary "
          "around that mouse's own values, under a fixed prior (no population level); pooled over trials."),
     ]},
-    # split into one series per family; worst to best within a family, families by their best model
-    {"id": "literature", "panel": "literature", "label": "Literature models, per-mouse MLE (study 12)",
+    # study 12's headline ranking (r3): each model's 2-level EM score, or its per-subject score where study 12
+    # found its 2-level score below its per-subject one; one series per family, worst to best within a family, families by their best
+    {"id": "literature", "panel": "literature", "label": "Literature models, headline score (study 12)",
      "split": "family", "parts": [
-        (f"{S12}/r1_leaderboard.json", json_ranked("/by_model", "pooled_heldout"),
-         _block("12-cognitive-literature-leaderboard", "r1", "result-1"),
-         "A cognitive model from the literature. Every parameter is fitted to the held-out mouse alone, by "
-         "maximum likelihood on its even sessions (no prior, nothing shared across mice); scored on its odd "
-         "sessions. CompareToThreshold and Hattori2019 are the same fits as the cognitive panel's CTT and "
-         "Hattori MLE."),
+        (f"{S12}/r3_2level_em.json",
+         json_ranked("/by_model", "headline_score", x_key="literature_model",
+                     fit=lambda e: {"fit": e["headline_source"], "fit_kind": "em" if _headline_is_em(e) else "per_subject"}),
+         _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
+         "Study 12's headline score: the model fitted per mouse with a session level (2-level EM: each session's "
+         "parameters vary around the mouse's own typical values under a fixed prior, nothing shared across "
+         "mice), or its per-subject MLE fit where its 2-level score is below its per-subject one. Fitted on even "
+         "sessions, scored on odd ones."),
+    ]},
+    # the same model's other fit, drawn hollow over it: per-subject where the headline is 2-level EM, and the
+    # 2-level fit where the headline is per-subject (its 2-level score is the lower one)
+    {"id": "literature-other", "panel": "literature", "label": "Literature models, the other fit (study 12)",
+     "split": "family", "overlay": "literature_model", "parts": [
+        (f"{S12}/r3_2level_em.json",
+         json_ranked("/by_model", lambda e: "pooled_heldout_per_subject" if _headline_is_em(e) else "pooled_heldout",
+                     x_key="literature_model",
+                     fit=lambda e: {"fit": "per-subject fit", "fit_kind": "per_subject"} if _headline_is_em(e)
+                     else {"fit": "2-level EM fit (below per-subject)", "fit_kind": "em"}),
+         _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
+         "The same model's other fit: per-subject MLE (every parameter fitted to the mouse alone, no prior), or, "
+         "where that is the headline, the 2-level EM fit, whose score is below it (study 12's flag says why)."),
     ]},
     {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),
@@ -286,6 +318,26 @@ def _split(spec: dict, points: list[dict], panel: dict) -> list[dict]:
     return out
 
 
+def _overlay(spec: dict, points: list[dict], panel: dict) -> list[dict]:
+    """One series per spec["split"] value, each point placed at its twin's x (spec["overlay"]).
+
+    The panel's groups and order stay as the series it overlays set them.
+    """
+    key, twin = spec["split"], spec["overlay"]
+    out: dict[str, dict] = {}
+    for pt in points:
+        if pt.get(twin) not in panel["x"]:
+            raise LeaderboardError(f"{spec['id']}: {pt['name']}'s {twin} {pt.get(twin)!r} is not in the "
+                                   f"{panel['id']} panel")
+        pt["x"] = pt[twin]
+        slug = re.sub(r"[^a-z0-9]+", "-", pt[key].lower()).strip("-")
+        out.setdefault(pt[key], {"id": f"{spec['id']}-{slug}", "panel": spec["panel"], "label": pt[key],
+                                 key: pt[key], "overlay": True, "points": []})["points"].append(pt)
+    for s in out.values():
+        s["points"].sort(key=lambda p: panel["x"].index(p["x"]))
+    return list(out.values())
+
+
 def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked: Callable[[Path], bool]) -> dict:
     """catalog.leaderboard for a studies checkout.
 
@@ -316,10 +368,15 @@ def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked:
                                "source": {"path": path, "where": where},
                                "block": {**block, "report_path": r["path"]}, "description": description,
                                **(info[0] if info else {})})
-        if points and spec.get("split"):
-            series += _split(spec, points, next(p for p in panels if p["id"] == spec["panel"]))
+        panel = next(p for p in panels if p["id"] == spec["panel"])
+        if points and spec.get("overlay") and not panel["x"]:   # the twins it is drawn over are not drawn
+            missing += [{"series": spec["id"], "label": spec["label"], "path": part[0], "block": part[2]}
+                        for part in spec["parts"]]
+        elif points and spec.get("overlay"):
+            series += _overlay(spec, points, panel)
+        elif points and spec.get("split"):
+            series += _split(spec, points, panel)
         elif points:
-            panel = next(p for p in panels if p["id"] == spec["panel"])
             if panel.get("from_data"):         # the reader's order (rank) is the panel's order
                 panel["x"] = [pt["x"] for pt in points]
             else:
