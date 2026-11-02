@@ -119,16 +119,16 @@ def _headline_is_em(e: dict) -> bool:
 
 # per-model text a ranked source must carry, and text it may carry (shown in the card and model panel)
 MODEL_REQUIRED = ("family", "summary")
-MODEL_OPTIONAL = ("family_note", "equations", "paper", "code", "fit_flag", "literature_model")
+MODEL_OPTIONAL = ("family_note", "equations", "paper", "code", "fit_flag", "literature_model", "short_name")
 
 
 def json_ranked(pointer: str, value: str | Callable[[dict], str], rank: str = "rank", x_key: str | None = None,
-                fit: Callable[[dict], str] | None = None) -> Callable:
+                fit: Callable[[dict], dict] | None = None) -> Callable:
     """Every entry of the dict at `pointer` that has a rank, in rank order.
 
     `value` names the score field, or picks it per entry (a function of the entry). A point's x is the
-    entry's key, or its `x_key` field; `fit` labels which fit the score is. Each point also carries the
-    entry's rank and name, and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
+    entry's key, or its `x_key` field; `fit` says which fit the score is ({"fit": label, "fit_kind": ...}).
+    Each point also carries the entry's rank and name, and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
     """
     def read(doc, path):
         entries = _pointer(doc, pointer, path)
@@ -142,7 +142,7 @@ def json_ranked(pointer: str, value: str | Callable[[dict], str], rank: str = "r
                 continue
             try:
                 field = value(e) if callable(value) else value
-                label = fit(e) if fit else None
+                which = fit(e) if fit else {}
             except KeyError as k:
                 raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {k}") from None
             # the score must be present (0.0 is a valid score; _values checks it); the text must be non-empty
@@ -150,7 +150,7 @@ def json_ranked(pointer: str, value: str | Callable[[dict], str], rank: str = "r
                                                              if not e.get(k)]
             if lacking:
                 raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {', '.join(lacking)}")
-            info = {"rank": e[rank], "name": name, **({"fit": label} if label else {}),
+            info = {"rank": e[rank], "name": name, **which,
                     **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
             ranked.append((e[rank], e[x_key] if x_key else name, _values(e[field], path, f"{pointer}/{name}/{field}"),
                            f"{pointer}/{name}/{field}", info))
@@ -208,7 +208,8 @@ SERIES = [
     {"id": "literature", "panel": "literature", "label": "Literature models, headline score (study 12)",
      "split": "family", "parts": [
         (f"{S12}/r3_2level_em.json",
-         json_ranked("/by_model", "headline_score", x_key="literature_model", fit=lambda e: e["headline_source"]),
+         json_ranked("/by_model", "headline_score", x_key="literature_model",
+                     fit=lambda e: {"fit": e["headline_source"], "fit_kind": "em" if _headline_is_em(e) else "per_subject"}),
          _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
          "Study 12's headline score: the model fitted per mouse with a session level (2-level EM: each session's "
          "parameters vary around the mouse's own typical values under a fixed prior, nothing shared across "
@@ -222,7 +223,8 @@ SERIES = [
         (f"{S12}/r3_2level_em.json",
          json_ranked("/by_model", lambda e: "pooled_heldout_per_subject" if _headline_is_em(e) else "pooled_heldout",
                      x_key="literature_model",
-                     fit=lambda e: "per-subject fit" if _headline_is_em(e) else "2-level EM fit (below per-subject)"),
+                     fit=lambda e: {"fit": "per-subject fit", "fit_kind": "per_subject"} if _headline_is_em(e)
+                     else {"fit": "2-level EM fit (below per-subject)", "fit_kind": "em"}),
          _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
          "The same model's other fit: per-subject MLE (every parameter fitted to the mouse alone, no prior), or, "
          "where that is the headline, the 2-level EM fit, whose score is below it (study 12's flag says why)."),

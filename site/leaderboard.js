@@ -41,9 +41,10 @@ document.addEventListener("atlas:ready", () => {
   };
   // study 12's families: a colour each, in the panel's family order; different models, so no line
   let familyIndex = () => 0;     // set per draw
-  // a model's other fit (overlay) is hollow, just right of its headline marker
-  const styleOf = (s) => s.family ? { c: `--lb-fam${(familyIndex(s.family) % 6) + 1}`, m: d3.symbolCircle, size: 40, noline: true,
-    hit: 6, ...(s.overlay ? { fill: "hollow", dx: 0.14 } : {}) }
+  // a literature model is a pair: its per-subject fit hollow on the left, its 2-level EM fit filled on the right
+  const PAIR_DX = 0.1;
+  const fitDx = (p) => (p.fit_kind === "em" ? PAIR_DX : p.fit_kind === "per_subject" ? -PAIR_DX : 0);
+  const styleOf = (s) => s.family ? { c: `--lb-fam${(familyIndex(s.family) % 6) + 1}`, m: d3.symbolCircle, size: 40, noline: true, hit: 6 }
     : STYLE[s.id] || { c: "--m-other", m: d3.symbolCircle };
   const legendLabel = (s) => s.overlay ? `Literature (other fit): ${s.label}` : s.family ? `Literature: ${s.label}` : s.label;
   const signed = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
@@ -149,8 +150,9 @@ document.addEventListener("atlas:ready", () => {
         Large markers are the mean ± SEM over seeds; small dots are single seeds.
         <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it
         (a literature model opens its own panel: what it is, its equations, paper and code).
-        In the literature panel, a filled marker is the model's headline score in study 12 (its 2-level EM fit, or its
-        per-subject fit where its 2-level score is the lower one); the hollow marker joined to it is the other fit. With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
+        In the literature panel each model is a pair, its per-subject fit (hollow, left) and its 2-level EM fit (filled,
+        right), joined by a line and named above; pairs are ranked by study 12's headline score (the 2-level EM score, or
+        the per-subject one where it is higher). With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>
@@ -187,7 +189,7 @@ document.addEventListener("atlas:ready", () => {
     const perRow = 3, rowH = 18, legendH = Math.ceil(legendItems.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
-    const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0);
+    const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0) + fitDx(p);
     // the axis is set by every series but study 12's ranking, whose weakest models sit far below the rest
     // (unless it is the only one); a point outside it is drawn at the edge (▼ / ▲) with its value in the card
     const axisSeries = series.some((s) => s.panel !== "literature") ? series.filter((s) => s.panel !== "literature") : series;
@@ -277,12 +279,12 @@ document.addEventListener("atlas:ready", () => {
         for (const p of pts) {
           const base = twinOf.get(p.x);
           if (base) lg_.append("line").attr("class", "lb-twin")
-            .attr("x1", x(pos[`${s.panel}|${p.x}`])).attr("y1", yPos(base.mean)).attr("x2", x(xAt(s, p))).attr("y2", yPos(p.mean));
+            .attr("x1", x(pos[`${s.panel}|${p.x}`] + fitDx(base))).attr("y1", yPos(base.mean)).attr("x2", x(xAt(s, p))).attr("y2", yPos(p.mean));
         }
       }
       for (const p of pts) {
         const off = p.mean < y0 ? "below" : p.mean > y1 ? "above" : null;
-        const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE"));
+        const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE")) || p.fit_kind === "per_subject";
         const mk = mg.append("g").attr("class", "lb-mean").attr("tabindex", 0).attr("role", "link")
           .attr("aria-label", `${s.overlay ? `${legendLabel(s)}, ${p.x} (${p.fit})` : `${s.label}, ${xText(s.panel, p.x)}`}: ${fmt(p.mean)}${off ? ` (${off} the axis)` : ""}`)
           .attr("transform", `translate(${x(xAt(s, p))},${off === "below" ? y.range()[0] - 7 : off === "above" ? y.range()[1] + 7 : y(p.mean)})`);
@@ -303,6 +305,19 @@ document.addEventListener("atlas:ready", () => {
       }
     }
 
+    // each literature pair's short name, vertical above its higher marker, so a screenshot names the model
+    const [ly0, ly1] = y.domain();
+    const lyPos = (v) => (v < ly0 ? y.range()[0] - 7 : v > ly1 ? y.range()[1] + 7 : y(v));
+    const names = layer.append("g").attr("class", "lb-pair-names");
+    for (const s of series.filter((q) => q.family && !q.overlay)) {
+      for (const p of s.points) {
+        const other = emOf.get(p.x);
+        const top = Math.min(lyPos(p.mean), other ? lyPos(other.mean) : Infinity) - 9;
+        names.append("text").attr("class", "lb-pair-name").style("fill", colour(s))
+          .attr("transform", `translate(${x(pos[`${s.panel}|${p.x}`]) + 3},${top}) rotate(-90)`).text(p.short_name || p.x);
+      }
+    }
+
     // legend: hover an entry to bring its series forward
     const lg = svg.append("g").attr("class", "lb-legend");
     const colW = (W - M.l - M.r) / perRow;
@@ -310,10 +325,11 @@ document.addEventListener("atlas:ready", () => {
       if (s.em) {
         const it = lg.append("g").attr("class", "lb-legend-item").style("color", "var(--muted)")
           .attr("transform", `translate(${M.l + (i % perRow) * colW},${M.t + Math.floor(i / perRow) * rowH + 6})`);
-        it.append("line").attr("x1", 4).attr("x2", 18).attr("y1", 4).attr("y2", -4).attr("class", "lb-twin");
-        it.append("path").attr("transform", "translate(18,-4)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk-hollow");
+        it.append("line").attr("x1", 5).attr("x2", 19).attr("class", "lb-twin");
+        it.append("path").attr("transform", "translate(5,0)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk-hollow");
+        it.append("path").attr("transform", "translate(19,0)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk");
         it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text")
-          .text("Literature, the other fit (hollow): per-subject, or the lower 2-level fit");
+          .text("Literature pair: per-subject fit (hollow, left), 2-level EM fit (filled, right)");
         it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
             .classed("lb-on", function () { return this.dataset.series.startsWith("literature-other-"); }))
           .on("pointerleave", () => layer.classed("lb-focus", false));

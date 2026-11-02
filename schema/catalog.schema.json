@@ -671,6 +671,18 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "fit": {
+                      "type": "string"
+                    },
+                    "fit_kind": {
+                      "enum": [
+                        "em",
+                        "per_subject"
+                      ]
+                    },
+                    "short_name": {
+                      "type": "string"
                     }
                   }
                 }

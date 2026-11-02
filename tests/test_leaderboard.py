@@ -139,6 +139,9 @@ def test_the_other_fit_sits_on_its_headline_marker(tmp_path):
     assert {x: (p["mean"], p["fit"]) for x, p in other.items()} == {
         "Good": (0.717, "per-subject fit"), "Lower": (0.709, "2-level EM fit (below per-subject)")}
     assert other["Lower"]["fit_flag"]["kind"] == "below_per_subject"
+    # the page places a pair by fit kind (per-subject left, 2-level EM right) and fills the 2-level EM marker
+    assert {(x, p["fit_kind"]) for x, p in head.items()} == {("Good", "em"), ("Lower", "per_subject")}
+    assert {(x, p["fit_kind"]) for x, p in other.items()} == {("Good", "per_subject"), ("Lower", "em")}
     assert next(p for p in lb["panels"] if p["id"] == "literature")["x"] == ["Lower", "Good"]
 
 
