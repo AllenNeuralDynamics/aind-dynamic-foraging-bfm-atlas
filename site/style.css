@@ -7,7 +7,8 @@
   /* leaderboard series; GRU hidden sizes follow matplotlib's plasma, as in the original figure, darkened
      where needed to keep 3:1 contrast on the white chart */
   --lb-ctt: #2b8c4e; --lb-hattori: #2166ac; --lb-glm: #3a3a3a; --lb-dis-op: #3f8d94; --lb-dis-best: #0e7c86; --lb-res: #1d1f22;
-  --lb-lit: #6a51a3; --lb-h16: #42049e; --lb-h64: #8a0ba5; --lb-h128: #cc4778; --lb-h256: #d9622a; --lb-h512: #a88400;
+  --lb-fam1: #6a51a3; --lb-fam2: #8c510a; --lb-fam3: #4d9221; --lb-fam4: #c51b7d; --lb-fam5: #b2182b; --lb-fam6: #1f78b4;
+  --lb-h16: #42049e; --lb-h64: #8a0ba5; --lb-h128: #cc4778; --lb-h256: #d9622a; --lb-h512: #a88400;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -19,7 +20,8 @@
     --ok: #6fcf8a; --ok-soft: #16301f; --info: #9aa1aa;
     --m-gru: #7aa7ec; --m-disrnn: #e0a060; --m-cognitive: #86c27d; --m-cognitive-bh: #cbd46a; --m-other: #9aa1aa;
     --lb-ctt: #6fcf8a; --lb-hattori: #7aa7ec; --lb-glm: #c4c8cd; --lb-dis-op: #8fd3d8; --lb-dis-best: #3fb6bf; --lb-res: #e6e8eb;
-    --lb-lit: #b9a6ec; --lb-h16: #9d7bf0; --lb-h64: #c56fd8; --lb-h128: #e8709a; --lb-h256: #f5a06e; --lb-h512: #f4d35e;
+    --lb-fam1: #b9a6ec; --lb-fam2: #dfc27d; --lb-fam3: #a6d96a; --lb-fam4: #f1b6da; --lb-fam5: #f4a582; --lb-fam6: #a6cee3;
+    --lb-h16: #9d7bf0; --lb-h64: #c56fd8; --lb-h128: #e8709a; --lb-h256: #f5a06e; --lb-h512: #f4d35e;
   }
 }
 :root[data-theme="dark"] {
@@ -29,7 +31,8 @@
   --ok: #6fcf8a; --ok-soft: #16301f; --info: #9aa1aa;
   --m-gru: #7aa7ec; --m-disrnn: #e0a060; --m-cognitive: #86c27d; --m-cognitive-bh: #cbd46a; --m-other: #9aa1aa;
   --lb-ctt: #6fcf8a; --lb-hattori: #7aa7ec; --lb-glm: #c4c8cd; --lb-dis-op: #8fd3d8; --lb-dis-best: #3fb6bf; --lb-res: #e6e8eb;
-  --lb-lit: #b9a6ec; --lb-h16: #9d7bf0; --lb-h64: #c56fd8; --lb-h128: #e8709a; --lb-h256: #f5a06e; --lb-h512: #f4d35e;
+  --lb-fam1: #b9a6ec; --lb-fam2: #dfc27d; --lb-fam3: #a6d96a; --lb-fam4: #f1b6da; --lb-fam5: #f4a582; --lb-fam6: #a6cee3;
+    --lb-h16: #9d7bf0; --lb-h64: #c56fd8; --lb-h128: #e8709a; --lb-h256: #f5a06e; --lb-h512: #f4d35e;
 }
 :root { color-scheme: light dark; }          /* native controls and scrollbars follow the theme */
 :root[data-theme="light"] { color-scheme: light; }
@@ -379,6 +382,8 @@ a.lchip { color: var(--accent); }
 .lb-legend-item { cursor: default; }
 .lb-focus .lb-series:not(.lb-on) { opacity: 0.15; }
 .lb-tip-value { margin-top: 4px; }
+.lb-tip-summary { margin-top: 4px; }
+.lb-model-eq { overflow-x: auto; }
 .lb-notes { max-width: 860px; margin-top: 18px; }
 .lb-notes td:first-child { white-space: nowrap; }
 .lb-tip-links { margin-top: 6px; }
