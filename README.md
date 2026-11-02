@@ -36,8 +36,8 @@ draws how they connect; the About page embeds it.
   so it runs, rather than as source on GitHub.
 - **Export SVG** on both, stamped with the studies commit, for slides.
 - **Leaderboard** (`#/leaderboard`): every model family's held-out choice likelihood on one axis:
-  cognitive models (MLE and hierarchical Bayes), study 12's literature models ranked by family (values
-  below the axis drawn at its edge; their 2-level EM fits as hollow markers joined to the per-subject fit), GLM-HMM by number of states (refit per held-out
+  cognitive models (MLE and hierarchical Bayes), study 12's literature models by family, at their headline score (values
+  below the axis drawn at its edge; each model's other fit as a hollow marker joined to it), GLM-HMM by number of states (refit per held-out
   mouse, refit pooled toward the shared fit, and zero-shot), disRNN and GRU by training mice, GRU by hidden size, and the frozen-core
   reservoir GRU. Hover a marker for what it is and its seeds; click it to open the result block
   that reports it. Notes under the chart say what each family may fit to a held-out mouse before

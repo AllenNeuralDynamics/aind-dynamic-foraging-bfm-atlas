@@ -36,7 +36,7 @@ PANELS = [
     {"id": "cognitive", "label": "Cognitive models (MLE / HB)",
      "groups": [{"label": "CTT", "x": ["CTT MLE", "CTT HB"]}, {"label": "Hattori", "x": ["Hattori MLE", "Hattori HB"]}]},
     # x is filled at build time from the source's ranks, which move as models are added
-    {"id": "literature", "label": "Literature models, per-mouse MLE (ranked; study 12)", "x": [], "from_data": True},
+    {"id": "literature", "label": "Literature models, headline score (ranked; study 12)", "x": [], "from_data": True},
     {"id": "glmhmm", "label": "GLM-HMM (hurdle), states K", "x": list(range(1, 11))},
     {"id": "disrnn", "label": "disRNN, training mice D", "x": [30, 100, 300, 614]},
     {"id": "gru", "label": "GRU, hidden size H, training mice D", "x": list(D_NOMINAL)},
@@ -112,15 +112,23 @@ def json_rows_by_d(pointer: str, d_key: str, value_key: str, xs: list, where: di
     return read
 
 
+def _headline_is_em(e: dict) -> bool:
+    """Whether study 12's headline score for this model is its 2-level EM fit (else its per-subject fit)."""
+    return e["headline_source"] == "2-level EM"
+
+
 # per-model text a ranked source must carry, and text it may carry (shown in the card and model panel)
 MODEL_REQUIRED = ("family", "summary")
 MODEL_OPTIONAL = ("family_note", "equations", "paper", "code", "fit_flag", "literature_model")
 
 
-def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
-    """Every entry of the dict at `pointer` that has a rank, in rank order; x is the entry's key.
+def json_ranked(pointer: str, value: str | Callable[[dict], str], rank: str = "rank", x_key: str | None = None,
+                fit: Callable[[dict], str] | None = None) -> Callable:
+    """Every entry of the dict at `pointer` that has a rank, in rank order.
 
-    Each point also carries the entry's rank and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
+    `value` names the score field, or picks it per entry (a function of the entry). A point's x is the
+    entry's key, or its `x_key` field; `fit` labels which fit the score is. Each point also carries the
+    entry's rank and name, and its model text (MODEL_REQUIRED, MODEL_OPTIONAL).
     """
     def read(doc, path):
         entries = _pointer(doc, pointer, path)
@@ -132,14 +140,21 @@ def json_ranked(pointer: str, value: str, rank: str = "rank") -> Callable:
                 raise LeaderboardError(f"{path}: {pointer}/{name} lacks {rank}")
             if e[rank] is None:                  # an unranked entry (e.g. a strawman) is left out, score or not
                 continue
+            try:
+                field = value(e) if callable(value) else value
+                label = fit(e) if fit else None
+            except KeyError as k:
+                raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {k}") from None
             # the score must be present (0.0 is a valid score; _values checks it); the text must be non-empty
-            lacking = ([value] if value not in e else []) + [k for k in MODEL_REQUIRED if not e.get(k)]
+            lacking = ([field] if field not in e else []) + [k for k in (*MODEL_REQUIRED, *([x_key] if x_key else []))
+                                                             if not e.get(k)]
             if lacking:
                 raise LeaderboardError(f"{path}: {pointer}/{name} is ranked but lacks {', '.join(lacking)}")
-            info = {"rank": e[rank], "name": name,
+            info = {"rank": e[rank], "name": name, **({"fit": label} if label else {}),
                     **{k: e[k] for k in (*MODEL_REQUIRED, *MODEL_OPTIONAL) if e.get(k)}}
-            ranked.append((e[rank], name, _values(e[value], path, f"{pointer}/{name}/{value}"), info))
-        return [(name, vs, f"{pointer}/{name}/{value}", info) for _, name, vs, info in sorted(ranked)]
+            ranked.append((e[rank], e[x_key] if x_key else name, _values(e[field], path, f"{pointer}/{name}/{field}"),
+                           f"{pointer}/{name}/{field}", info))
+        return [(x, vs, where, info) for _, x, vs, where, info in sorted(ranked, key=lambda r: r[0])]
     return read
 
 
@@ -188,24 +203,29 @@ SERIES = [
          "Hattori model fitted by hierarchical Bayes (HB), one mouse at a time: each session's parameters vary "
          "around that mouse's own values, under a fixed prior (no population level); pooled over trials."),
     ]},
-    # split into one series per family; worst to best within a family, families by their best model
-    {"id": "literature", "panel": "literature", "label": "Literature models, per-mouse MLE (study 12)",
+    # study 12's headline ranking (r3): each model's 2-level EM score, or its per-subject score where study 12
+    # found the 2-level fit failed; one series per family, worst to best within a family, families by their best
+    {"id": "literature", "panel": "literature", "label": "Literature models, headline score (study 12)",
      "split": "family", "parts": [
-        (f"{S12}/r1_leaderboard.json", json_ranked("/by_model", "pooled_heldout"),
-         _block("12-cognitive-literature-leaderboard", "r1", "result-1"),
-         "A cognitive model from the literature. Every parameter is fitted to the held-out mouse alone, by "
-         "maximum likelihood on its even sessions (no prior, nothing shared across mice); scored on its odd "
-         "sessions. CompareToThreshold and Hattori2019 are the same fits as the cognitive panel's CTT and "
-         "Hattori MLE."),
-    ]},
-    # drawn over the per-subject panel: each point at its r1 twin's x (overlay key), the panel's order untouched
-    {"id": "literature-em", "panel": "literature", "label": "Literature models, 2-level EM (study 12)",
-     "split": "family", "overlay": "literature_model", "parts": [
-        (f"{S12}/r3_2level_em.json", json_ranked("/by_model", "pooled_heldout"),
+        (f"{S12}/r3_2level_em.json",
+         json_ranked("/by_model", "headline_score", x_key="literature_model", fit=lambda e: e["headline_source"]),
          _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
-         "The same literature model, fitted with a second level: each session's parameters vary around the "
-         "mouse's own typical values under a fixed prior (no population level, nothing shared across mice), by "
-         "Laplace-EM on its even sessions; its odd sessions are scored by the session marginal."),
+         "Study 12's headline score: the model fitted per mouse with a session level (2-level EM: each session's "
+         "parameters vary around the mouse's own typical values under a fixed prior, nothing shared across "
+         "mice), or its per-subject MLE fit where study 12 found the 2-level fit failed. Fitted on even "
+         "sessions, scored on odd ones."),
+    ]},
+    # the same model's other fit, drawn hollow over it: per-subject where the headline is 2-level EM, and the
+    # failed 2-level fit where the headline is per-subject
+    {"id": "literature-other", "panel": "literature", "label": "Literature models, the other fit (study 12)",
+     "split": "family", "overlay": "literature_model", "parts": [
+        (f"{S12}/r3_2level_em.json",
+         json_ranked("/by_model", lambda e: "pooled_heldout_per_subject" if _headline_is_em(e) else "pooled_heldout",
+                     x_key="literature_model",
+                     fit=lambda e: "per-subject fit" if _headline_is_em(e) else "failed 2-level EM fit"),
+         _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
+         "The same model's other fit: per-subject MLE (every parameter fitted to the mouse alone, no prior), or, "
+         "where that is the headline, the 2-level EM fit that study 12 found failed."),
     ]},
     {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),
