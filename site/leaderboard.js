@@ -171,6 +171,56 @@ document.addEventListener("atlas:ready", () => {
     return { pos, spans, xmax: x - PANEL_PAD };
   }
 
+  // the modelling landscape (from the lab's "modeling dynamic foraging" slide): why these models. Editorial and
+  // hand-written: rows assume less about the strategy going up, columns assume less about how stable it is going
+  // right. A box with series prefixes is on the leaderboard; hovering it highlights those series in the chart.
+  const COLS = ["Single session", "Hierarchical (pooled across mice and sessions)", "State-space: discrete states (HMM)",
+    "State-space: continuous drift (dynamic)"];
+  const LANDSCAPE = [   // top row first; col is [first column, span]
+    [{ label: "Gated recurrent units (GRUs)", col: [1, 4], series: ["gru-"],
+       note: "A recurrent network that learns the strategy from data; a held-out mouse gets its own embedding." }],
+    [{ label: "Disentangled recurrent neural networks (disRNNs)", col: [1, 4], series: ["disrnn-"],
+       note: "A recurrent network with a bottleneck that keeps its latent variables few and readable." }],
+    [{ label: "Single-session GLM", col: [1, 1], note: "A logistic regression on recent choices and rewards. Not on the leaderboard." },
+     { label: "Hierarchical GLM", col: [2, 1], note: "Not on the leaderboard yet." },
+     { label: "HMM + GLM", col: [3, 1], series: ["glmhmm-"],
+       note: "GLM-HMM: the GLM's weights switch between a few hidden states (study 14)." },
+     { label: "Dynamic GLM", col: [4, 1], note: "GLM weights that drift from trial to trial. Not on the leaderboard yet." }],
+    [{ label: "Single-session cognitive models", col: [1, 1], series: ["ctt", "hattori", "literature-"],
+       note: "A named strategy (e.g. Q-learning, compare-to-threshold) fitted to each mouse alone: CTT and Hattori MLE, and the hollow literature markers." },
+     { label: "Hierarchical cognitive models", col: [2, 1], series: ["ctt", "hattori", "literature-"],
+       note: "The same strategies with each session's parameters varying around the mouse's own: CTT and Hattori HB, and the filled (2-level EM) literature markers." },
+     { label: "HMM + cognitive", col: [3, 1], note: "A cognitive model whose parameters switch between hidden states. Not on the leaderboard yet." },
+     { label: "Dynamic cognitive", col: [4, 1], note: "Cognitive parameters that drift over time. Not on the leaderboard yet." }],
+  ];
+  const landscape = () => `<details class="lb-landscape" open><summary>Why these models</summary>
+    <p>Each model makes its own assumptions about the mouse. <b>Going up</b>, it assumes less about the strategy: from a
+      named cognitive hypothesis, to a GLM's linear weights, to a recurrent network that learns the strategy from the data.
+      <b>Going right</b>, it assumes less about how stable the strategy is across mice and time: one fit per session or
+      mouse, then parameters pooled across mice and sessions, then strategies that switch between hidden states or drift.
+      The leaderboard below shows what each step buys on held-out mice. Filled boxes are on the leaderboard, dashed ones
+      are not yet; hover a box to highlight its models in the chart.</p>
+    <div class="lsc" role="table" aria-label="The modelling landscape">
+      <div class="lsc-y" aria-hidden="true"><span>Data-driven</span><span class="lsc-arrow-y"></span><span>Hypothesis-driven</span></div>
+      ${LANDSCAPE.map((row, r) => row.map((c) => `<div class="lsc-cell ${c.series ? "lsc-on" : "lsc-off"}" role="cell"
+        style="grid-row:${r + 1};grid-column:${c.col[0] + 1} / span ${c.col[1]}" title="${esc(c.note)}"
+        ${c.series ? `data-series="${esc(c.series.join(" "))}" tabindex="0"` : ""}>${esc(c.label)}</div>`).join("")).join("")}
+      ${COLS.map((c, i) => `<div class="lsc-col" style="grid-row:5;grid-column:${i + 2}">${esc(c)}</div>`).join("")}
+      <div class="lsc-x" aria-hidden="true"><span>Stationary</span><span class="lsc-arrow-x"></span><span>Non-stationary</span></div>
+    </div></details>`;
+  // hovering (or focusing) a filled box highlights its series in the chart, as a legend entry does
+  function wireLandscape() {
+    const layer = d3.select("#leaderboard .lb-data");
+    for (const cell of main().querySelectorAll(".lsc-cell[data-series]")) {
+      const prefixes = cell.dataset.series.split(" ");
+      const on = () => layer.classed("lb-focus", true).selectAll(".lb-series")
+        .classed("lb-on", function () { return prefixes.some((p) => this.dataset.series.startsWith(p)); });
+      const off = () => layer.classed("lb-focus", false);
+      cell.addEventListener("pointerenter", on); cell.addEventListener("focus", on);
+      cell.addEventListener("pointerleave", off); cell.addEventListener("blur", off);
+    }
+  }
+
   // the boards: the choice board, then the boards with ignored trials (if this catalog has them)
   const tabs = (current) => {
     const boards = [{ id: "", title: "Choice (left / right)" }, ...(S.cat.leaderboard_ignore || [])];
@@ -200,6 +250,7 @@ document.addEventListener("atlas:ready", () => {
     main().innerHTML = ignore ? `
       <h1>Leaderboard</h1>
       ${tabs(id)}
+      ${landscape()}
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it. ${howTo}.
         With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
@@ -208,6 +259,7 @@ document.addEventListener("atlas:ready", () => {
       ${ignoreNotes(L)}` : `
       <h1>Leaderboard</h1>
       ${tabs(id)}
+      ${landscape()}
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
         ${howTo}
         (a literature model opens its own panel: what it is, its equations, paper and code).
@@ -221,6 +273,7 @@ document.addEventListener("atlas:ready", () => {
     // the hover card lives on the non-scrolling .lb-host: tooltip() places it from viewport bounds,
     // which would be off by the scroll offset inside the horizontally scrolling .lb-wrap
     draw(L, main().querySelector(".lb-host"));
+    wireLandscape();
     document.getElementById("lb-export").addEventListener("click", () =>
       A.downloadSvg(document.getElementById("leaderboard"), `leaderboard-${id ? `${id}-` : ""}${(S.sha || "main").slice(0, 8)}.svg`));
   };
