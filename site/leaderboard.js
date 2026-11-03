@@ -585,34 +585,37 @@ document.addEventListener("atlas:ready", () => {
     ${box(400, 4, 100, 32, "mc-in", ["aₜ₋₁, rₜ₋₁"])}
     ${box(400, 172, 100, 34, "mc-in", ["P(aₜ)"])}
     ${arrow("108,40 132,40")} ${arrow("209,66 209,122")} ${arrow("108,150 132,150")}
-    ${arrow("284,40 322,40 322,78")} ${arrow("284,150 340,150 340,126")}
+    ${arrow("284,40 331,40 331,78")} ${arrow("284,150 331,150 331,126")}
     ${arrow("362,102 390,102")} ${arrow("450,36 450,68")} ${arrow("450,134 450,170")}`, label);
   const GRU_DIAGRAM = embedDiagram("GRU core", "hidden state hₜ",
     "GRU: the subject embedding plus a session delta, with the previous choice and reward, drive a GRU core that outputs the choice probabilities");
 
-  // inside the disRNN core, in the library's order: the update reads trial t-1's outcome and the latents, then the
-  // choice network reads the updated latents
-  const DISRNN_CORE = diagram(300, `
-    ${box(40, 40, 110, 44, "mc-grey", ["Latents", "z¹ₜ₋₁ … zᴺₜ₋₁"])}
-    ${box(40, 110, 110, 44, "mc-in", ["Observations oₜ", "aₜ₋₁, rₜ₋₁"])}
-    ${box(40, 180, 110, 44, "mc-grey", ["Context", "eᵢ + Δ"])}
-    ${box(200, 50, 120, 36, "mc-blue", ["Update MLP 1"])}
-    <text x="260" y="118" text-anchor="middle" class="mc-sub">⋮</text>
-    ${box(200, 150, 120, 36, "mc-blue", ["Update MLP N"])}
-    ${box(350, 50, 110, 36, "mc-noise mc-orange", ["z¹ₜ + noise"])}
-    ${box(350, 150, 110, 36, "mc-noise mc-orange", ["zᴺₜ + noise"])}
-    ${box(350, 214, 110, 34, "mc-blue", ["Choice MLP"])}
-    ${[62, 132, 202].map((y0) => arrow(`150,${y0} 198,68`, "mc-orange") + arrow(`150,${y0 + 4} 198,168`, "mc-orange")).join("")}
-    ${arrow("150,210 348,226", "mc-orange")}
-    ${arrow("320,68 348,68")} ${arrow("320,168 348,168")}
-    <polyline class="mc-arrow" points="460,68 490,68"/><polyline class="mc-arrow" points="460,168 490,168"/>
-    ${arrow("490,14 490,236 462,236", "mc-orange")}
-    ${arrow("490,14 20,14 20,62 38,62")}
-    <text x="250" y="28" dy="0.35em" text-anchor="middle" class="mc-sub">zₜ becomes the next trial's zₜ₋₁</text>
-    ${arrow("405,248 405,266")}
-    <text x="405" y="280" dy="0.35em" text-anchor="middle">P(aₜ)</text>
-    <text x="16" y="280" dy="0.35em" class="mc-sub mc-orange-text">Orange: noisy bottlenecks, penalised by β.</text>`,
-    "Inside the disRNN core: each latent's update network reads bottlenecked observations, latents and context; the noisy new latents feed the choice network and the next trial");
+  // inside the disRNN core, laid out as Miller et al.'s figure: the latents feed the choice network and, with the
+  // observations and the context, each latent's update network; the new latents get noise and loop back
+  const DISRNN_CORE = diagram(330, `
+    ${box(200, 8, 124, 36, "mc-blue", ["Choice MLP"])}
+    <text x="358" y="26" dy="0.35em">P(aₜ) vs the actual aₜ</text>
+    ${box(20, 92, 110, 44, "mc-grey", ["Latents", "z̃¹ₜ … z̃ᴺₜ"])}
+    ${box(20, 162, 110, 44, "mc-in", ["Observations oₜ", "aₜ, rₜ"])}
+    ${box(20, 232, 110, 44, "mc-grey", ["Context", "eᵢ + Δ"])}
+    ${box(200, 92, 124, 36, "mc-blue", ["Update MLP 1"])}
+    <text x="262" y="152" text-anchor="middle" class="mc-sub">⋮</text>
+    ${box(200, 172, 124, 36, "mc-blue", ["Update MLP N"])}
+    ${[110, 190].map((y0, i) => `<rect class="mc-box mc-in mc-noise mc-orange" x="340" y="${y0 - 16}" width="128" height="32" rx="6"/>
+      <text x="366" y="${y0}" dy="0.35em" text-anchor="middle">${["z¹ₜ₊₁", "zᴺₜ₊₁"][i]}</text>
+      <text x="446" y="${y0}" dy="0.35em" text-anchor="middle">${["z̃¹ₜ₊₁", "z̃ᴺₜ₊₁"][i]}</text>
+      ${arrow(`324,${y0} 338,${y0}`)} ${arrow(`386,${y0} 422,${y0}`, "mc-orange")}`).join("")}
+    ${arrow("130,98 198,30", "mc-orange")}
+    ${arrow("130,108 198,104", "mc-orange")} ${arrow("130,118 198,184", "mc-orange")}
+    ${arrow("130,178 198,112", "mc-orange")} ${arrow("130,188 198,192", "mc-orange")}
+    ${arrow("130,246 198,120", "mc-orange")} ${arrow("130,254 198,200", "mc-orange")}
+    ${arrow("130,266 166,266 166,38 198,38", "mc-orange")}
+    ${arrow("324,26 352,26")}
+    ${arrow("468,110 504,110 504,308 6,308 6,108 18,108")}
+    ${arrow("468,190 496,190 496,300 12,300 12,120 18,120")}
+    <text x="300" y="286" dy="0.35em" text-anchor="middle" class="mc-sub">z̃ₜ₊₁ are the latents for trial t + 1</text>
+    <text x="6" y="322" dy="0.35em" class="mc-sub mc-orange-text">Orange: noisy bottlenecks, penalised by β; the dashed box adds noise to each new latent.</text>`,
+    "Inside the disRNN core: the latents feed the choice network; with the observations and the context they feed each latent's update network, whose noisy output becomes the next trial's latents");
   const DISRNN_DIAGRAM = embedDiagram("disRNN core", "latents zₜ",
     "disRNN: the same subject embedding and session delta as the GRU, with a disRNN core") +
     `<p class="mc-cap">Inside the disRNN core</p>${DISRNN_CORE}`;
@@ -667,9 +670,10 @@ $$P(a_t) = \mathrm{softmax}(W_o h_t + b_o)$$
         (bottom diagram).`,
       heldout: `A held-out mouse gets its own subject embedding, fitted on its other sessions; the network stays as
         trained.`,
-      equations: String.raw`Notation: trial $t$; latents $z_t \in \mathbb{R}^N$ ($N = 5$ in study 06), updated with
-trial $t-1$'s outcome; observations $o_t = (a_{t-1}, r_{t-1})$; $M$ a fixed bound on each latent;
-$\epsilon \sim \mathcal{N}(0, 1)$ fresh noise each time.
+      equations: String.raw`Notation: trial $t$; latents $\tilde z_t \in \mathbb{R}^N$ ($N = 5$ in study 06), what the
+network carries into trial $t$; observations $o_t = (a_t, r_t)$, trial $t$'s choice and reward; $M$ a fixed bound on
+each latent; $\epsilon \sim \mathcal{N}(0, 1)$ fresh noise each time. (The code runs the same model one step shifted:
+each step reads the last trial's outcome, updates, then predicts the next choice.)
 
 **Context.** As in the GRU (study 06 ran with session conditioning on), then through one shared bottleneck:
 
@@ -679,16 +683,16 @@ $$c_{i,s} = e_i + \Delta(e_i, s)$$
 $\sigma$. Its cost is $\mathrm{KL}\big(\mathcal{N}(m x, \sigma^2)\,\|\,\mathcal{N}(0, 1)\big) = \tfrac12\,(m^2x^2 + \sigma^2 - 1 - \log\sigma^2)$.
 A large $\sigma$ drowns the input: the bottleneck is closed.
 
-**Update.** Latent $k$ has its own network, which reads bottlenecked copies of the observations, the previous
-latents and the context:
-
-$$(u_k, v_k) = \mathrm{MLP}_k(\tilde o_t, \tilde z_{t-1}, \tilde c_{i,s}), \qquad w_k = \sigma(u_k)$$
-
-$$z^k_t = (1 - w_k)\, z^k_{t-1} + w_k\, M \tanh(v_k / M) + \sigma_k \epsilon$$
-
-**Choice.** A choice network reads the (bottlenecked) new latents and context; in study 06 it is linear:
+**Choice.** A choice network reads bottlenecked copies of the latents and the context; in study 06 it is linear:
 
 $$P(a_t) = \mathrm{softmax}\big(\mathrm{ChoiceNet}(\tilde z_t, \tilde c_{i,s})\big)$$
+
+**Update.** Latent $k$ has its own network, which reads bottlenecked copies of the observations, the latents and the
+context; the new latent then gets its own noise:
+
+$$(u_k, v_k) = \mathrm{MLP}_k(\tilde o_t, \tilde z_t, \tilde c_{i,s}), \qquad w_k = \sigma(u_k)$$
+
+$$z^k_{t+1} = (1 - w_k)\, \tilde z^k_t + w_k\, M \tanh(v_k / M), \qquad \tilde z^k_{t+1} = z^k_{t+1} + \sigma_k \epsilon$$
 
 **Training.** Minimise $-\sum_t \log P(a_t) + \beta \sum \mathrm{KL}$ over every bottleneck.`,
       sources: [`Paper: <a href="https://doi.org/10.52202/075280-2682" target="_blank" rel="noopener">Miller et al., Cognitive model discovery via disentangled RNNs, NeurIPS 36 (2023)</a>
