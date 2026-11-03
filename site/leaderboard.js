@@ -592,12 +592,12 @@ document.addEventListener("atlas:ready", () => {
 
   // inside the disRNN core, laid out as Miller et al.'s figure: the latents feed the choice network and, with the
   // observations and the context, each latent's update network; the new latents get noise and loop back
-  const DISRNN_CORE = diagram(330, `
+  const DISRNN_CORE = diagram(292, `
     ${box(200, 8, 124, 36, "mc-blue", ["Choice MLP"])}
     <text x="358" y="26" dy="0.35em">P(aₜ) vs the actual aₜ</text>
-    ${box(20, 92, 110, 44, "mc-grey", ["Latents", "z̃¹ₜ … z̃ᴺₜ"])}
-    ${box(20, 162, 110, 44, "mc-in", ["Observations oₜ", "aₜ, rₜ"])}
-    ${box(20, 232, 110, 44, "mc-grey", ["Context", "eᵢ + Δ"])}
+    ${box(20, 14, 110, 44, "mc-grey", ["Context", "eᵢ + Δ"])}
+    ${box(20, 96, 110, 44, "mc-grey", ["Latents", "z̃¹ₜ … z̃ᴺₜ"])}
+    ${box(20, 176, 110, 44, "mc-in", ["Observations oₜ", "aₜ, rₜ"])}
     ${box(200, 92, 124, 36, "mc-blue", ["Update MLP 1"])}
     <text x="262" y="152" text-anchor="middle" class="mc-sub">⋮</text>
     ${box(200, 172, 124, 36, "mc-blue", ["Update MLP N"])}
@@ -605,17 +605,15 @@ document.addEventListener("atlas:ready", () => {
       <text x="366" y="${y0}" dy="0.35em" text-anchor="middle">${["z¹ₜ₊₁", "zᴺₜ₊₁"][i]}</text>
       <text x="446" y="${y0}" dy="0.35em" text-anchor="middle">${["z̃¹ₜ₊₁", "z̃ᴺₜ₊₁"][i]}</text>
       ${arrow(`324,${y0} 338,${y0}`)} ${arrow(`386,${y0} 422,${y0}`, "mc-orange")}`).join("")}
-    ${arrow("130,98 198,30", "mc-orange")}
-    ${arrow("130,108 198,104", "mc-orange")} ${arrow("130,118 198,184", "mc-orange")}
-    ${arrow("130,178 198,112", "mc-orange")} ${arrow("130,188 198,192", "mc-orange")}
-    ${arrow("130,246 198,120", "mc-orange")} ${arrow("130,254 198,200", "mc-orange")}
-    ${arrow("130,266 166,266 166,38 198,38", "mc-orange")}
+    ${arrow("130,30 198,24", "mc-orange")} ${arrow("130,44 198,104", "mc-orange")} ${arrow("130,52 198,182", "mc-orange")}
+    ${arrow("130,102 198,36", "mc-orange")} ${arrow("130,114 198,112", "mc-orange")} ${arrow("130,126 198,188", "mc-orange")}
+    ${arrow("130,190 198,120", "mc-orange")} ${arrow("130,200 198,196", "mc-orange")}
     ${arrow("324,26 352,26")}
-    ${arrow("468,110 504,110 504,308 6,308 6,108 18,108")}
-    ${arrow("468,190 496,190 496,300 12,300 12,120 18,120")}
-    <text x="300" y="286" dy="0.35em" text-anchor="middle" class="mc-sub">z̃ₜ₊₁ are the latents for trial t + 1</text>
-    <text x="6" y="322" dy="0.35em" class="mc-sub mc-orange-text">Orange: noisy bottlenecks, penalised by β; the dashed box adds noise to each new latent.</text>`,
-    "Inside the disRNN core: the latents feed the choice network; with the observations and the context they feed each latent's update network, whose noisy output becomes the next trial's latents");
+    ${arrow("468,110 504,110 504,258 6,258 6,112 18,112")}
+    ${arrow("468,190 496,190 496,250 12,250 12,124 18,124")}
+    <text x="300" y="236" dy="0.35em" text-anchor="middle" class="mc-sub">z̃ₜ₊₁ are the latents for trial t + 1</text>
+    <text x="6" y="278" dy="0.35em" class="mc-sub mc-orange-text">Orange: noisy bottlenecks, penalised by β; the dashed box adds noise to each new latent.</text>`,
+    "Inside the disRNN core: the context and the latents feed the choice network; with the observations they feed each latent's update network, whose noisy output becomes the next trial's latents");
   const DISRNN_DIAGRAM = embedDiagram("disRNN core", "latents zₜ",
     "disRNN: the same subject embedding and session delta as the GRU, with a disRNN core") +
     `<p class="mc-cap">Inside the disRNN core</p>${DISRNN_CORE}`;
