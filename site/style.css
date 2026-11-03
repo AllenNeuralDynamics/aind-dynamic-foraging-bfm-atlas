@@ -111,8 +111,8 @@ th { color: var(--muted); font-weight: 600; }
 .prose img { max-width: 100%; height: auto; border-radius: 4px; }
 .fig { position: relative; display: inline-block; max-width: 100%; }
 .fig-zoom { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; padding: 0; font-size: 1.05rem; line-height: 1;
-  border-radius: 6px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); cursor: zoom-in; opacity: 0.6; }
-.fig:hover .fig-zoom, .fig-zoom:focus-visible { opacity: 1; }
+  border-radius: 6px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); cursor: zoom-in; }
+.fig-zoom:hover, .fig-zoom:focus-visible { background: var(--accent-soft); }
 .lightbox { border: 0; padding: 0; border-radius: 10px; background: var(--surface); max-width: 96vw; max-height: 96vh; }
 .lightbox::backdrop { background: rgba(0, 0, 0, 0.6); }
 .lightbox img { display: block; width: 94vw; height: 92vh; object-fit: contain; cursor: zoom-out; }
@@ -439,6 +439,7 @@ a.lchip { color: var(--accent); }
 
 /* model-card diagrams (leaderboard.js openCard): inline SVG on the theme's colours */
 .mc-diagram { display: block; width: 100%; height: auto; margin: 8px 0 4px; font-family: var(--sans); }
+.mc-cap { margin: 10px 0 0; font-size: 0.85em; font-weight: 600; color: var(--muted); }
 .mc-diagram text { fill: var(--text); font-size: 12px; }
 .mc-diagram .mc-sub { fill: var(--muted); font-size: 11px; }
 .mc-diagram .mc-orange-text { fill: var(--warn); }

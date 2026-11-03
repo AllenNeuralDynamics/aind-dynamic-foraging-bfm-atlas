@@ -512,7 +512,7 @@ document.addEventListener("atlas:ready", () => {
         : `<div class="tip-v">${esc(p.description)}</div>`}
       <div class="tip-v">Reported in study ${esc(studyNo(b.study))} ${esc(b.report)}, ${esc(b.block)};
         read from <span class="mono">${esc(p.source.path.split("/").pop())}</span></div>
-      <div class="lb-tip-links">${p.summary || cardOf(s) ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
+      <div class="lb-tip-links">${(p.summary || cardOf(s)) && seed === undefined ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
   }
 
   // a literature model's two fits: the headline marker names the other fit, and the other fit the headline
@@ -574,39 +574,48 @@ document.addEventListener("atlas:ready", () => {
       <marker id="mc-ah-o" class="mc-ah mc-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
     </defs>${body}</svg>`;
 
-  const GRU_DIAGRAM = diagram(212, `
+  // the GRU and the disRNN share the subject and session embedding; only the core differs
+  const embedDiagram = (core, coreSub, label) => diagram(212, `
     ${box(4, 22, 104, 36, "mc-in mc-blue", ["Subject ID i"])}
     ${box(134, 14, 150, 52, "mc-blue", ["Subject embedding", "eᵢ, a row of a table"])}
     ${box(4, 132, 104, 36, "mc-in mc-orange", ["Session index s"])}
     ${box(134, 124, 150, 52, "mc-orange", ["Session-delta MLP", "Δ(eᵢ, s)"])}
     ${box(300, 80, 62, 44, "mc-grey", ["eᵢ + Δ", "context"])}
-    ${box(392, 70, 116, 64, "mc-green", ["GRU core", "hidden state hₜ"])}
+    ${box(392, 70, 116, 64, "mc-green", [core, coreSub])}
     ${box(400, 4, 100, 32, "mc-in", ["aₜ₋₁, rₜ₋₁"])}
     ${box(400, 172, 100, 34, "mc-in", ["P(aₜ)"])}
     ${arrow("108,40 132,40")} ${arrow("209,66 209,122")} ${arrow("108,150 132,150")}
     ${arrow("284,40 322,40 322,78")} ${arrow("284,150 340,150 340,126")}
-    ${arrow("362,102 390,102")} ${arrow("450,36 450,68")} ${arrow("450,134 450,170")}`,
+    ${arrow("362,102 390,102")} ${arrow("450,36 450,68")} ${arrow("450,134 450,170")}`, label);
+  const GRU_DIAGRAM = embedDiagram("GRU core", "hidden state hₜ",
     "GRU: the subject embedding plus a session delta, with the previous choice and reward, drive a GRU core that outputs the choice probabilities");
 
-  const DISRNN_DIAGRAM = diagram(272, `
-    ${box(40, 92, 100, 46, "mc-grey", ["Latents", "z¹ₜ … zᴺₜ"])}
-    ${box(40, 176, 100, 46, "mc-in", ["Observations oₜ", "subject cᵢ"])}
-    ${box(190, 10, 124, 38, "mc-blue", ["Choice MLP"])}
-    <text x="334" y="29" dy="0.35em">P(aₜ) vs the actual choice</text>
-    ${box(190, 82, 124, 36, "mc-blue", ["Update MLP 1"])}
-    <text x="252" y="140" text-anchor="middle" class="mc-sub">⋮</text>
-    ${box(190, 156, 124, 36, "mc-blue", ["Update MLP N"])}
-    ${box(340, 82, 116, 36, "mc-noise mc-orange", ["z¹ₜ₊₁ + noise"])}
-    ${box(340, 156, 116, 36, "mc-noise mc-orange", ["zᴺₜ₊₁ + noise"])}
-    ${arrow("140,104 188,36")}
-    ${arrow("140,110 188,96", "mc-orange")} ${arrow("140,126 188,170", "mc-orange")}
-    ${arrow("140,190 188,106", "mc-orange")} ${arrow("140,204 188,182", "mc-orange")}
-    ${arrow("314,29 330,29")} ${arrow("314,100 338,100")} ${arrow("314,174 338,174")}
-    <polyline class="mc-arrow" points="456,174 492,174"/>
-    ${arrow("456,100 492,100 492,242 16,242 16,115 38,115")}
-    <text x="300" y="234" text-anchor="middle" class="mc-sub">next trial: the noisy latents are the new zₜ</text>
-    <text x="16" y="264" class="mc-sub mc-orange-text">Orange arrows and dashed boxes: noisy bottlenecks, penalised by β.</text>`,
-    "disRNN: few latent variables, each with its own update network; noisy bottlenecks on the update networks' inputs and on the latents");
+  // inside the disRNN core, in the library's order: the update reads trial t-1's outcome and the latents, then the
+  // choice network reads the updated latents
+  const DISRNN_CORE = diagram(300, `
+    ${box(40, 40, 110, 44, "mc-grey", ["Latents", "z¹ₜ₋₁ … zᴺₜ₋₁"])}
+    ${box(40, 110, 110, 44, "mc-in", ["Observations oₜ", "aₜ₋₁, rₜ₋₁"])}
+    ${box(40, 180, 110, 44, "mc-grey", ["Context", "eᵢ + Δ"])}
+    ${box(200, 50, 120, 36, "mc-blue", ["Update MLP 1"])}
+    <text x="260" y="118" text-anchor="middle" class="mc-sub">⋮</text>
+    ${box(200, 150, 120, 36, "mc-blue", ["Update MLP N"])}
+    ${box(350, 50, 110, 36, "mc-noise mc-orange", ["z¹ₜ + noise"])}
+    ${box(350, 150, 110, 36, "mc-noise mc-orange", ["zᴺₜ + noise"])}
+    ${box(350, 214, 110, 34, "mc-blue", ["Choice MLP"])}
+    ${[62, 132, 202].map((y0) => arrow(`150,${y0} 198,68`, "mc-orange") + arrow(`150,${y0 + 4} 198,168`, "mc-orange")).join("")}
+    ${arrow("150,210 348,226", "mc-orange")}
+    ${arrow("320,68 348,68")} ${arrow("320,168 348,168")}
+    <polyline class="mc-arrow" points="460,68 490,68"/><polyline class="mc-arrow" points="460,168 490,168"/>
+    ${arrow("490,14 490,236 462,236", "mc-orange")}
+    ${arrow("490,14 20,14 20,62 38,62")}
+    <text x="250" y="28" dy="0.35em" text-anchor="middle" class="mc-sub">zₜ becomes the next trial's zₜ₋₁</text>
+    ${arrow("405,248 405,266")}
+    <text x="405" y="280" dy="0.35em" text-anchor="middle">P(aₜ)</text>
+    <text x="16" y="280" dy="0.35em" class="mc-sub mc-orange-text">Orange: noisy bottlenecks, penalised by β.</text>`,
+    "Inside the disRNN core: each latent's update network reads bottlenecked observations, latents and context; the noisy new latents feed the choice network and the next trial");
+  const DISRNN_DIAGRAM = embedDiagram("disRNN core", "latents zₜ",
+    "disRNN: the same subject embedding and session delta as the GRU, with a disRNN core") +
+    `<p class="mc-cap">Inside the disRNN core</p>${DISRNN_CORE}`;
 
   const GLMHMM_DIAGRAM = diagram(212, `
     <text x="70" y="44" dy="0.35em" text-anchor="middle" class="mc-sub">…</text>
@@ -653,30 +662,37 @@ $$P(a_t) = \mathrm{softmax}(W_o h_t + b_o)$$
       summary: `A recurrent neural network built to be read. Its state is a few latent variables, and each latent has
         its own small update network. Noisy bottlenecks sit on every input an update network reads and on every
         latent it keeps; a penalty (β) on them makes the network use as few latents and as few interactions as the
-        data allow. A larger β closes more bottlenecks and gives a simpler, more readable model.`,
+        data allow. A larger β closes more bottlenecks and gives a simpler, more readable model. It meets mice and
+        sessions through the same subject embedding and session delta as the GRU (top diagram); only the core differs
+        (bottom diagram).`,
       heldout: `A held-out mouse gets its own subject embedding, fitted on its other sessions; the network stays as
         trained.`,
-      equations: String.raw`Notation: trial $t$; latents $z_t \in \mathbb{R}^N$ ($N = 5$ in study 06); observations
-$o_t$ (the previous choice and reward); subject context $c_i$; $M$ a fixed bound on each latent; $\epsilon \sim \mathcal{N}(0, 1)$ fresh noise each time.
+      equations: String.raw`Notation: trial $t$; latents $z_t \in \mathbb{R}^N$ ($N = 5$ in study 06), updated with
+trial $t-1$'s outcome; observations $o_t = (a_{t-1}, r_{t-1})$; $M$ a fixed bound on each latent;
+$\epsilon \sim \mathcal{N}(0, 1)$ fresh noise each time.
+
+**Context.** As in the GRU (study 06 ran with session conditioning on), then through one shared bottleneck:
+
+$$c_{i,s} = e_i + \Delta(e_i, s)$$
 
 **Bottleneck.** An input $x$ passes as $\tilde x = m\,x + \sigma \epsilon$, with a learned multiplier $m$ and noise scale
 $\sigma$. Its cost is $\mathrm{KL}\big(\mathcal{N}(m x, \sigma^2)\,\|\,\mathcal{N}(0, 1)\big) = \tfrac12\,(m^2x^2 + \sigma^2 - 1 - \log\sigma^2)$.
 A large $\sigma$ drowns the input: the bottleneck is closed.
 
-**Update.** Latent $k$ has its own network, which reads bottlenecked copies of the observations, the latents and the
-subject context:
+**Update.** Latent $k$ has its own network, which reads bottlenecked copies of the observations, the previous
+latents and the context:
 
-$$(u_k, v_k) = \mathrm{MLP}_k(\tilde o_t, \tilde z_t, \tilde c_i), \qquad w_k = \sigma(u_k)$$
+$$(u_k, v_k) = \mathrm{MLP}_k(\tilde o_t, \tilde z_{t-1}, \tilde c_{i,s}), \qquad w_k = \sigma(u_k)$$
 
-$$z^k_{t+1} = (1 - w_k)\, z^k_t + w_k\, M \tanh(v_k / M) + \sigma_k \epsilon$$
+$$z^k_t = (1 - w_k)\, z^k_{t-1} + w_k\, M \tanh(v_k / M) + \sigma_k \epsilon$$
 
-**Choice.** A choice network reads the (bottlenecked) latents; in study 06 it is linear:
+**Choice.** A choice network reads the (bottlenecked) new latents and context; in study 06 it is linear:
 
-$$P(a_t) = \mathrm{softmax}\big(\mathrm{ChoiceNet}(\tilde z_t, \tilde c_i)\big)$$
+$$P(a_t) = \mathrm{softmax}\big(\mathrm{ChoiceNet}(\tilde z_t, \tilde c_{i,s})\big)$$
 
 **Training.** Minimise $-\sum_t \log P(a_t) + \beta \sum \mathrm{KL}$ over every bottleneck.`,
       sources: [`Paper: <a href="https://doi.org/10.52202/075280-2682" target="_blank" rel="noopener">Miller et al., Cognitive model discovery via disentangled RNNs, NeurIPS 36 (2023)</a>
-          (<a href="https://doi.org/10.1101/2023.06.23.546250" target="_blank" rel="noopener">bioRxiv</a>); the diagram is redrawn and simplified from theirs`,
+          (<a href="https://doi.org/10.1101/2023.06.23.546250" target="_blank" rel="noopener">bioRxiv</a>); the core diagram is redrawn and simplified from theirs`,
         `Code: <a href="${DISRNN_LIB}/disentangled_rnns/library/disrnn.py" target="_blank" rel="noopener"><code>HkDisentangledRNN</code></a> in aind-disentangled-rnns @ <span class="mono">a9b99788</span>; the multisubject model in <a href="${WRAPPER}/code/models/multisubject_disrnn.py" target="_blank" rel="noopener">the wrapper</a>`] },
     { prefix: "glmhmm-", title: "GLM-HMM (hurdle emission)", diagram: GLMHMM_DIAGRAM,
       summary: `A hidden Markov model whose states each have their own regression of the choice on recent history. The
@@ -685,8 +701,8 @@ $$P(a_t) = \mathrm{softmax}\big(\mathrm{ChoiceNet}(\tilde z_t, \tilde c_i)\big)$
         the mouse responds, then which side.`,
       heldout: `Refit: the held-out mouse gets its own GLM-HMM, started from the shared fit. Refit pooled: the same, with
         its weights pulled toward the shared fit. Zero-shot: nothing is fitted; the shared fit predicts every mouse.
-        The choice board scores only the side half, on the trials the mouse responded; the 3-way and engagement
-        boards score both halves.`,
+        The choice board scores only the side half, on the trials the mouse responded; the engagement board
+        scores only the respond-or-ignore half; the 3-way board scores both together.`,
       equations: String.raw`Notation: trial $t$; outcome $y_t \in \{L, R, \text{ignore}\}$; side $s = +1$ (right),
 $-1$ (left) or $0$ (ignore); reward $r$; $\sigma$ the logistic function.
 
