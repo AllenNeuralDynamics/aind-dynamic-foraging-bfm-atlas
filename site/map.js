@@ -267,8 +267,10 @@ document.addEventListener("atlas:ready", () => {
     const placeAnchors = () => {
       anchors = {};
       if (!islands) return;
-      const vals = Object.keys(VOCAB[islands].values), R = Math.min(W, H) * 0.36;
-      vals.forEach((v, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / vals.length; anchors[v] = { x: W / 2 + R * Math.cos(a), y: H / 2 + R * Math.sin(a) }; });
+      // on an ellipse as wide as the drawing, flatter than a circle, so no island is pressed into the top edge;
+      // centred a little low, since island names sit above the islands
+      const vals = Object.keys(VOCAB[islands].values), RX = W * 0.3, RY = H * 0.26, CY = H * 0.56;
+      vals.forEach((v, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / vals.length; anchors[v] = { x: W / 2 + RX * Math.cos(a), y: CY + RY * Math.sin(a) }; });
     };
     const goal = (n, ax) => {
       const ts = n.s ? studyTags(n.s, islands).filter((t) => anchors[t]) : [];
@@ -317,16 +319,33 @@ document.addEventListener("atlas:ready", () => {
       g.selectAll("g").data(groups, (x) => x.v).join((e) => { const k = e.append("g").attr("class", "island"); k.append("path"); k.append("text"); return k; })
         .each(function (x) {
           const pts = x.pts.flatMap((n) => { const r = radius(n.s) + 24; return d3.range(10).map((i) => [n.x + r * Math.cos(i * Math.PI / 5), n.y + r * Math.sin(i * Math.PI / 5)]); });
-          const hull = d3.polygonHull(pts), c = d3.polygonCentroid(hull), top = d3.min(hull, (p) => p[1]);
+          const hull = d3.polygonHull(pts), c = d3.polygonCentroid(hull);
           const col = islands === "model" ? modelColor(x.v) : "var(--accent)";
           d3.select(this).select("path").attr("d", d3.line().curve(d3.curveCatmullRomClosed)(hull)).style("fill", col).style("stroke", col);
-          d3.select(this).select("text").attr("x", c[0]).attr("y", Math.max(14, top - 6)).style("fill", col)
+          // the name sits on the island's outer edge (the side away from the map's centre), on its outline,
+          // so names spread out instead of crowding the middle
+          let dx = c[0] - W / 2, dy = c[1] - H / 2;
+          const len = Math.hypot(dx, dy) || 1;
+          [dx, dy] = len < 1 ? [0, -1] : [dx / len, dy / len];
+          const far = hull.reduce((b, p) => ((p[0] - c[0]) * dx + (p[1] - c[1]) * dy > (b[0] - c[0]) * dx + (b[1] - c[1]) * dy ? p : b));
+          const lx = Math.max(8, Math.min(W - 8, far[0])), ly = Math.max(16, Math.min(H - 6, far[1] + (dy > 0.3 ? 30 : dy < -0.3 ? -4 : 5)));   // below, clear the study names under the nodes
+          const txt = d3.select(this).select("text").attr("x", lx).attr("y", ly).style("fill", col)
+            .attr("text-anchor", dx > 0.35 ? "start" : dx < -0.35 ? "end" : "middle")
             .text(VOCAB[islands].values[x.v].label);
+          // then step it outward until it clears the study names (at most 8 steps of 8 px)
+          const names = nodeSel.selectAll("text").nodes().map((e) => { const b = e.getBBox();
+            const g = e.closest(".node").__data__; return { x: b.x + g.x, y: b.y + g.y, w: b.width, h: b.height }; });
+          for (let k = 1; k <= 8; k++) {
+            const b = txt.node().getBBox();
+            if (!names.some((m) => b.x < m.x + m.w && m.x < b.x + b.width && b.y < m.y + m.h && m.y < b.y + b.height)) break;
+            txt.attr("x", Math.max(8, Math.min(W - 8, lx + dx * 8 * k))).attr("y", Math.max(16, Math.min(H - 6, ly + dy * 8 * k)));
+          }
         });
     }
     sim.on("tick", () => {
-      // kept inside the drawing, label included
-      nodes.forEach((n) => { const r = radius(n.s) + 30; n.x = Math.max(r, Math.min(W - r, n.x)); n.y = Math.max(r, Math.min(H - Math.max(r + 10, n.below || 0), n.y)); });
+      // kept inside the drawing, label included; at the top, room for its island's outline (24) and name (30)
+      nodes.forEach((n) => { const r = radius(n.s) + 30; n.x = Math.max(r, Math.min(W - r, n.x));
+        n.y = Math.max(radius(n.s) + 24 + 30, Math.min(H - Math.max(r + 10, n.below || 0), n.y)); });
       nodeSel.attr("transform", (n) => `translate(${n.x},${n.y})`);
       edgeSel.selectAll("path").attr("d", (l) => curve(l.source, l.target, rimOf(l.source.s, radius(l.source.s)) + 2,
         rimOf(l.target.s, radius(l.target.s)) + 3, l.e.bend));
