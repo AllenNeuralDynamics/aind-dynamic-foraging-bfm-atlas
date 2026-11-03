@@ -173,7 +173,8 @@ document.addEventListener("atlas:ready", () => {
 
   // the modelling landscape (from the lab's "modeling dynamic foraging" slide): why these models. Editorial and
   // hand-written: rows assume less about the strategy going up, columns assume less about how stable it is going
-  // right. A box with series prefixes is on the leaderboard; hovering it highlights those series in the chart.
+  // right. A box with series prefixes is on the leaderboard; hovering it highlights those series in the chart, and
+  // clicking it keeps them highlighted (pins it) until it is clicked again.
   const COLS = ["Single session", "Hierarchical (pooled across mice and sessions)", "State-space: discrete states (HMM)",
     "State-space: continuous drift (dynamic)"];
   const LANDSCAPE = [   // top row first; col is [first column, span]
@@ -194,30 +195,43 @@ document.addEventListener("atlas:ready", () => {
      { label: "Dynamic cognitive", col: [4, 1], note: "Cognitive parameters that drift over time. Not on the leaderboard yet." }],
   ];
   const landscape = () => `<details class="lb-landscape" open><summary>Why these models</summary>
-    <p>Each model makes its own assumptions about the mouse. <b>Going up</b>, it assumes less about the strategy: from a
-      named cognitive hypothesis, to a GLM's linear weights, to a recurrent network that learns the strategy from the data.
-      <b>Going right</b>, it assumes less about how stable the strategy is across mice and time: one fit per session or
-      mouse, then parameters pooled across mice and sessions, then strategies that switch between hidden states or drift.
-      The leaderboard below shows what each step buys on held-out mice. Filled boxes are on the leaderboard, dashed ones
-      are not yet; hover a box to highlight its models in the chart.</p>
-    <div class="lsc" role="table" aria-label="The modelling landscape">
+    <p><b>Going up</b>, a model assumes less about the strategy (cognitive hypothesis, GLM weights, recurrent network).
+      <b>Going right</b>, it assumes less about how stable the strategy is across mice and time. Filled boxes are on the
+      leaderboard below: hover one to highlight its models, click it to keep them highlighted, click again to clear.</p>
+    <div class="lsc" role="group" aria-label="The modelling landscape">
       <div class="lsc-y" aria-hidden="true"><span>Data-driven</span><span class="lsc-arrow-y"></span><span>Hypothesis-driven</span></div>
-      ${LANDSCAPE.map((row, r) => row.map((c) => `<div class="lsc-cell ${c.series ? "lsc-on" : "lsc-off"}" role="cell"
+      ${LANDSCAPE.map((row, r) => row.map((c) => `<div class="lsc-cell ${c.series ? "lsc-on" : "lsc-off"}"
         style="grid-row:${r + 1};grid-column:${c.col[0] + 1} / span ${c.col[1]}" title="${esc(c.note)}"
-        ${c.series ? `data-series="${esc(c.series.join(" "))}" tabindex="0"` : ""}>${esc(c.label)}</div>`).join("")).join("")}
+        ${c.series ? `data-series="${esc(c.series.join(" "))}" role="button" aria-pressed="false" tabindex="0"` : ""}>${esc(c.label)}</div>`).join("")).join("")}
       ${COLS.map((c, i) => `<div class="lsc-col" style="grid-row:5;grid-column:${i + 2}">${esc(c)}</div>`).join("")}
       <div class="lsc-x" aria-hidden="true"><span>Stationary</span><span class="lsc-arrow-x"></span><span>Non-stationary</span></div>
     </div></details>`;
-  // hovering (or focusing) a filled box highlights its series in the chart, as a legend entry does
+  // the series test of the pinned landscape box (null: none); leaving any hover returns the chart to it
+  let pinned = null;
+  const highlight = (keep) => {
+    const layer = d3.select("#leaderboard .lb-data").classed("lb-focus", !!keep);
+    if (keep) layer.selectAll(".lb-series").classed("lb-on", function () { return keep(this.dataset.series); });
+  };
+  const unhighlight = () => highlight(pinned);
+  // hovering (or focusing) a filled box highlights its series in the chart, as a legend entry does; a click (or
+  // Enter / Space) pins it, so the highlight stays while the reader looks at the chart
   function wireLandscape() {
-    const layer = d3.select("#leaderboard .lb-data");
-    for (const cell of main().querySelectorAll(".lsc-cell[data-series]")) {
+    pinned = null;
+    const cells = [...main().querySelectorAll(".lsc-cell[data-series]")];
+    for (const cell of cells) {
       const prefixes = cell.dataset.series.split(" ");
-      const on = () => layer.classed("lb-focus", true).selectAll(".lb-series")
-        .classed("lb-on", function () { return prefixes.some((p) => this.dataset.series.startsWith(p)); });
-      const off = () => layer.classed("lb-focus", false);
-      cell.addEventListener("pointerenter", on); cell.addEventListener("focus", on);
-      cell.addEventListener("pointerleave", off); cell.addEventListener("blur", off);
+      const keep = (id) => prefixes.some((p) => id.startsWith(p));
+      const toggle = () => {
+        const was = cell.getAttribute("aria-pressed") === "true";
+        for (const c of cells) c.setAttribute("aria-pressed", "false");
+        cell.setAttribute("aria-pressed", String(!was));
+        pinned = was ? null : keep;
+        highlight(keep);     // the pointer (or focus) is still on this box
+      };
+      cell.addEventListener("pointerenter", () => highlight(keep)); cell.addEventListener("focus", () => highlight(keep));
+      cell.addEventListener("pointerleave", unhighlight); cell.addEventListener("blur", unhighlight);
+      cell.addEventListener("click", toggle);
+      cell.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } });
     }
   }
 
@@ -250,16 +264,15 @@ document.addEventListener("atlas:ready", () => {
     main().innerHTML = ignore ? `
       <h1>Leaderboard</h1>
       ${tabs(id)}
-      ${landscape()}
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it. ${howTo}.
         With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
+      ${landscape()}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: ${esc(L.ylabel)}"></svg></div></div>
       ${ignoreNotes(L)}` : `
       <h1>Leaderboard</h1>
       ${tabs(id)}
-      ${landscape()}
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
         ${howTo}
         (a literature model opens its own panel: what it is, its equations, paper and code).
@@ -267,6 +280,7 @@ document.addEventListener("atlas:ready", () => {
         right), joined by a line and named above; pairs are ranked by study 12's headline score (the 2-level EM score, or
         the per-subject one where it is higher). With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
+      ${landscape()}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
       <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: held-out choice likelihood by model"></svg></div></div>
       ${notes(L.series.some((s) => s.id === "glmhmm-pooled"))}`;
@@ -455,7 +469,7 @@ document.addEventListener("atlas:ready", () => {
           .text("Literature pair: per-subject fit (hollow, left), 2-level EM fit (filled, right)");
         it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
             .classed("lb-on", function () { return this.dataset.series.startsWith("literature-"); }))   // both fits of every pair
-          .on("pointerleave", () => layer.classed("lb-focus", false));
+          .on("pointerleave", unhighlight);
         return;
       }
       const st = styleOf(s);
@@ -467,7 +481,7 @@ document.addEventListener("atlas:ready", () => {
       it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text").text(legendLabel(s));
       it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
           .classed("lb-on", function () { return this.dataset.series === s.id; }))
-        .on("pointerleave", () => layer.classed("lb-focus", false));
+        .on("pointerleave", unhighlight);
     });
   }
 
