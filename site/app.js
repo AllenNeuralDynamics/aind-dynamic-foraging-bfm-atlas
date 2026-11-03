@@ -144,6 +144,13 @@ function renderMarkdown(md, basePath) {
     const src = img.getAttribute("src") || "";
     if (!/^[a-z]+:/.test(src)) img.src = `data/files/${resolvePath(basePath, src)}`;
     img.loading = "lazy";
+    // a zoom button opens the figure larger, in the #lightbox dialog (wired once, below)
+    const fig = document.createElement("span");
+    fig.className = "fig";
+    img.replaceWith(fig);
+    fig.append(img);
+    fig.insertAdjacentHTML("beforeend", `<button type="button" class="fig-zoom" title="Open larger"
+      aria-label="Open larger: ${esc(img.alt || "figure")}">⤢</button>`);
   }
   const seen = {};
   for (const h of div.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
@@ -540,7 +547,26 @@ function syncNav() {
 }
 
 document.querySelector(".drawer-close").addEventListener("click", closeDrawer);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+// body.drawer-open lets the page squeeze beside the open drawer (style.css); every opener and closer sets hidden
+new MutationObserver(() => document.body.classList.toggle("drawer-open", !document.getElementById("drawer").hidden))
+  .observe(document.getElementById("drawer"), { attributes: true, attributeFilter: ["hidden"] });
+// Escape closes the figure lightbox first (the dialog's own cancel), and the drawer only when no figure is open
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !lightbox.open) closeDrawer(); });
+
+// a report figure's zoom button shows it in the lightbox; a click on the figure, the backdrop or × closes it
+const lightbox = document.getElementById("lightbox");
+document.addEventListener("click", (e) => {
+  const zoom = e.target.closest(".fig-zoom");
+  if (zoom) {
+    e.preventDefault();     // a figure inside a link must not follow it
+    const img = zoom.parentElement.querySelector("img"), big = lightbox.querySelector("img");
+    big.src = img.currentSrc || img.src;
+    big.alt = img.alt;
+    lightbox.showModal();
+  } else if (lightbox.open && (e.target === lightbox || e.target.closest(".lightbox img, .lightbox-close"))) {
+    lightbox.close();
+  }
+});
 
 // the banner's GitHub menu closes on a pick, a click elsewhere, or Escape; capture phase, since the
 // map and About graphs stop their clicks from bubbling

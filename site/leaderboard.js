@@ -48,7 +48,7 @@ document.addEventListener("atlas:ready", () => {
   const fitDx = (p) => (p.fit_kind === "em" ? PAIR_DX : p.fit_kind === "per_subject" ? -PAIR_DX : 0);
   const styleOf = (s) => s.family ? { c: `--lb-fam${(familyIndex(s.family) % 6) + 1}`, m: d3.symbolCircle, size: 40, noline: true, hit: 6 }
     : STYLE[s.id] || { c: "--m-other", m: d3.symbolCircle };
-  const legendLabel = (s) => s.overlay ? `Literature (other fit): ${s.label}` : s.family ? `Literature: ${s.label}` : s.label;
+  const legendLabel = (s) => s.overlay ? `From the literature (other fit): ${s.label}` : s.family ? `From the literature: ${s.label}` : s.label;
   const signed = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
   let twinOf = new Map(), emOf = new Map();     // per draw: literature model -> its headline / other-fit point
   const FORAGING_MODELS = "https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-models";
@@ -77,9 +77,9 @@ document.addEventListener("atlas:ready", () => {
     <div class="table-wrap"><table>
       <thead><tr><th>Model</th><th>Learned from the training mice</th><th>Fitted to each held-out mouse</th></tr></thead>
       <tbody>
-        <tr><td>CTT, Hattori, study 12's literature models: MLE</td><td>nothing</td><td>all of its parameters, by maximum
+        <tr><td>CTT, Hattori, study 12's models from the literature: MLE</td><td>nothing</td><td>all of its parameters, by maximum
           likelihood (no prior, nothing shared across mice)</td></tr>
-        <tr><td>Study 12's literature models: 2-level EM</td><td>nothing</td><td>its own typical parameters, with each
+        <tr><td>Study 12's models from the literature: 2-level EM</td><td>nothing</td><td>its own typical parameters, with each
           session's parameters varying around them under a fixed prior (Laplace-EM on its even sessions; odd sessions
           scored by the session marginal)</td></tr>
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
@@ -113,7 +113,7 @@ document.addEventListener("atlas:ready", () => {
     <p>Every trial of the held-out sessions is scored here, ignored trials included, so only models that predict an
       ignore can be drawn: study 02's 3-way GRU (left, right or ignore as its output; trained with ignored trials kept)
       and study 14's GLM-HMM (hurdle emission: per state, a respond-or-ignore GLM times a left-or-right GLM). Study 12's
-      literature models and study 13's CTT and Hattori fits predict left vs right only, and are on the
+      models from the literature and study 13's CTT and Hattori fits predict left vs right only, and are on the
       <a href="#/leaderboard">choice board</a>; so are the disRNN and study 01's 2-way GRU.</p>
     <div class="table-wrap"><table>
       <thead><tr><th>Score</th><th>What it counts</th><th>Chance</th></tr></thead>
@@ -175,37 +175,47 @@ document.addEventListener("atlas:ready", () => {
   // hand-written: rows assume less about the strategy going up, columns assume less about how stable it is going
   // right. A box with series prefixes is on the leaderboard; hovering it highlights those series in the chart, and
   // clicking it keeps them highlighted (pins it) until it is clicked again.
-  const COLS = ["Single session", "Hierarchical (pooled across mice and sessions)", "State-space: discrete states (HMM)",
+  const COLS = ["Per session / per subject", "Hierarchical (pooled across mice and sessions)", "State-space: discrete states (HMM)",
     "State-space: continuous drift (dynamic)"];
   const LANDSCAPE = [   // top row first; col is [first column, span]
-    [{ label: "Gated recurrent units (GRUs)", col: [1, 4], series: ["gru-"],
+    [{ label: "Gated recurrent units (GRUs)", col: [1, 4], series: ["gru-"], key: "gru",
        note: "A recurrent network that learns the strategy from data; a held-out mouse gets its own embedding." }],
-    [{ label: "Disentangled recurrent neural networks (disRNNs)", col: [1, 4], series: ["disrnn-"],
+    [{ label: "Disentangled recurrent neural networks (disRNNs)", col: [1, 4], series: ["disrnn-"], key: "disrnn",
        note: "A recurrent network with a bottleneck that keeps its latent variables few and readable." }],
-    [{ label: "Single-session GLM", col: [1, 1], note: "A logistic regression on recent choices and rewards. Not on the leaderboard." },
+    [{ label: "Per-session / per-subject GLM", col: [1, 1], note: "A logistic regression on recent choices and rewards. Not on the leaderboard." },
      { label: "Hierarchical GLM", col: [2, 1], note: "Not on the leaderboard yet." },
-     { label: "HMM + GLM", col: [3, 1], series: ["glmhmm-"],
+     { label: "HMM + GLM", col: [3, 1], series: ["glmhmm-"], key: "glmhmm",
        note: "GLM-HMM: the GLM's weights switch between a few hidden states (study 14)." },
      { label: "Dynamic GLM", col: [4, 1], note: "GLM weights that drift from trial to trial. Not on the leaderboard yet." }],
-    [{ label: "Single-session cognitive models", col: [1, 1], series: ["ctt", "hattori", "literature-"],
-       note: "A named strategy (e.g. Q-learning, compare-to-threshold) fitted to each mouse alone: CTT and Hattori MLE, and the hollow literature markers." },
-     { label: "Hierarchical cognitive models", col: [2, 1], series: ["ctt", "hattori", "literature-"],
-       note: "The same strategies with each session's parameters varying around the mouse's own: CTT and Hattori HB, and the filled (2-level EM) literature markers." },
+    [{ label: "Per-session / per-subject cognitive models", col: [1, 1], series: ["ctt", "hattori", "literature-"], key: "cog-subject",
+       note: "A named strategy (e.g. Q-learning, compare-to-threshold) fitted to each session or each mouse alone (on the leaderboard: per mouse): CTT and Hattori MLE, and the hollow per-subject markers of the models from the literature." },
+     { label: "Hierarchical cognitive models", col: [2, 1], series: ["ctt", "hattori", "literature-"], key: "cog-hier",
+       note: "The same strategies with each session's parameters varying around the mouse's own: CTT and Hattori HB, and the filled (2-level EM) markers of the models from the literature." },
      { label: "HMM + cognitive", col: [3, 1], note: "A cognitive model whose parameters switch between hidden states. Not on the leaderboard yet." },
      { label: "Dynamic cognitive", col: [4, 1], note: "Cognitive parameters that drift over time. Not on the leaderboard yet." }],
   ];
   const landscape = () => `<details class="lb-landscape" open><summary>Why these models</summary>
     <p><b>Going up</b>, a model assumes less about the strategy (cognitive hypothesis, GLM weights, recurrent network).
       <b>Going right</b>, it assumes less about how stable the strategy is across mice and time. Filled boxes are on the
-      leaderboard below: hover one to highlight its models, click it to keep them highlighted, click again to clear.</p>
+      leaderboard below: hover one to highlight its models, click it to keep them highlighted, click again to clear.
+      Hovering a marker in the chart lights its box here.</p>
     <div class="lsc" role="group" aria-label="The modelling landscape">
       <div class="lsc-y" aria-hidden="true"><span>Data-driven</span><span class="lsc-arrow-y"></span><span>Hypothesis-driven</span></div>
       ${LANDSCAPE.map((row, r) => row.map((c) => `<div class="lsc-cell ${c.series ? "lsc-on" : "lsc-off"}"
         style="grid-row:${r + 1};grid-column:${c.col[0] + 1} / span ${c.col[1]}" title="${esc(c.note)}"
-        ${c.series ? `data-series="${esc(c.series.join(" "))}" role="button" aria-pressed="false" tabindex="0"` : ""}>${esc(c.label)}</div>`).join("")).join("")}
+        ${c.series ? `data-series="${esc(c.series.join(" "))}" data-key="${c.key}" role="button" aria-pressed="false" tabindex="0"` : ""}>${esc(c.label)}</div>`).join("")).join("")}
       ${COLS.map((c, i) => `<div class="lsc-col" style="grid-row:5;grid-column:${i + 2}">${esc(c)}</div>`).join("")}
       <div class="lsc-x" aria-hidden="true"><span>Stationary</span><span class="lsc-arrow-x"></span><span>Non-stationary</span></div>
     </div></details>`;
+  // hovering a chart marker lights its box in the landscape: a CTT, Hattori or literature point by its fit (per-subject
+  // MLE, or hierarchical: HB and 2-level EM), every other point by its series; markCell() with nothing clears it
+  function markCell(s, p) {
+    const key = !s ? null
+      : s.panel === "cognitive" ? (/ HB$/.test(p.x) ? "cog-hier" : "cog-subject")
+      : s.panel === "literature" ? (p.fit_kind === "em" ? "cog-hier" : "cog-subject")
+      : LANDSCAPE.flat().find((c) => c.series && c.series.some((q) => s.id.startsWith(q)))?.key;
+    for (const cell of main().querySelectorAll(".lsc-cell[data-key]")) cell.classList.toggle("lsc-lit", cell.dataset.key === key);
+  }
   // the series test of the pinned landscape box (null: none); leaving any hover returns the chart to it
   let pinned = null;
   const highlight = (keep) => {
@@ -275,8 +285,8 @@ document.addEventListener("atlas:ready", () => {
       ${tabs(id)}
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
         ${howTo}
-        (a literature model opens its own panel: what it is, its equations, paper and code).
-        In the literature panel each model is a pair, its per-subject fit (hollow, left) and its 2-level EM fit (filled,
+        (a model from the literature opens its own panel: what it is, its equations, paper and code).
+        In the panel of models from the literature each model is a pair, its per-subject fit (hollow, left) and its 2-level EM fit (filled,
         right), joined by a line and named above; pairs are ranked by study 12's headline score (the 2-level EM score, or
         the per-subject one where it is higher). With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
@@ -429,11 +439,12 @@ document.addEventListener("atlas:ready", () => {
         mk.append("path").attr("d", d3.symbol(off ? d3.symbolTriangle : st.m, st.size || (s.panel === "cognitive" ? 70 : 42))())
           .attr("transform", off === "below" ? "rotate(180)" : null)
           .attr("class", st.stroke ? "lb-mk-x" : hollow ? "lb-mk-hollow" : "lb-mk");
-        // a literature model opens its model panel (equations, paper, code); every other point its result block
-        const open = () => { if (p.summary) openModel(s, p); else location.hash = blockRoute(p.block); };
-        mk.on("pointerenter focus", (ev) => { tip.show(ev.currentTarget, card(s, p, undefined, off)); showGuide(p.mean, c); })
-          .on("pointerleave", () => { tip.hide(); hideGuide(); })
-          .on("blur", (ev) => { hideGuide(); if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
+        // a model from the literature opens its model panel (equations, paper, code), a GRU, disRNN or GLM-HMM
+        // its family's card; every other point its result block
+        const open = () => { if (p.summary) openModel(s, p); else if (cardOf(s)) openCard(s, p); else location.hash = blockRoute(p.block); };
+        mk.on("pointerenter focus", (ev) => { tip.show(ev.currentTarget, card(s, p, undefined, off)); showGuide(p.mean, c); markCell(s, p); })
+          .on("pointerleave", () => { tip.hide(); hideGuide(); markCell(); })
+          .on("blur", (ev) => { hideGuide(); markCell(); if (!tipEl.contains(ev.relatedTarget)) tip.hide(); })   // Tab into the card keeps it
           .on("click", open)
           .on("keydown", (ev) => {
             if (ev.key === "Enter") open();
@@ -466,7 +477,7 @@ document.addEventListener("atlas:ready", () => {
         it.append("path").attr("transform", "translate(5,0)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk-hollow");
         it.append("path").attr("transform", "translate(19,0)").attr("d", d3.symbol(d3.symbolCircle, 32)()).attr("class", "lb-mk");
         it.append("text").attr("x", 30).attr("dy", "0.35em").attr("class", "lb-legend-text")
-          .text("Literature pair: per-subject fit (hollow, left), 2-level EM fit (filled, right)");
+          .text("Model from the literature, a pair: per-subject fit (hollow, left), 2-level EM fit (filled, right)");
         it.on("pointerenter", () => layer.classed("lb-focus", true).selectAll(".lb-series")
             .classed("lb-on", function () { return this.dataset.series.startsWith("literature-"); }))   // both fits of every pair
           .on("pointerleave", unhighlight);
@@ -501,7 +512,7 @@ document.addEventListener("atlas:ready", () => {
         : `<div class="tip-v">${esc(p.description)}</div>`}
       <div class="tip-v">Reported in study ${esc(studyNo(b.study))} ${esc(b.report)}, ${esc(b.block)};
         read from <span class="mono">${esc(p.source.path.split("/").pop())}</span></div>
-      <div class="lb-tip-links">${p.summary ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
+      <div class="lb-tip-links">${p.summary || cardOf(s) ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
   }
 
   // a literature model's two fits: the headline marker names the other fit, and the other fit the headline
@@ -520,7 +531,7 @@ document.addEventListener("atlas:ready", () => {
     const body = document.getElementById("drawer-body");
     const codeUrl = code.path && code.commit ? `${FORAGING_MODELS}/blob/${encodeURIComponent(code.commit)}/${code.path.split("/").map(encodeURIComponent).join("/")}` : null;
     body.innerHTML = `
-      <div class="k muted">Literature model · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
+      <div class="k muted">Model from the literature · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
       <h2 style="margin-top:0">${esc(p.x)}</h2>
       <p>${A.chip(s.label)} rank ${esc(p.rank)} · ${s.overlay ? `its ${esc(p.fit)}` : `headline${p.fit ? ` (${esc(p.fit)})` : ""}`}
         <b>${fmt(p.mean)}</b></p>
@@ -537,6 +548,185 @@ document.addEventListener("atlas:ready", () => {
       </ul>
       <p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`;
     if (p.equations) body.querySelector(".lb-model-eq").append(A.renderMarkdown(p.equations, b.report_path));
+    const drawer = document.getElementById("drawer");
+    if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
+    drawer.hidden = false;
+    drawer.focus();
+  }
+
+  // ------------------------------------------------------------ model cards for the GRU, disRNN and GLM-HMM
+  // Hand-written, as the landscape is: the models from the literature bring their text from study 12's JSON,
+  // these families have no such source. Facts are from the code each study ran (pinned below) and the
+  // studies' sweeps (study 01: session conditioning on; study 06: 5 latents, linear choice net; study 14:
+  // hurdle emission, L = 10). Diagrams are inline SVG on the theme's colours.
+  const WRAPPER = "https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-wrapper/blob/5affee531856d6eff31c9285e981c93747699efc";
+  const DISRNN_LIB = "https://github.com/AllenNeuralDynamics/aind-disentangled-rnns/blob/a9b9978831cb22d37e2a75c15805c621dfe00b1f";
+  const GLMHMM_CODE = `${FORAGING_MODELS}/tree/cf38f45d38eddaade38434bd9dbecfa4a98f7388/src/aind_dynamic_foraging_models/glm_hmm`;
+
+  // diagram pieces: a box with one or two centred lines, an arrow along points
+  const box = (x, y, w, h, cls, lines) => `<rect class="mc-box ${cls}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>` +
+    lines.map((t, i) => `<text x="${x + w / 2}" y="${y + h / 2 + (i - (lines.length - 1) / 2) * 15}" dy="0.35em" text-anchor="middle"
+      ${i ? `class="mc-sub"` : ""}>${t}</text>`).join("");
+  const arrow = (pts, cls = "") => `<polyline class="mc-arrow ${cls}" points="${pts}" marker-end="url(#${cls.includes("mc-orange") ? "mc-ah-o" : "mc-ah"})"/>`;
+  const diagram = (h, body, label) => `<svg class="mc-diagram" viewBox="0 0 520 ${h}" role="img" aria-label="${esc(label)}">
+    <defs>
+      <marker id="mc-ah" class="mc-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="mc-ah-o" class="mc-ah mc-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>${body}</svg>`;
+
+  const GRU_DIAGRAM = diagram(212, `
+    ${box(4, 22, 104, 36, "mc-in mc-blue", ["Subject ID i"])}
+    ${box(134, 14, 150, 52, "mc-blue", ["Subject embedding", "eᵢ, a row of a table"])}
+    ${box(4, 132, 104, 36, "mc-in mc-orange", ["Session index s"])}
+    ${box(134, 124, 150, 52, "mc-orange", ["Session-delta MLP", "Δ(eᵢ, s)"])}
+    ${box(300, 80, 62, 44, "mc-grey", ["eᵢ + Δ", "context"])}
+    ${box(392, 70, 116, 64, "mc-green", ["GRU core", "hidden state hₜ"])}
+    ${box(400, 4, 100, 32, "mc-in", ["aₜ₋₁, rₜ₋₁"])}
+    ${box(400, 172, 100, 34, "mc-in", ["P(aₜ)"])}
+    ${arrow("108,40 132,40")} ${arrow("209,66 209,122")} ${arrow("108,150 132,150")}
+    ${arrow("284,40 322,40 322,78")} ${arrow("284,150 340,150 340,126")}
+    ${arrow("362,102 390,102")} ${arrow("450,36 450,68")} ${arrow("450,134 450,170")}`,
+    "GRU: the subject embedding plus a session delta, with the previous choice and reward, drive a GRU core that outputs the choice probabilities");
+
+  const DISRNN_DIAGRAM = diagram(272, `
+    ${box(40, 92, 100, 46, "mc-grey", ["Latents", "z¹ₜ … zᴺₜ"])}
+    ${box(40, 176, 100, 46, "mc-in", ["Observations oₜ", "subject cᵢ"])}
+    ${box(190, 10, 124, 38, "mc-blue", ["Choice MLP"])}
+    <text x="334" y="29" dy="0.35em">P(aₜ) vs the actual choice</text>
+    ${box(190, 82, 124, 36, "mc-blue", ["Update MLP 1"])}
+    <text x="252" y="140" text-anchor="middle" class="mc-sub">⋮</text>
+    ${box(190, 156, 124, 36, "mc-blue", ["Update MLP N"])}
+    ${box(340, 82, 116, 36, "mc-noise mc-orange", ["z¹ₜ₊₁ + noise"])}
+    ${box(340, 156, 116, 36, "mc-noise mc-orange", ["zᴺₜ₊₁ + noise"])}
+    ${arrow("140,104 188,36")}
+    ${arrow("140,110 188,96", "mc-orange")} ${arrow("140,126 188,170", "mc-orange")}
+    ${arrow("140,190 188,106", "mc-orange")} ${arrow("140,204 188,182", "mc-orange")}
+    ${arrow("314,29 330,29")} ${arrow("314,100 338,100")} ${arrow("314,174 338,174")}
+    <polyline class="mc-arrow" points="456,174 492,174"/>
+    ${arrow("456,100 492,100 492,242 16,242 16,115 38,115")}
+    <text x="300" y="234" text-anchor="middle" class="mc-sub">next trial: the noisy latents are the new zₜ</text>
+    <text x="16" y="264" class="mc-sub mc-orange-text">Orange arrows and dashed boxes: noisy bottlenecks, penalised by β.</text>`,
+    "disRNN: few latent variables, each with its own update network; noisy bottlenecks on the update networks' inputs and on the latents");
+
+  const GLMHMM_DIAGRAM = diagram(212, `
+    <text x="70" y="44" dy="0.35em" text-anchor="middle" class="mc-sub">…</text>
+    ${[170, 300, 430].map((cx, i) => `<circle class="mc-box mc-green" cx="${cx}" cy="44" r="24"/>
+      <text x="${cx}" y="44" dy="0.35em" text-anchor="middle">${["zₜ₋₁", "zₜ", "zₜ₊₁"][i]}</text>
+      ${box(cx - 56, 112, 112, 42, "mc-blue", ["GLM of its state", "σ(a·eₜ), σ(w·hₜ)"])}
+      <text x="${cx}" y="196" dy="0.35em" text-anchor="middle">${["yₜ₋₁", "yₜ", "yₜ₊₁"][i]}</text>
+      ${arrow(`${cx},68 ${cx},110`)} ${arrow(`${cx},154 ${cx},184`)}`).join("")}
+    ${arrow("84,44 144,44")} ${arrow("194,44 274,44")} ${arrow("324,44 404,44")}
+    <text x="234" y="34" text-anchor="middle" class="mc-sub">A</text><text x="364" y="34" text-anchor="middle" class="mc-sub">A</text>
+    ${box(4, 112, 92, 42, "mc-in mc-orange", ["history xₜ", "last 10 trials"])}
+    <polyline class="mc-arrow mc-orange" points="96,133 102,133 102,96 456,96"/>
+    ${[196, 326, 456].map((x0) => arrow(`${x0},96 ${x0},110`, "mc-orange")).join("")}`,
+    "GLM-HMM: a hidden state follows a Markov chain; each state has its own GLM of the trial history that gives the choice");
+
+  const MODEL_CARDS = [
+    { prefix: "gru-", title: "Gated recurrent unit (GRU)", diagram: GRU_DIAGRAM,
+      summary: `A recurrent neural network that learns the strategy from the data, with no hypothesis built in. On each
+        trial it reads the previous choice and reward, together with a short vector that says which mouse (and which
+        session) this is, updates its hidden state, and reads out the choice probabilities. Every mouse shares the
+        network; only the vector differs.`,
+      heldout: `A held-out mouse gets its own subject embedding, fitted on its other sessions; the network stays as
+        trained. In the reservoir-only line the recurrent core keeps its random initial weights, and only the
+        embeddings and the readout are trained.`,
+      equations: String.raw`Notation: trial $t$; choice $a_t$; reward $r_t$; mouse $i$; session $s$; $\sigma$ the logistic
+function; $\odot$ the element-wise product.
+
+**Context.** A learned subject embedding plus a learned session delta (study 01 ran with session conditioning on):
+
+$$c_{i,s} = e_i + \Delta(e_i, s), \qquad x_t = [\,a_{t-1},\ r_{t-1},\ c_{i,s}\,]$$
+
+**GRU core** (hidden state $h_t$ of size $H$):
+
+$$\begin{aligned} z_t &= \sigma(W_z x_t + U_z h_{t-1} + b_z) \\ g_t &= \sigma(W_g x_t + U_g h_{t-1} + b_g) \\ \tilde h_t &= \tanh\!\big(W_h x_t + U_h (g_t \odot h_{t-1}) + b_h\big) \\ h_t &= (1 - z_t) \odot h_{t-1} + z_t \odot \tilde h_t \end{aligned}$$
+
+**Choice.** A linear readout and a softmax over left and right (and ignore, for the 3-way GRU):
+
+$$P(a_t) = \mathrm{softmax}(W_o h_t + b_o)$$
+
+**Training.** Cross-entropy of the actual choices, by Adam, on the training mice's sessions.`,
+      sources: [`Paper: <a href="https://arxiv.org/abs/1406.1078" target="_blank" rel="noopener">Cho et al. (2014)</a>, the GRU`,
+        `Code: <a href="${WRAPPER}/code/models/gru_network.py" target="_blank" rel="noopener"><code>MultisubjectGru</code></a> in aind-dynamic-foraging-bfm-wrapper @ <span class="mono">5affee53</span>`] },
+    { prefix: "disrnn-", title: "Disentangled RNN (disRNN)", diagram: DISRNN_DIAGRAM,
+      summary: `A recurrent neural network built to be read. Its state is a few latent variables, and each latent has
+        its own small update network. Noisy bottlenecks sit on every input an update network reads and on every
+        latent it keeps; a penalty (β) on them makes the network use as few latents and as few interactions as the
+        data allow. A larger β closes more bottlenecks and gives a simpler, more readable model.`,
+      heldout: `A held-out mouse gets its own subject embedding, fitted on its other sessions; the network stays as
+        trained.`,
+      equations: String.raw`Notation: trial $t$; latents $z_t \in \mathbb{R}^N$ ($N = 5$ in study 06); observations
+$o_t$ (the previous choice and reward); subject context $c_i$; $M$ a fixed bound on each latent; $\epsilon \sim \mathcal{N}(0, 1)$ fresh noise each time.
+
+**Bottleneck.** An input $x$ passes as $\tilde x = m\,x + \sigma \epsilon$, with a learned multiplier $m$ and noise scale
+$\sigma$. Its cost is $\mathrm{KL}\big(\mathcal{N}(m x, \sigma^2)\,\|\,\mathcal{N}(0, 1)\big) = \tfrac12\,(m^2x^2 + \sigma^2 - 1 - \log\sigma^2)$.
+A large $\sigma$ drowns the input: the bottleneck is closed.
+
+**Update.** Latent $k$ has its own network, which reads bottlenecked copies of the observations, the latents and the
+subject context:
+
+$$(u_k, v_k) = \mathrm{MLP}_k(\tilde o_t, \tilde z_t, \tilde c_i), \qquad w_k = \sigma(u_k)$$
+
+$$z^k_{t+1} = (1 - w_k)\, z^k_t + w_k\, M \tanh(v_k / M) + \sigma_k \epsilon$$
+
+**Choice.** A choice network reads the (bottlenecked) latents; in study 06 it is linear:
+
+$$P(a_t) = \mathrm{softmax}\big(\mathrm{ChoiceNet}(\tilde z_t, \tilde c_i)\big)$$
+
+**Training.** Minimise $-\sum_t \log P(a_t) + \beta \sum \mathrm{KL}$ over every bottleneck.`,
+      sources: [`Paper: <a href="https://doi.org/10.52202/075280-2682" target="_blank" rel="noopener">Miller et al., Cognitive model discovery via disentangled RNNs, NeurIPS 36 (2023)</a>
+          (<a href="https://doi.org/10.1101/2023.06.23.546250" target="_blank" rel="noopener">bioRxiv</a>); the diagram is redrawn and simplified from theirs`,
+        `Code: <a href="${DISRNN_LIB}/disentangled_rnns/library/disrnn.py" target="_blank" rel="noopener"><code>HkDisentangledRNN</code></a> in aind-disentangled-rnns @ <span class="mono">a9b99788</span>; the multisubject model in <a href="${WRAPPER}/code/models/multisubject_disrnn.py" target="_blank" rel="noopener">the wrapper</a>`] },
+    { prefix: "glmhmm-", title: "GLM-HMM (hurdle emission)", diagram: GLMHMM_DIAGRAM,
+      summary: `A hidden Markov model whose states each have their own regression of the choice on recent history. The
+        mouse switches between a few strategies (for example engaged, biased to one side, or disengaged) by a Markov
+        chain; within a state, the choice follows that state's GLM. Study 14 uses the hurdle emission: first whether
+        the mouse responds, then which side.`,
+      heldout: `Refit: the held-out mouse gets its own GLM-HMM, started from the shared fit. Refit pooled: the same, with
+        its weights pulled toward the shared fit. Zero-shot: nothing is fitted; the shared fit predicts every mouse.
+        The choice board scores only the side half, on the trials the mouse responded; the 3-way and engagement
+        boards score both halves.`,
+      equations: String.raw`Notation: trial $t$; outcome $y_t \in \{L, R, \text{ignore}\}$; side $s = +1$ (right),
+$-1$ (left) or $0$ (ignore); reward $r$; $\sigma$ the logistic function.
+
+**States.** Each session is a sequence of hidden states $z_t \in \{1, \dots, K\}$, restarted every session:
+
+$$P(z_1 = k) = \pi_k, \qquad P(z_t = k \mid z_{t-1} = j) = A_{jk}$$
+
+**Regressors**, for lags $l = 1, \dots, L$ ($L = 10$ in study 14's K grid):
+
+$$\begin{aligned} &\text{side:} && \text{RewC}_l = s_{t-l}\, r_{t-l}, \quad \text{UnrC}_l = s_{t-l}\,(1 - r_{t-l}) \\ &\text{engagement:} && \text{Ignored}_l = [\,y_{t-l} = \text{ignore}\,], \quad \text{Rewarded}_l = r_{t-l} \end{aligned}$$
+
+$h_t$ holds the side lags (RewC, UnrC) plus a bias; $e_t$ the engagement lags (Ignored, Rewarded) plus a bias.
+
+**Hurdle emission.** In state $k$:
+
+$$P(\text{respond} \mid k) = \sigma(a_k \cdot e_t), \qquad P(R \mid \text{respond}, k) = \sigma(w_k \cdot h_t)$$
+
+**Fitting.** EM: the E-step infers the states (forward-backward); the M-step solves each state's two logistic
+regressions exactly (Newton), weighted by the state posteriors.`,
+      sources: [`Paper: <a href="https://doi.org/10.1038/s41593-021-01007-z" target="_blank" rel="noopener">Ashwood et al., Mice alternate between discrete strategies during perceptual decision-making, Nature Neuroscience 25, 201–212 (2022)</a>`,
+        `Code: <a href="${GLMHMM_CODE}" target="_blank" rel="noopener"><code>glm_hmm</code></a> in aind-dynamic-foraging-models @ <span class="mono">cf38f45d</span> (the version study 14 ran)`] },
+  ];
+  const cardOf = (s) => MODEL_CARDS.find((c) => s.id.startsWith(c.prefix));
+
+  // a GRU, disRNN or GLM-HMM point's card, in the drawer: its family's text, diagram and equations, and this point
+  function openCard(s, p) {
+    const c = cardOf(s), b = p.block;
+    const body = document.getElementById("drawer-body");
+    body.innerHTML = `
+      <div class="k muted">Model · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
+      <h2 style="margin-top:0">${esc(c.title)}</h2>
+      <p>${A.chip(s.label)} ${esc(xText(s.panel, p.x))} · <b>${fmt(p.mean)}</b>${p.n > 1 ? ` ± ${fmt(p.sem)} (${p.n} seeds)` : ""}</p>
+      <p>${c.summary}</p>
+      ${c.diagram}
+      <h3>Equations</h3><div class="lb-model-eq"></div>
+      <h3>How a held-out mouse meets it</h3><p>${c.heldout}</p>
+      <h3>This point</h3><p>${esc(p.description)}</p>
+      <h3>Sources</h3><ul>${c.sources.map((x) => `<li>${x}</li>`).join("")}</ul>
+      <p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`;
+    body.querySelector(".lb-model-eq").append(A.renderMarkdown(c.equations, b.report_path));
     const drawer = document.getElementById("drawer");
     if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
     drawer.hidden = false;
