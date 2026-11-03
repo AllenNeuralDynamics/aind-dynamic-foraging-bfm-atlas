@@ -547,9 +547,13 @@ function syncNav() {
 }
 
 document.querySelector(".drawer-close").addEventListener("click", closeDrawer);
-// body.drawer-open lets the page squeeze beside the open drawer (style.css); every opener and closer sets hidden
-new MutationObserver(() => document.body.classList.toggle("drawer-open", !document.getElementById("drawer").hidden))
-  .observe(document.getElementById("drawer"), { attributes: true, attributeFilter: ["hidden"] });
+// body.drawer-open lets the page squeeze beside the open drawer (style.css); every opener and closer sets hidden.
+// A closed drawer forgets the study card it showed (map.js), so a later selection does not reopen it by itself
+new MutationObserver(() => {
+  const drawer = document.getElementById("drawer");
+  document.body.classList.toggle("drawer-open", !drawer.hidden);
+  if (drawer.hidden) delete drawer.dataset.study;
+}).observe(document.getElementById("drawer"), { attributes: true, attributeFilter: ["hidden"] });
 // Escape closes the figure lightbox first (the dialog's own cancel), and the drawer only when no figure is open
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !lightbox.open) closeDrawer(); });
 

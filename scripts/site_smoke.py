@@ -162,7 +162,7 @@ def main(site: str, out: str) -> int:
                 if page.locator("h1", has_text=bad).count():
                     failures.append(f"{name}: rendered '{bad}'")
             page.screenshot(path=str(out / f"{name}.png"))
-        # study map: one node per study, a layer toggles its edges, selecting a study fills the panel
+        # study map: one node per study, a layer toggles its edges, selecting a study opens its card in the drawer
         page.goto(base + "#/")
         page.wait_for_selector("#study-map .node", timeout=20000)
         if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
@@ -184,11 +184,15 @@ def main(site: str, out: str) -> int:
             failures.append("study map: the upstream layer did not toggle")
         up.click()
         page.locator("#study-map .node[data-id]:not(.issue)").first.click()
-        if not page.locator("#map-panel", has_text="Motivated by").count():
-            failures.append("study map: selecting a study did not fill the panel")
+        if page.locator("#drawer").is_hidden() or not page.locator("#drawer", has_text="Motivated by").count():
+            failures.append("study map: selecting a study did not open its card in the drawer")
+        elif page.evaluate("[...document.querySelectorAll('#drawer-body .rels .k')][0]?.textContent || ''").find("Reports") != 0:
+            failures.append("study map: the study card does not list its reports first")
         page.screenshot(path=str(out / "map.png"))
         check_export(page, "#map-export", "study map", out / "map.svg", failures, sha=cat["_meta"]["studies_git_sha"])
-        page.locator("#map-panel .panel-close").click()
+        page.locator("#map-clear").click()
+        if not page.locator("#drawer").is_hidden():
+            failures.append("study map: clearing the selection did not close the study card")
         # a dragged study keeps part of the move once the forces settle (Drag hold), not springing back
         node = page.locator("#study-map .node[data-id]:not(.issue) .body").nth(1)
         page.wait_for_timeout(2500)

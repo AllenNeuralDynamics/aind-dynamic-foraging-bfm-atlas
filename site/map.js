@@ -391,7 +391,7 @@ document.addEventListener("atlas:ready", () => {
       g.addEventListener("focus", show);
       g.addEventListener("blur", hide);
       if (!s) return;
-      const pick = () => { focused = focused === s.id ? null : s.id; store.set("atlas.map.focus", focused); panel(); light(focused); };
+      const pick = () => { focused = focused === s.id ? null : s.id; store.set("atlas.map.focus", focused); panel(!!focused); light(focused); };
       g.addEventListener("click", (ev) => { if (ev.defaultPrevented) return; ev.stopPropagation(); pick(); });
       g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
     });
@@ -464,14 +464,26 @@ document.addEventListener("atlas:ready", () => {
       const text = rkey ? `${study.slice(0, 2)} ${rkey.split("/").pop()}` : study;
       return href ? `<a href="${esc(href)}">${esc(text)}</a>` : esc(text);
     }
-    function panel() {
+    // the selected study's card opens in the page's drawer, as a leaderboard model does; the line under the map names
+    // the selection, so a selection restored on load (or a closed drawer) can reopen it. open: show the card now
+    function panel(open = false) {
       const el = host.querySelector("#map-panel");
       svg.querySelectorAll(".node.focused").forEach((n) => n.classList.remove("focused"));
+      const drawer = document.getElementById("drawer");
       if (!focused) {
-        el.innerHTML = `<p class="muted">Select a study to see why it exists, what it led to, what it uses, and its reports.</p>`;
+        el.innerHTML = `<p class="muted">Select a study to see its reports, why it exists, what it led to, and what it uses.</p>`;
+        if (drawer.dataset.study) { delete drawer.dataset.study; drawer.hidden = true; }
         return;
       }
       svg.querySelector(`.node[data-id="${CSS.escape(focused)}"]`)?.classList.add("focused");
+      el.innerHTML = `<p class="muted">Selected: <b>${esc(focused)}</b> ·
+        <button type="button" class="linkish" id="map-show">Show its details</button> ·
+        <button type="button" class="linkish" id="map-clear">Clear selection</button></p>`;
+      el.querySelector("#map-show").addEventListener("click", () => card(true));
+      el.querySelector("#map-clear").addEventListener("click", () => { focused = null; store.set("atlas.map.focus", null); panel(); light(null); });
+      if (open || drawer.dataset.study) card(open);   // an open card follows the selection
+    }
+    function card(focusIt) {
       const s = S.study[focused], deps = S.cat.dependencies;
       const mb = s.cover.motivated_by;
       const motivated = mb === null || mb === undefined
@@ -490,17 +502,24 @@ document.addEventListener("atlas:ready", () => {
           ${d.note ? ` — ${esc(d.note)}` : ""}</li>`);
       const reports = s.reports.map((r) => `<li><a href="#/report/${esc(s.id)}/${esc(r.id)}">${esc(r.id)}</a> ${statusChip(r.status)}
           ${esc(r.title.replace(/^(Result|r)\s*\d+\s*[—:-]\s*/i, ""))}</li>`);
-      el.innerHTML = `<div class="panel-head"><a href="#/study/${esc(s.id)}"><b>${esc(s.id)}</b></a> ${statusChip(s.cover.status)}
-          <button type="button" class="panel-close" aria-label="Clear selection">×</button></div>
+      // reports first: they are the links a reader came for
+      const drawer = document.getElementById("drawer");
+      document.getElementById("drawer-body").innerHTML = `
+        <div class="k muted">Study</div>
+        <h2 style="margin-top:0"><a href="#/study/${esc(s.id)}">${esc(s.id)}</a> ${statusChip(s.cover.status)}</h2>
         ${tagLine(s) ? `<p class="muted">${esc(tagLine(s))}</p>` : ""}
+        <div class="rels">${relList(`Reports (${s.reports.length})`, reports.length ? reports : [`<li class="muted">None yet.</li>`])}</div>
         ${s.cover.question ? `<p>${esc(s.cover.question)}</p>` : ""}
         ${s.cover.verdict ? `<p class="muted">Verdict: ${esc(s.cover.verdict)}</p>` : ""}
         <div class="rels">
           ${relList("Motivated by", motivated)}${relList("Led to", ledTo)}
           ${relList("Uses results from", uses)}${relList("Used by", usedBy)}${relList("Corrections", corr)}
-          ${relList(`Reports (${s.reports.length})`, reports)}
-        </div>`;
-      el.querySelector(".panel-close").addEventListener("click", () => { focused = null; store.set("atlas.map.focus", null); panel(); light(null); });
+        </div>
+        <p><a href="#/study/${esc(s.id)}">Open the study page →</a></p>`;
+      drawer.dataset.study = s.id;
+      if (drawer.hidden && focusIt) S.drawerOpener = document.activeElement;   // focus returns here on close
+      drawer.hidden = false;
+      if (focusIt) drawer.focus();
     }
     islandsLabel();
     placeAnchors();

@@ -22,8 +22,8 @@ draws how they connect; the About page embeds it.
 - **Study map** (home page): every study by creation order, in lanes by model family, with the
   relationships the studies repo declares (its ADR 0002): **motivation** (why a study exists),
   **correction**, and **upstream** (a report uses another study's results) as a toggle layer.
-  Hover a study for its question and verdict; select it for what motivated it, what it led to,
-  and its reports. Plain links between studies are citations and are not drawn.
+  Hover a study for its question and verdict; select it to open its card in the side drawer: its
+  reports first, then what motivated it, what it led to, and what it uses. Plain links between studies are citations and are not drawn.
 - **Lineage** of any result block: the report drawer (the block's *Provenance* button, or a
   number) and its own page, `#/lineage/<study>/<rN>/<block>`. Each step back from the block to
   its data (report block, analysis, run results, tracked runs, launch records, launch manifests,
