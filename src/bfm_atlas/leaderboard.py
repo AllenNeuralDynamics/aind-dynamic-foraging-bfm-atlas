@@ -37,7 +37,7 @@ PANELS = [
     {"id": "cognitive", "label": "Cognitive models (MLE / HB)",
      "groups": [{"label": "CTT", "x": ["CTT MLE", "CTT HB"]}, {"label": "Hattori", "x": ["Hattori MLE", "Hattori HB"]}]},
     # x is filled at build time from the source's ranks, which move as models are added
-    {"id": "literature", "label": "Literature models, headline score (ranked; study 12)", "x": [], "from_data": True},
+    {"id": "literature", "label": "Models from the literature, headline score (ranked; study 12)", "x": [], "from_data": True},
     {"id": "glmhmm", "label": "GLM-HMM (hurdle), states K", "x": list(range(1, 11))},
     {"id": "disrnn", "label": "disRNN, training mice D", "x": [30, 100, 300, 614]},
     {"id": "gru", "label": "GRU, hidden size H, training mice D", "x": list(D_NOMINAL)},
@@ -206,7 +206,7 @@ SERIES = [
     ]},
     # study 12's headline ranking (r3): each model's 2-level EM score, or its per-subject score where study 12
     # found its 2-level score below its per-subject one; one series per family, worst to best within a family, families by their best
-    {"id": "literature", "panel": "literature", "label": "Literature models, headline score (study 12)",
+    {"id": "literature", "panel": "literature", "label": "Models from the literature, headline score (study 12)",
      "split": "family", "parts": [
         (f"{S12}/r3_2level_em.json",
          json_ranked("/by_model", "headline_score", x_key="literature_model",
@@ -219,7 +219,7 @@ SERIES = [
     ]},
     # the same model's other fit, drawn hollow over it: per-subject where the headline is 2-level EM, and the
     # 2-level fit where the headline is per-subject (its 2-level score is the lower one)
-    {"id": "literature-other", "panel": "literature", "label": "Literature models, the other fit (study 12)",
+    {"id": "literature-other", "panel": "literature", "label": "Models from the literature, the other fit (study 12)",
      "split": "family", "overlay": "literature_model", "parts": [
         (f"{S12}/r3_2level_em.json",
          json_ranked("/by_model", lambda e: "pooled_heldout_per_subject" if _headline_is_em(e) else "pooled_heldout",
