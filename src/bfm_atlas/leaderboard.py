@@ -26,6 +26,7 @@ S06 = "studies/06-disrnn-operating-point-at-scale/analysis"
 S10 = "studies/10-gru-reservoir-ablation"
 S13 = "studies/13-hb-subject-vs-gru-heldout/analysis"
 S14 = "studies/14-glmhmm-vs-gru-heldout/analysis"
+S02 = "studies/02-gru-scaling-law-ignore/analysis"
 
 METRIC = ("Choice likelihood on 149 held-out mice, outside every model's training mice (geometric-mean "
           "probability of each left/right choice). What a model may fit to these mice before it is scored "
@@ -282,6 +283,66 @@ SERIES = [
 ]
 
 
+# ------------------------------------------------------------------ the boards with ignored trials
+# The same 149 held-out mice, scored on every trial, ignores included. Only the models that predict an
+# ignore are drawn: study 02's 3-way GRU and study 14's GLM-HMM (hurdle emission). Study 12's literature
+# models and study 13's HB fits predict left/right only, so they are on the choice board alone.
+D_3WAY = [10, 30, 100, 614]
+IGNORE_PANELS = [
+    {"id": "glmhmm", "label": "GLM-HMM (hurdle), states K", "x": list(range(1, 11))},
+    {"id": "gru", "label": "3-way GRU, hidden size H, training mice D", "x": D_3WAY},
+]
+GLMHMM_REFIT = ("GLM-HMM with K hidden states (hurdle emission: per state, a respond-or-ignore GLM times a "
+                "left-or-right GLM). The shared fit from the training mice is refitted to each held-out mouse's "
+                "own sessions before scoring: study 14's matched protocol. One seed.")
+GLMHMM_POOLED = ("GLM-HMM refitted to each held-out mouse with its weights pulled toward the shared fit, and its "
+                 "transitions too where the training mice's score prefers it (study 14's round 2); the prior at "
+                 "each K is the one that selection score picks. One seed.")
+GLMHMM_ZEROSHOT = "The same GLM-HMM scored with the shared fit alone: nothing is fitted to the held-out mouse. One seed."
+
+
+def _gru_3way(metric: str) -> list[dict]:
+    return [{"id": f"gru-h{h}", "panel": "gru", "label": f"3-way GRU H = {h}", "h": h, "parts": [
+        (f"{S02}/r4_three_way_engagement.json", json_by_x(f"/grid/{metric}/{h}/{{x}}/seeds", D_3WAY),
+         _block("02-gru-scaling-law-ignore", "r4", "result-1"),
+         f"GRU with {h} hidden units and a 3-way output (left, right, ignore), trained on D mice with ignored "
+         "trials kept (study 02); each held-out mouse gets its own subject embedding."),
+    ]} for h in (16, 64, 128, 256)]
+
+
+IGNORE_BOARDS = [
+    {"id": "three_way", "title": "3-way (L / R / ignore)", "ylabel": "3-way likelihood, held-out mice",
+     "metric": ("3-way likelihood on 149 held-out mice (geometric-mean probability of the actual outcome, left, "
+                "right or ignore, on every trial; chance 1/3)"),
+     "panels": IGNORE_PANELS, "series": [
+        {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
+            (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/matched", list(range(1, 11))),
+             _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_REFIT)]},
+        {"id": "glmhmm-pooled", "panel": "glmhmm", "label": "GLM-HMM, refit pooled toward the shared fit", "parts": [
+            (f"{S14}/r2_refit_prior.json", json_by_x("/best_by_k/hurdle/{x}/matched", list(range(1, 11))),
+             _block("14-glmhmm-vs-gru-heldout", "r2", "result-2"), GLMHMM_POOLED)]},
+        {"id": "glmhmm-zeroshot", "panel": "glmhmm", "label": "GLM-HMM, zero-shot (shared fit only)", "parts": [
+            (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/zero_shot", list(range(1, 11))),
+             _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_ZEROSHOT)]},
+        *_gru_3way("three_way"),
+    ]},
+    # study 14's r1 publishes the engagement score of the refit and of the zero-shot fit; the pooled refit's is
+    # in r2's JSON but in no result block, so it is not drawn
+    {"id": "engage", "title": "Engagement (respond vs ignore)", "ylabel": "Engagement likelihood, held-out mice",
+     "metric": ("Engagement likelihood on 149 held-out mice (geometric-mean probability of whether the mouse "
+                "responds or ignores, on every trial; chance 1/2)"),
+     "panels": IGNORE_PANELS, "series": [
+        {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
+            (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/engage", list(range(1, 11))),
+             _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_REFIT)]},
+        {"id": "glmhmm-zeroshot", "panel": "glmhmm", "label": "GLM-HMM, zero-shot (shared fit only)", "parts": [
+            (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/engage_zero_shot", list(range(1, 11))),
+             _block("14-glmhmm-vs-gru-heldout", "r1", "result-1"), GLMHMM_ZEROSHOT)]},
+        *_gru_3way("engage"),
+    ]},
+]
+
+
 def _load(path: Path) -> Any:
     if path.suffix == ".csv":
         with path.open(newline="") as f:
@@ -338,15 +399,18 @@ def _overlay(spec: dict, points: list[dict], panel: dict) -> list[dict]:
     return list(out.values())
 
 
-def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked: Callable[[Path], bool]) -> dict:
-    """catalog.leaderboard for a studies checkout.
+def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked: Callable[[Path], bool],
+                      board: dict | None = None) -> dict:
+    """catalog.leaderboard for a studies checkout, or one board of catalog.leaderboard_ignore.
 
     `reports` maps (study id, report id) to the catalog's report, so each point's block is checked to
-    exist; `tracked` says whether a file is committed (an untracked file is treated as absent).
+    exist; `tracked` says whether a file is committed (an untracked file is treated as absent). `board`
+    is an IGNORE_BOARDS entry; by default, the choice board (METRIC, PANELS, SERIES).
     """
-    panels = copy.deepcopy(PANELS)            # a from_data panel's x is filled per build
+    board = board or {"metric": METRIC, "panels": PANELS, "series": SERIES}
+    panels = copy.deepcopy(board["panels"])   # a from_data panel's x is filled per build
     series, missing, cache = [], [], {}
-    for spec in SERIES:
+    for spec in board["series"]:
         points = []
         for path, read, block, description in spec["parts"]:
             p = root / path
@@ -383,4 +447,10 @@ def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked:
                 order = [x for g in panel.get("groups", [panel]) for x in g["x"]]
                 points.sort(key=lambda pt: order.index(pt["x"]))
             series.append({k: spec[k] for k in ("id", "panel", "label", "h") if k in spec} | {"points": points})
-    return {"available": bool(series), "metric": METRIC, "panels": panels, "series": series, "missing": missing}
+    return {**{k: board[k] for k in ("id", "title", "ylabel") if k in board},
+            "available": bool(series), "metric": board["metric"], "panels": panels, "series": series, "missing": missing}
+
+
+def build_ignore_leaderboards(root: Path, reports: dict[tuple[str, str], dict], tracked: Callable[[Path], bool]) -> list[dict]:
+    """catalog.leaderboard_ignore: the 3-way and engagement boards (IGNORE_BOARDS), in that order."""
+    return [build_leaderboard(root, reports, tracked, b) for b in IGNORE_BOARDS]

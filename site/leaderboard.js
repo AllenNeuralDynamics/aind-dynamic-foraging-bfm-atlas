@@ -1,6 +1,7 @@
 /* The leaderboard (#/leaderboard): every model family's held-out choice likelihood on one axis.
  * Data come from catalog.leaderboard (src/bfm_atlas/leaderboard.py), read at build time from the
- * studies files that hold each number. Hover a dot for what it is; click it to open the result
+ * studies files that hold each number. The boards with ignored trials (#/leaderboard/three_way,
+ * #/leaderboard/engage) come from catalog.leaderboard_ignore and are drawn the same way. Hover a dot for what it is; click it to open the result
  * block that reports it. Registers through window.Atlas; uses map.js's tooltip and Export SVG.
  */
 "use strict";
@@ -15,6 +16,7 @@ document.addEventListener("atlas:ready", () => {
   const GROUP_GAP = 0.4, PANEL_PAD = 0.65;
   const EMPTY_SPAN = 5;          // x units an empty panel (its source not on main yet) keeps for its note
   const PX_PER_UNIT = 44;        // the chart widens with its x range instead of squeezing every panel
+  const MIN_W = 760;             // #leaderboard's min-width in style.css
   const H_ALL = [16, 64, 128, 256, 512];
   const H_DODGE = 0.15;          // x offset per hidden size, inside a GRU D column
   const HEXAGON = { draw(ctx, size) {          // d3 has no hexagon symbol
@@ -105,6 +107,27 @@ document.addEventListener("atlas:ready", () => {
       (<a href="#/report/14-glmhmm-vs-gru-heldout/r2?block-result-2">r2</a>).` : ""}</p>
   </section>`;
 
+  // the boards with ignored trials: which models are on them, and what each score counts
+  const ignoreNotes = (L) => `<section class="lb-notes">
+    <h2>Which models are on this board</h2>
+    <p>Every trial of the held-out sessions is scored here, ignored trials included, so only models that predict an
+      ignore can be drawn: study 02's 3-way GRU (left, right or ignore as its output; trained with ignored trials kept)
+      and study 14's GLM-HMM (hurdle emission: per state, a respond-or-ignore GLM times a left-or-right GLM). Study 12's
+      literature models and study 13's CTT and Hattori fits predict left vs right only, and are on the
+      <a href="#/leaderboard">choice board</a>; so are the disRNN and study 01's 2-way GRU.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Score</th><th>What it counts</th><th>Chance</th></tr></thead>
+      <tbody>
+        <tr><td>3-way</td><td>probability of the actual outcome (left, right or ignore), every trial</td><td>1/3</td></tr>
+        <tr><td>Engagement</td><td>probability of respond vs ignore, every trial</td><td>1/2</td></tr>
+        <tr><td>Choice (other board)</td><td>probability of left vs right, responded trials only</td><td>1/2</td></tr>
+      </tbody></table></div>
+    <p>A held-out mouse meets each model as on the choice board: the GRU fits only a subject embedding; the GLM-HMM is
+      refitted to the mouse (refit), refitted with its weights pulled toward the shared fit (pooled), or not fitted at
+      all (zero-shot).${L.id === "engage" ? ` On this board the GLM-HMM has no pooled line: study 14 reports the
+      engagement score of its pooled refit in no result block.` : ""}</p>
+  </section>`;
+
   // a family name on at most two lines, broken at the space that leaves the shorter longest line
   const LABEL_PX = 6.2;          // about one character of the 11 px bold group label
   function wrapLabel(label) {
@@ -148,8 +171,18 @@ document.addEventListener("atlas:ready", () => {
     return { pos, spans, xmax: x - PANEL_PAD };
   }
 
-  VIEWS.leaderboard = () => {
-    const L = S.cat.leaderboard;
+  // the boards: the choice board, then the boards with ignored trials (if this catalog has them)
+  const tabs = (current) => {
+    const boards = [{ id: "", title: "Choice (left / right)" }, ...(S.cat.leaderboard_ignore || [])];
+    if (boards.length < 2) return "";
+    return `<nav class="lb-tabs" aria-label="Leaderboard boards">${boards.map((b) =>
+      `<a href="#/leaderboard${b.id ? `/${encodeURIComponent(b.id)}` : ""}"${b.id === current ? ` aria-current="page"` : ""}>${esc(b.title)}</a>`).join("")}</nav>`;
+  };
+
+  VIEWS.leaderboard = (which) => {
+    const ignore = (S.cat.leaderboard_ignore || []).find((b) => b.id === which);
+    const L = ignore || S.cat.leaderboard;
+    const id = ignore ? ignore.id : "";
     if (!L) {
       main().innerHTML = `<h1>Leaderboard</h1><p class="muted">This catalog has no leaderboard data (built by an older bfm-atlas).</p>`;
       return;
@@ -159,14 +192,24 @@ document.addEventListener("atlas:ready", () => {
         ${[...new Map(missing.map((m) => [`${m.series}|${m.path}`, m])).values()].map((m) =>
           `${esc(m.label || m.series)} (study ${esc(studyNo(m.block.study))} ${esc(m.block.report)}, <span class="mono">${esc(m.path.split("/").pop())}</span>)`).join("; ")}.</p>` : "";
     if (!L.available) {
-      main().innerHTML = `<h1>Leaderboard</h1><p class="muted">This catalog has no leaderboard data.</p>${missingNote}`;
+      main().innerHTML = `<h1>Leaderboard</h1>${tabs(id)}<p class="muted">This board has no data yet.</p>${missingNote}`;
       return;
     }
-    main().innerHTML = `
+    const howTo = `Large markers are the mean ± SEM over seeds; small dots are single seeds.
+        <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it`;
+    main().innerHTML = ignore ? `
       <h1>Leaderboard</h1>
+      ${tabs(id)}
+      <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it. ${howTo}.
+        With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
+      ${missingNote}
+      <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
+      <div class="lb-host"><div class="lb-wrap"><svg id="leaderboard" role="img" aria-label="Leaderboard: ${esc(L.ylabel)}"></svg></div></div>
+      ${ignoreNotes(L)}` : `
+      <h1>Leaderboard</h1>
+      ${tabs(id)}
       <p class="lb-lede">${esc(L.metric)}. Each model family is read from the study that measured it.
-        Large markers are the mean ± SEM over seeds; small dots are single seeds.
-        <b>Hover</b> a marker for what it is; <b>click</b> it to open the result block that reports it
+        ${howTo}
         (a literature model opens its own panel: what it is, its equations, paper and code).
         In the literature panel each model is a pair, its per-subject fit (hollow, left) and its 2-level EM fit (filled,
         right), joined by a line and named above; pairs are ranked by study 12's headline score (the 2-level EM score, or
@@ -179,7 +222,7 @@ document.addEventListener("atlas:ready", () => {
     // which would be off by the scroll offset inside the horizontally scrolling .lb-wrap
     draw(L, main().querySelector(".lb-host"));
     document.getElementById("lb-export").addEventListener("click", () =>
-      A.downloadSvg(document.getElementById("leaderboard"), `leaderboard-${(S.sha || "main").slice(0, 8)}.svg`));
+      A.downloadSvg(document.getElementById("leaderboard"), `leaderboard-${id ? `${id}-` : ""}${(S.sha || "main").slice(0, 8)}.svg`));
   };
 
   function draw(L, host) {
@@ -193,7 +236,9 @@ document.addEventListener("atlas:ready", () => {
     tipEl.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && active) { ev.stopPropagation(); active.focus(); } });
     const { pos, spans, xmax } = layout(L.panels);
     const series = L.series;
-    const M = { l: 70, r: 14, t: 16, b: 84 }, W = Math.round(M.l + M.r + xmax * PX_PER_UNIT);
+    // at least the chart's CSS min-width (a board with few panels, e.g. the ones with ignored trials, would be
+    // narrower and get stretched past its frame)
+    const M = { l: 70, r: 14, t: 16, b: 84 }, W = Math.max(MIN_W, Math.round(M.l + M.r + xmax * PX_PER_UNIT));
     host.style.setProperty("--lb-w", `${W + 2}px`);
     const litPanel = L.panels.find((p) => p.id === "literature");
     const ranks = new Map(series.filter((s) => s.family && !s.overlay).flatMap((s) => s.points.map((p) => [p.x, p.rank])));
@@ -204,7 +249,7 @@ document.addEventListener("atlas:ready", () => {
     // legend rows above the plot
     // the other-fit series share one legend entry
     const legendItems = [...series.filter((s) => !s.overlay), ...(series.some((s) => s.overlay) ? [{ em: true }] : [])];
-    const perRow = 3, rowH = 18, legendH = Math.ceil(legendItems.length / perRow) * rowH + 8;
+    const perRow = W < 1000 ? 2 : 3, rowH = 18, legendH = Math.ceil(legendItems.length / perRow) * rowH + 8;
     const plotTop = M.t + legendH, H = plotTop + 340 + M.b;
     const svg = d3.select("#leaderboard").attr("viewBox", `0 0 ${W} ${H}`);
     const xAt = (s, p) => pos[`${s.panel}|${p.x}`] + (s.h ? (H_ALL.indexOf(s.h) - 2) * H_DODGE : 0) + (styleOf(s).dx || 0) + fitDx(p);
@@ -261,7 +306,7 @@ document.addEventListener("atlas:ready", () => {
       }
     });
     g.append("text").attr("transform", `translate(16,${(plotTop + H - M.b) / 2}) rotate(-90)`).attr("text-anchor", "middle")
-      .attr("class", "lb-ylabel").text("Choice likelihood, held-out mice");
+      .attr("class", "lb-ylabel").text(L.ylabel || "Choice likelihood, held-out mice");
 
     // series in three layers, so no line covers another series' markers: lines and error bars,
     // then seed dots, then the mean markers on top (a marker's card lists its seeds)

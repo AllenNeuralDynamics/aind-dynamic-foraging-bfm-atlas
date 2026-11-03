@@ -359,6 +359,10 @@ a.lchip { color: var(--accent); }
 
 /* leaderboard (leaderboard.js) */
 .lb-lede { max-width: 860px; }
+.lb-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.lb-tabs a { border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; color: var(--muted); }
+.lb-tabs a:hover { border-color: var(--accent); color: var(--accent); }
+.lb-tabs a[aria-current="page"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .lb-missing { font-size: 0.9em; }
 /* full-bleed: the chart is as wide as its x range needs (--lb-w, set by leaderboard.js), up to the viewport */
 .lb-host { width: min(calc(100vw - 32px), var(--lb-w, 100%)); max-width: calc(100vw - 32px); margin-left: 50%; transform: translateX(-50%); }

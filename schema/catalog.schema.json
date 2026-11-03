@@ -441,6 +441,24 @@
         }
       }
     },
+    "leaderboard_ignore": {
+      "description": "The leaderboard boards with ignored trials (leaderboard.py IGNORE_BOARDS): the 3-way and engagement likelihood of the models that predict an ignore, each board shaped like the choice leaderboard.",
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/properties/leaderboard"
+          },
+          {
+            "required": [
+              "id",
+              "title",
+              "ylabel"
+            ]
+          }
+        ]
+      }
+    },
     "leaderboard": {
       "description": "The leaderboard view (leaderboard.py): each model family's held-out choice likelihood, read at build time from the studies files that hold it, with the result block that reports each point.",
       "type": "object",
@@ -450,6 +468,15 @@
         "missing"
       ],
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "ylabel": {
+          "type": "string"
+        },
         "available": {
           "type": "boolean"
         },
