@@ -19,7 +19,7 @@ draws how they connect; the About page embeds it.
 
 ## What it shows
 
-- **Home** (`#/`): our SfN 2026 abstract ("Modeling adaptive decision-making at scale"), each claim
+- **Home** (`#/`, the first navigation link and the site title): our SfN 2026 abstract ("Modeling adaptive decision-making at scale"), each claim
   linked to the study, report or model card behind it, with a hover card listing every source it draws on
   (hand-written in `site/home.js`; a link whose study or report is not in the catalog is dropped),
   then links to the rest of the atlas.
