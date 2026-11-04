@@ -20,7 +20,7 @@ draws how they connect; the About page embeds it.
 ## What it shows
 
 - **Home** (`#/`): our SfN 2026 abstract ("Modeling adaptive decision-making at scale"), each claim
-  linked to the study or report behind it, with a hover card listing every source it draws on
+  linked to the study, report or model card behind it, with a hover card listing every source it draws on
   (hand-written in `site/home.js`; a link whose study or report is not in the catalog is dropped),
   then links to the rest of the atlas.
 - **Study map** (`#/studies`): every study by creation order, in lanes by model family, with the

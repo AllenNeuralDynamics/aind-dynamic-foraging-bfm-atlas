@@ -16,18 +16,14 @@ document.addEventListener("atlas:ready", () => {
     "M. Tom", "H. Loeffler", "H. D. Nguyen", "A. M. Amaya", "M. Olsen", "A. Stearns", "D. Rette", "T. Ramirez", "B. Ouellette",
     "M. Woodard", "N. Mars", "A. Cahoon", "K. Svoboda", "L. N. Driscoll", "J. Y. Cohen"];
 
-  // a link: a report ({study, report}), a study ({study}) or an atlas page ({route, label}), with one line on
-  // what it shows; the phrase's own link is its first one that resolves
+  // a link: a report ({study, report}), a study ({study}), an atlas page ({route, label}) or a leaderboard model
+  // card ({card, label}, opened in the drawer), with one line on what it shows; the phrase's own link is its first
+  // one that resolves
   const R = (study, report, note) => ({ study, report, note });
   const P = (route, label, note) => ({ route, label, note });
+  const C = (card, label, note) => ({ card, label, note });
   const LINKS = {
-    rnn: [R("01-gru-scaling-law", null, "The GRU foundation model: trained on up to 614 mice and scored on 149 held-out mice.")],
-    arch: [P("#/leaderboard", "Leaderboard: the GRU's model card", "Click a GRU marker for the architecture: subject embedding plus session delta, GRU core, readout."),
-      R("50-gru-dynamics-embedding", "r5", "What the subject embedding does to the trained GRU.")],
-    scale: [R("01-gru-scaling-law", "r1", "Held-out likelihood against the number of training mice D."),
-      R("01-gru-scaling-law", "r3", "Bootstrap confidence intervals on the shape of that curve.")],
-    heldout: [R("01-gru-scaling-law", "r4", "Zero-shot against adapted: the held-out mouse gets its own embedding, the core stays fixed."),
-      R("01-gru-scaling-law", "r5", "How many of a new mouse's sessions the embedding needs.")],
+    arch: [C("gru-", "The GRU's model card", "Its architecture, a diagram, the equations and sources; the phrase opens it.")],
     cognitive: [P("#/leaderboard", "Leaderboard", "Every model family on the same 149 held-out mice."),
       R("01-gru-scaling-law", "r8", "The GRU against the classical-RL suite, mouse by mouse."),
       R("12-cognitive-literature-leaderboard", "r3", "The models from the literature, fit per subject and as 2-level EM."),
@@ -53,12 +49,12 @@ document.addEventListener("atlas:ready", () => {
       "ethologically relevant settings. Modeling such behavior at scale requires approaches that can accurately predict " +
       "and reproduce behavior while accounting for both shared computational structure and factors contributing to " +
       "behavioral variability."],
-    ["Here, we develop a ", ["rnn", "recurrent neural network (RNN) model"], " using a large-scale dataset comprising over 750 " +
+    ["Here, we develop a recurrent neural network (RNN) model using a large-scale dataset comprising over 750 " +
       "mice, 22,000 sessions, and 12 million trials from a two-arm bandit task with changing reward contingencies. The model " +
       "combines a ", ["arch", "gated recurrent unit core with learned subject and session embeddings"], " that adapt its " +
-      "dynamics to individual animals and sessions. We pre-train variants of the model at multiple scales using data from ",
-      ["scale", "10, 30, 100, 300, or 614 mice"], " and ", ["heldout", "evaluate generalization to 149 held-out mice by " +
-      "fine-tuning only the embeddings while keeping the recurrent core fixed"], ". On these held-out mice, the models ",
+      "dynamics to individual animals and sessions. We pre-train variants of the model at multiple scales using data from 10, 30, 100, " +
+      "300, or 614 mice and evaluate generalization to 149 held-out mice by fine-tuning only the embeddings while keeping " +
+      "the recurrent core fixed. On these held-out mice, the models ",
       ["cognitive", "substantially outperform classical cognitive models in next-choice prediction"], ". Moreover, ",
       ["capacity", "performance improves with both model capacity (number of RNN hidden units) and pre-training dataset size"],
       ", resembling the scaling behavior observed in foundation models for language and vision. Beyond next-choice " +
@@ -85,6 +81,7 @@ document.addEventListener("atlas:ready", () => {
 
   // a link's target, title and href in this catalog, or null when the study or report is not in it
   function resolve(l) {
+    if (l.card) return A.openModelCard ? { href: "#/leaderboard", title: l.label, note: l.note, card: l.card } : null;
     if (l.route) return { href: l.route, title: l.label, note: l.note };
     const s = S.study[l.study];
     if (!s) return null;
@@ -99,10 +96,11 @@ document.addEventListener("atlas:ready", () => {
   const piece = (x) => {
     if (typeof x === "string") return esc(x);
     const [key, text] = x, ls = resolved[key];
-    return ls.length ? `<a class="abs-link" href="${esc(ls[0].href)}" data-key="${esc(key)}">${esc(text)}</a>` : esc(text);
+    return ls.length ? `<a class="abs-link" href="${esc(ls[0].href)}" data-key="${esc(key)}"${ls[0].card ? ` data-card="${esc(ls[0].card)}"` : ""}>${esc(text)}</a>`
+      : esc(text);
   };
   const card = (key) => `<b>Where this comes from</b><ul>${resolved[key].map((l) =>
-    `<li><a href="${esc(l.href)}">${esc(l.title)}</a><div class="tip-v">${esc(l.note)}</div></li>`).join("")}</ul>`;
+    `<li><a href="${esc(l.href)}"${l.card ? ` data-card="${esc(l.card)}"` : ""}>${esc(l.title)}</a><div class="tip-v">${esc(l.note)}</div></li>`).join("")}</ul>`;
 
   VIEWS.home = () => {
     main().innerHTML = `
@@ -116,14 +114,19 @@ document.addEventListener("atlas:ready", () => {
       <section class="home-abstract" aria-label="Abstract">
         <h2>Abstract</h2>
         ${ABSTRACT.map((para) => `<p>${para.map(piece).join("")}</p>`).join("")}
-        <p class="muted home-hint">Linked phrases open the study or report behind each claim; hover one (or Tab to it) for every
-          source it draws on.</p>
+        <p class="muted home-hint">Linked phrases open the study, report or model card behind each claim; hover one (or Tab to it)
+          for every source it draws on.</p>
       </section>
       <h2>Explore the atlas</h2>
       <div class="home-explore">${EXPLORE.map(([href, name, line]) =>
         `<a class="home-tile" href="${href}"><b>${esc(name)}</b><span>${esc(line)}</span></a>`).join("")}</div>`;
     const host = main().querySelector(".home-abstract"), tip = A.tooltip(host);
     const tipEl = host.querySelector(".tip");
+    // a model-card link opens the card in the drawer instead of leaving the page
+    host.addEventListener("click", (ev) => {
+      const a = ev.target.closest("a[data-card]");
+      if (a && A.openModelCard(a.dataset.card)) { ev.preventDefault(); tip.hide(); }
+    });
     // keyboard users Tab from a phrase into its card's links: hide the card only once focus leaves both
     tipEl.addEventListener("focusout", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
     for (const a of host.querySelectorAll(".abs-link")) {
