@@ -395,6 +395,15 @@ document.addEventListener("atlas:ready", () => {
       guide.attr("y1", y(v)).attr("y2", y(v)).style("stroke", c).style("display", null);
     };
     const hideGuide = () => guide.style("display", "none");
+    // the best model on this board: a dashed line at its mean, always shown (under the data), named at the left end,
+    // where the scores are low and the label clears the markers
+    const best = series.flatMap((s) => s.points.map((p) => ({ s, p }))).reduce((a, q) => (q.p.mean > a.p.mean ? q : a), { p: { mean: -Infinity } });
+    if (best.s) {
+      const by = y(best.p.mean), bg = svg.append("g").attr("class", "lb-best");
+      bg.append("line").attr("x1", M.l).attr("x2", W - M.r).attr("y1", by).attr("y2", by);
+      bg.append("text").attr("x", M.l + 6).attr("y", by - 5).text(`Best: ${best.s.overlay ? `${legendLabel(best.s)}, ${best.p.x}`
+        : `${best.s.label}, ${xText(best.s.panel, best.p.x)}`} (${fmt(best.p.mean)})`);
+    }
     const layer = svg.append("g").attr("class", "lb-data");
     const [lines, seeds, marks] = ["lb-lines", "lb-seeds", "lb-marks"].map((c) => layer.append("g").attr("class", c));
     for (const s of series) {
