@@ -18,11 +18,11 @@
 <header class="top">
   <a class="brand" href="#/">Behavior Foundation Model Studies Atlas</a>
   <nav>
-    <a href="#/">Studies</a>
+    <a href="#/studies">Studies</a>
     <a href="#/leaderboard" data-view="leaderboard" hidden>Leaderboard</a>
     <a href="#/timeline" data-view="timeline" hidden>Timeline</a>
     <a href="#/health">Health</a>
-    <a href="#/about" data-view="about" hidden>About</a>
+    <a href="#/framework" data-view="framework" hidden>Framework</a>
   </nav>
   <span class="pin" id="pin"></span>
   <!-- a static page cannot start a workflow without a token: this opens the deploy workflow, one "Run workflow" click away -->
@@ -47,12 +47,13 @@
   <button class="lightbox-close" type="button" aria-label="Close the figure">×</button>
   <img alt="">
 </dialog>
-<!-- views.js, map.js, about.js and leaderboard.js first: their atlas:ready listeners must exist before app.js fires
-     the event; about.js and leaderboard.js after map.js, whose tooltip and Export SVG they use -->
+<!-- views.js, map.js, about.js, leaderboard.js and home.js first: their atlas:ready listeners must exist before app.js
+     fires the event; about.js, leaderboard.js and home.js after map.js, whose tooltip and Export SVG they use -->
 <script src="views.js"></script>
 <script src="map.js"></script>
 <script src="about.js"></script>
 <script src="leaderboard.js"></script>
+<script src="home.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

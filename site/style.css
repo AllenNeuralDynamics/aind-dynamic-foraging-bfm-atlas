@@ -454,3 +454,20 @@ a.lchip { color: var(--accent); }
 .mc-arrow.mc-orange { stroke: var(--warn); }
 .mc-ah path { fill: var(--muted); }
 .mc-ah.mc-orange path { fill: var(--warn); }
+
+/* the home page (home.js): the SfN abstract, its linked claims, and the way into the atlas */
+.home-kicker { color: var(--muted); font-size: 0.9em; margin: 4px 0 2px; }
+.home-title { margin: 0 0 8px; text-wrap: balance; }
+.home-authors { margin: 0 0 4px; max-width: 860px; }
+.home-affil { font-size: 0.88em; max-width: 860px; }
+.home-abstract { position: relative; max-width: 860px; }
+.home-abstract p { line-height: 1.65; }
+.abs-link { border-bottom: 1px dotted var(--accent); }
+.abs-link:hover, .abs-link:focus-visible { background: var(--accent-soft); }
+.home-hint { font-size: 0.88em; }
+.home-abstract .tip a { color: inherit; text-decoration: underline; }
+.home-explore { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0 24px; }
+.home-tile { display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: var(--text); }
+.home-tile b { color: var(--accent); }
+.home-tile span { color: var(--muted); font-size: 0.88em; }
+.home-tile:hover, .home-tile:focus-visible { border-color: var(--accent); }

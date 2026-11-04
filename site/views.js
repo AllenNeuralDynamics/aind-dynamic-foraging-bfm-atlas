@@ -82,7 +82,7 @@ document.addEventListener("atlas:ready", () => {
           ${Object.entries(v.blocks).map(([n, b]) => `<h3><code>${esc(n)}</code></h3><pre>${esc(b)}</pre>`).join("")}`}
       </details>`;
     }).join("");
-    main().innerHTML = `<div class="crumbs"><a href="#/">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> /
+    main().innerHTML = `<div class="crumbs"><a href="#/studies">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> /
         <a href="#/report/${esc(sid)}/${esc(rid)}">${esc(rid)}</a> / history</div>
       <h1>${esc(r.title)} — history</h1>
       <p class="muted">Each commit that changed this report's result blocks, newest first, with the change to each block

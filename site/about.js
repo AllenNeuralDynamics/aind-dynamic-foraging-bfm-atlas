@@ -1,4 +1,4 @@
-/* The About page (#/about): the framework behind the studies repo, described for other projects
+/* The Framework page (#/framework; #/about, its old name, still opens it): the framework behind the studies repo, described for other projects
  * that train models on several compute platforms, track runs in W&B and analyse afterwards.
  * Everything comes from catalog.framework (src/bfm_atlas/framework.py): an editorial model of the
  * framework's objects, filled in at build time from the studies CONTEXT.md, schemas/, ADRs and
@@ -31,10 +31,10 @@ document.addEventListener("atlas:ready", () => {
   const ext = (href, text, cls = "") => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
   const level = (l) => { const [name, hint] = LEVELS[l || "none"]; return `<span class="lvl-chip lv-${esc(l || "none")}" title="${esc(hint)}">${esc(name)}</span>`; };
 
-  VIEWS.about = () => {
+  VIEWS.framework = () => {
     const fw = S.cat.framework;
     if (!fw || !fw.available) {
-      main().innerHTML = `<h1>About</h1><p class="muted">This catalog was built without the framework description
+      main().innerHTML = `<h1>Framework</h1><p class="muted">This catalog was built without the framework description
         (${esc(fw?.error || "no framework section")}).</p>`;
       return;
     }
@@ -301,4 +301,6 @@ document.addEventListener("atlas:ready", () => {
       .then((md) => { porting = md; if (document.getElementById("porting") === host) show(md); })
       .catch((err) => { host.innerHTML = `<p class="lvl-error">${esc(err.message)}</p>`; });
   }
+
+  VIEWS.about = () => VIEWS.framework();     // the page's old name: links to #/about keep working
 });

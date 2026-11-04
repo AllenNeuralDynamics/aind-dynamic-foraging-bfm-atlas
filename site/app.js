@@ -288,7 +288,7 @@ function viewStudy(id) {
   const w = s.cover.wandb;
   const inbound = s.reports.flatMap((r) => (S.correctedBy[`${s.id}/${r.id}`] || []).map((c) => ({ r, c })));
   $main().innerHTML = `
-    <div class="crumbs"><a href="#/">Studies</a> / ${esc(s.id)}</div>
+    <div class="crumbs"><a href="#/studies">Studies</a> / ${esc(s.id)}</div>
     <h1>${esc(s.title.replace(/^Study:\s*/, ""))}</h1>
     <div class="chips">${tagChips(s)}${statusChip(s.cover.status)}
       ${w ? `<a class="chip" href="https://wandb.ai/${esc(w.entity)}/${esc(w.project)}" target="_blank" rel="noopener">W&amp;B ${esc(w.project)}</a>` : ""}
@@ -376,7 +376,7 @@ function viewReport(sid, rid) {
     : u.wandb_group ? `<a class="mono" href="#/group/${encodeURIComponent(u.wandb_group)}">${esc(u.wandb_group)}</a>`
     : `<code>${esc(u.command || JSON.stringify(u))}</code>`;
   $main().innerHTML = `
-    <div class="crumbs"><a href="#/">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> / ${esc(r.id)}</div>
+    <div class="crumbs"><a href="#/studies">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> / ${esc(r.id)}</div>
     <h1>${esc(r.title)}</h1>
     <div class="chips">${statusChip(r.status)}${r.authors.map((a) => chip(a)).join("")}
       ${srcLink(r.path, `source @ ${short(S.sha)}`)} <span class="chip">health ${healthBadges(r.path, { exact: true })}</span>
@@ -463,7 +463,7 @@ function viewGroup(g) {
   const e = S.cat.wandb_groups[g];
   if (!e) return notFound(`W&B group ${g}`);
   $main().innerHTML = `
-    <div class="crumbs"><a href="#/">Studies</a> / ${e.study ? `<a href="#/study/${esc(e.study)}">${esc(e.study)}</a> / ` : ""}W&amp;B group</div>
+    <div class="crumbs"><a href="#/studies">Studies</a> / ${e.study ? `<a href="#/study/${esc(e.study)}">${esc(e.study)}</a> / ` : ""}W&amp;B group</div>
     <h1 class="mono">${esc(g)}</h1>
     <div class="chips">${e.variant ? chip(`variant ${e.variant}`) : ""}
       ${e.url ? `<a class="chip" href="${esc(e.url)}" target="_blank" rel="noopener">open in W&amp;B</a>` : ""}</div>
@@ -491,7 +491,7 @@ function viewHealth() {
 
 function notFound(what) {
   $main().innerHTML = `<h1>Not found</h1><p class="muted">No ${esc(what)} in this catalog
-    (studies ${esc(short(S.sha))}).</p><p><a href="#/">Back to studies</a></p>`;
+    (studies ${esc(short(S.sha))}).</p><p><a href="#/studies">Back to studies</a></p>`;
 }
 
 // Views added by later modules (cross-study, history) register here.
@@ -515,7 +515,8 @@ function routeInner() {
 
 function renderRoute(parts) {
   const [view, a, b] = parts;
-  if (!view) return viewStudies();
+  if (!view) return VIEWS.home ? VIEWS.home() : viewStudies();
+  if (view === "studies") return viewStudies();
   if (view === "study") return viewStudy(a);
   if (view === "report") return viewReport(a, b);
   if (view === "group") return viewGroup(parts.slice(1).join("/"));
