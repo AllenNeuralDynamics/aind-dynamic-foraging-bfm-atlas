@@ -175,6 +175,8 @@ def main(site: str, out: str) -> int:
                 failures.append("home: focusing a linked phrase shows no card with its sources")
         if page.locator(".home-explore a").count() < 5:
             failures.append("home: the links to the rest of the atlas are missing")
+        if not page.locator('.top nav a[href="#/"]', has_text="Home").is_visible():
+            failures.append("home: no Home link in the navigation")
         page.goto(base + "#/studies")
         page.wait_for_selector("#study-map .node", timeout=20000)
         if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
