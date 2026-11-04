@@ -1043,7 +1043,7 @@ document.addEventListener("atlas:ready", () => {
       main.innerHTML = `<h1>Not found</h1><p class="muted">No result block ${esc(block)} in ${esc(sid)} ${esc(rid)}.</p>`;
       return;
     }
-    main.innerHTML = `<div class="crumbs"><a href="#/">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> /
+    main.innerHTML = `<div class="crumbs"><a href="#/studies">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> /
         <a href="#/report/${esc(sid)}/${esc(rid)}">${esc(rid)}</a> / lineage</div>
       <h1>Lineage of ${esc(rid)} <code>${esc(block)}</code></h1>
       <p class="muted">${esc(r.title)}. Each step back from this result block to the data it came from, generated from the

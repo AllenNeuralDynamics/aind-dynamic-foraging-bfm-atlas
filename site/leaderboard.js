@@ -730,24 +730,29 @@ regressions exactly (Newton), weighted by the state posteriors.`,
   const cardOf = (s) => MODEL_CARDS.find((c) => s.id.startsWith(c.prefix));
 
   // a GRU, disRNN or GLM-HMM point's card, in the drawer: its family's text, diagram and equations, and this point
-  function openCard(s, p) {
-    const c = cardOf(s), b = p.block;
+  // without a point (the home page opens a family's card by its prefix), the card leaves out the score, the point's text
+  // and its result-block links
+  function openCard(s, p, c = cardOf(s)) {
+    const b = p?.block;
     const body = document.getElementById("drawer-body");
     body.innerHTML = `
-      <div class="k muted">Model · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
+      <div class="k muted">Model${b ? ` · study ${esc(studyNo(b.study))} ${esc(b.report)}` : ""}</div>
       <h2 style="margin-top:0">${esc(c.title)}</h2>
-      <p>${A.chip(s.label)} ${esc(xText(s.panel, p.x))} · <b>${fmt(p.mean)}</b>${p.n > 1 ? ` ± ${fmt(p.sem)} (${p.n} seeds)` : ""}</p>
+      ${p ? `<p>${A.chip(s.label)} ${esc(xText(s.panel, p.x))} · <b>${fmt(p.mean)}</b>${p.n > 1 ? ` ± ${fmt(p.sem)} (${p.n} seeds)` : ""}</p>` : ""}
       <p>${c.summary}</p>
       ${c.diagram}
       <h3>Equations</h3><div class="lb-model-eq"></div>
       <h3>How a held-out mouse meets it</h3><p>${c.heldout}</p>
-      <h3>This point</h3><p>${esc(p.description)}</p>
+      ${p ? `<h3>This point</h3><p>${esc(p.description)}</p>` : ""}
       <h3>Sources</h3><ul>${c.sources.map((x) => `<li>${x}</li>`).join("")}</ul>
-      <p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`;
-    body.querySelector(".lb-model-eq").append(A.renderMarkdown(c.equations, b.report_path));
+      ${b ? `<p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`
+        : `<p><a href="#/leaderboard">See it on the leaderboard →</a></p>`}`;
+    body.querySelector(".lb-model-eq").append(A.renderMarkdown(c.equations, b?.report_path || ""));
     const drawer = document.getElementById("drawer");
     if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
     drawer.hidden = false;
     drawer.focus();
   }
+  // the home page opens a family's card: "gru-", "disrnn-" or "glmhmm-"
+  A.openModelCard = (prefix) => { const c = MODEL_CARDS.find((x) => x.prefix === prefix); if (c) openCard(null, null, c); return !!c; };
 });

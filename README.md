@@ -19,7 +19,11 @@ draws how they connect; the About page embeds it.
 
 ## What it shows
 
-- **Study map** (home page): every study by creation order, in lanes by model family, with the
+- **Home** (`#/`): our SfN 2026 abstract ("Modeling adaptive decision-making at scale"), each claim
+  linked to the study, report or model card behind it, with a hover card listing every source it draws on
+  (hand-written in `site/home.js`; a link whose study or report is not in the catalog is dropped),
+  then links to the rest of the atlas.
+- **Study map** (`#/studies`): every study by creation order, in lanes by model family, with the
   relationships the studies repo declares (its ADR 0002): **motivation** (why a study exists),
   **correction**, and **upstream** (a report uses another study's results) as a toggle layer.
   Hover a study for its question and verdict; select it to open its card in the side drawer: its
@@ -53,7 +57,7 @@ draws how they connect; the About page embeds it.
   the 3-way likelihood (left, right or ignore) and the engagement likelihood (respond vs ignore) of the
   models that predict an ignore, study 02's 3-way GRU by hidden size and training mice, and study 14's
   GLM-HMM by number of states (`IGNORE_BOARDS` in the same file).
-- **About** (`#/about`): the framework itself, for other ML projects to reuse. The stack
+- **Framework** (`#/framework`; `#/about` still opens it): the framework itself, for other ML projects to reuse. The stack
   diagram of the four repositories (the dispatcher's `docs/diagrams/bfm-stack.html`, read from the
   same dispatcher commit as the skills and shipped under `data/dispatcher/`); an interactive map
   of the objects it defines (study, launch, launch record, freeze, producer, report, ...) by
