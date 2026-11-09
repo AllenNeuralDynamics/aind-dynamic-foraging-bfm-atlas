@@ -94,7 +94,6 @@ document.addEventListener("atlas:ready", () => {
     species: "external", analysis: "gru-core", classical: "embedding" };
 
   const EXPLORE = [
-    ["#/poster", "Poster", "The SfN 2026 poster; each panel links to the reports behind it."],
     ["#/studies", "Studies", "Every study, how they connect, and each report traced to its inputs and commits."],
     ["#/leaderboard", "Leaderboard", "Every model family's held-out choice likelihood on one axis, with model cards."],
     ["#/timeline", "Timeline", "When each launch ran and what each study is waiting on."],
