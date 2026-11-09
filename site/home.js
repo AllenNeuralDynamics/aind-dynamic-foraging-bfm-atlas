@@ -137,6 +137,7 @@ document.addEventListener("atlas:ready", () => {
       ${crop(p)}<span>On the poster: ${esc(p.title)} ↗</span></a>` : "") + `<b>Where this comes from</b>${sources(key)}`;
   };
 
+  let hideOnScroll = null;   // the home card's scroll listener, replaced on each visit
   VIEWS.home = () => {
     main().innerHTML = `
       <p class="home-kicker">SfN 2026 · Late-breaking poster LBP081.11 / B9 · Wed, Nov 18, 1–5 PM, WCC Halls A–C ·
@@ -165,8 +166,23 @@ document.addEventListener("atlas:ready", () => {
     });
     // keyboard users Tab from a phrase into its card's links: hide the card only once focus leaves both
     tipEl.addEventListener("focusout", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
+    // the card is as wide as the abstract and fixed to the window (style.css): above the phrase if it fits, else below,
+    // else over it, scrolling inside when taller than the window. Fixed, it never lengthens the page, so hiding it
+    // near the bottom does not make the page jump; it hides when the page scrolls
+    const place = (a) => {
+      const h = host.getBoundingClientRect(), b = a.getBoundingClientRect();
+      tipEl.style.width = `${h.width - 8}px`;
+      tipEl.style.left = `${h.left + 4}px`;
+      const H = tipEl.offsetHeight;
+      let top = b.top - H - 8;
+      if (top < 8) top = b.bottom + 8;
+      tipEl.style.top = `${Math.max(8, Math.min(top, innerHeight - H - 8))}px`;
+    };
+    if (hideOnScroll) window.removeEventListener("scroll", hideOnScroll);
+    hideOnScroll = () => { if (!tipEl.hidden) tip.hide(); };
+    window.addEventListener("scroll", hideOnScroll, { passive: true });
     for (const a of host.querySelectorAll(".abs-link")) {
-      const show = () => tip.show(a, card(a.dataset.key));
+      const show = () => { tip.show(a, card(a.dataset.key)); place(a); };
       a.addEventListener("pointerenter", show);
       a.addEventListener("focus", show);
       a.addEventListener("pointerleave", () => tip.hide());

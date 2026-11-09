@@ -475,7 +475,8 @@ a.lchip { color: var(--accent); }
 .home-tile:hover, .home-tile:focus-visible { border-color: var(--accent); }
 
 /* the poster panel in a home-page tooltip, and the poster view (home.js) */
-.home-abstract .tip { width: 380px; }
+/* as wide as the abstract (home.js places it), so the poster panel reads at the size of the text */
+.home-abstract .tip { position: fixed; box-sizing: border-box; max-height: calc(100vh - 16px); overflow: auto; }
 .tip-poster { display: grid; gap: 4px; margin-bottom: 8px; color: inherit; }
 .home-abstract .tip .tip-poster { text-decoration: none; }
 .tip-poster span:last-child { text-decoration: underline; font-weight: 600; }
