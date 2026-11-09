@@ -141,7 +141,7 @@ document.addEventListener("atlas:ready", () => {
   VIEWS.home = () => {
     main().innerHTML = `
       <p class="home-kicker">SfN 2026 · Late-breaking poster LBP081.11 / B9 · Wed, Nov 18, 1–5 PM, WCC Halls A–C ·
-        presenter at the poster 2–3 PM · <a href="#/poster">See the poster</a></p>
+        presenter at the poster 2–3 PM</p>
       <h1 class="home-title">Modeling adaptive decision-making at scale</h1>
       <p class="home-authors">${AUTHORS.map(esc).join(", ")}</p>
       <p class="home-affil muted">* Equal contribution (Han Hou and Po-Chen Kuo). All authors: Allen Institute, Neural Dynamics,
@@ -150,8 +150,7 @@ document.addEventListener("atlas:ready", () => {
       <section class="home-abstract" aria-label="Abstract">
         <h2>Abstract</h2>
         ${ABSTRACT.map((para) => `<p>${para.map(piece).join("")}</p>`).join("")}
-        <p class="muted home-hint">Linked phrases open the study, report or model card behind each claim; hover one (or Tab to it)
-          for every source it draws on and the poster panel that shows it.</p>
+        <p class="home-hint"><a href="#/poster">Explore the interactive poster →</a></p>
       </section>
       <h2>Explore the atlas</h2>
       <div class="home-explore">${EXPLORE.map(([href, name, line]) =>
