@@ -166,11 +166,21 @@ document.addEventListener("atlas:ready", () => {
     });
     // keyboard users Tab from a phrase into its card's links: hide the card only once focus leaves both
     tipEl.addEventListener("focusout", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
-    // the card is as wide as the abstract and fixed to the window (style.css): above the phrase if it fits, else below,
-    // else over it, scrolling inside when taller than the window. Fixed, it never lengthens the page, so hiding it
-    // near the bottom does not make the page jump; it hides when the page scrolls
+    // the card is fixed to the window (style.css), so it never lengthens the page and hiding it near the bottom does
+    // not make the page jump; it hides when the page scrolls. Where the window leaves room right of the abstract it
+    // sits there, beside the phrase and as wide as the room allows (up to the abstract's width); otherwise it is as
+    // wide as the abstract, above the phrase if it fits, else below, else over it. Taller than the window, it scrolls
+    const SIDE_MIN = 360;
     const place = (a) => {
       const h = host.getBoundingClientRect(), b = a.getBoundingClientRect();
+      const side = innerWidth - h.right - 32;
+      if (side >= SIDE_MIN) {
+        tipEl.style.width = `${Math.min(side, h.width)}px`;
+        tipEl.style.left = `${h.right + 16}px`;
+        const H = tipEl.offsetHeight;
+        tipEl.style.top = `${Math.max(8, Math.min(b.top + b.height / 2 - H / 2, innerHeight - H - 8))}px`;
+        return;
+      }
       tipEl.style.width = `${h.width - 8}px`;
       tipEl.style.left = `${h.left + 4}px`;
       const H = tipEl.offsetHeight;
@@ -178,14 +188,19 @@ document.addEventListener("atlas:ready", () => {
       if (top < 8) top = b.bottom + 8;
       tipEl.style.top = `${Math.max(8, Math.min(top, innerHeight - H - 8))}px`;
     };
+    // leaving a phrase, the pointer may cross the paragraph to the card beside it: wait longer before hiding
+    let leave = null;
     if (hideOnScroll) window.removeEventListener("scroll", hideOnScroll);
     hideOnScroll = () => { if (!tipEl.hidden) tip.hide(); };
     window.addEventListener("scroll", hideOnScroll, { passive: true });
     for (const a of host.querySelectorAll(".abs-link")) {
-      const show = () => { tip.show(a, card(a.dataset.key)); place(a); };
+      const show = () => { clearTimeout(leave); tip.show(a, card(a.dataset.key)); place(a); };
       a.addEventListener("pointerenter", show);
       a.addEventListener("focus", show);
-      a.addEventListener("pointerleave", () => tip.hide());
+      a.addEventListener("pointerleave", () => {
+        clearTimeout(leave);
+        leave = setTimeout(() => { if (!tipEl.matches(":hover")) tip.hide(); }, 600);
+      });
       a.addEventListener("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
       a.addEventListener("keydown", (ev) => { if (ev.key === "ArrowDown") { ev.preventDefault(); tipEl.querySelector("a")?.focus(); } });
     }
