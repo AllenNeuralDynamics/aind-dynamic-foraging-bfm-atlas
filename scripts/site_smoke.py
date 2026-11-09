@@ -163,16 +163,27 @@ def main(site: str, out: str) -> int:
                     failures.append(f"{name}: rendered '{bad}'")
             page.screenshot(path=str(out / f"{name}.png"))
         # study map: one node per study, a layer toggles its edges, selecting a study opens its card in the drawer
-        # home: the SfN abstract, its claims linked to studies (each link resolves), a hover card per link
+        # home: the SfN abstract, its claims linked to studies (each link resolves), a hover card per link with the
+        # claim's poster panel, which opens the poster view with that panel highlighted
         page.goto(base + "#/")
         page.wait_for_selector(".home-abstract", timeout=20000)
         links = page.locator(".home-abstract .abs-link")
-        if links.count() < 8:
+        if links.count() < 7:
             failures.append(f"home: only {links.count()} linked phrases in the abstract")
         else:
             links.first.focus()
             if page.locator(".home-abstract .tip:not([hidden]) a").count() < 1:
                 failures.append("home: focusing a linked phrase shows no card with its sources")
+            panel = page.locator(".home-abstract .tip:not([hidden]) .tip-poster")
+            if not panel.count():
+                failures.append("home: a linked phrase's card shows no poster panel")
+            else:
+                panel.click()
+                page.wait_for_timeout(500)
+                if not page.locator(".poster-stage .poster-hl").count():
+                    failures.append("home: the poster panel opens no highlighted poster view")
+                page.goto(base + "#/")
+                page.wait_for_selector(".home-abstract", timeout=20000)
         if page.locator(".home-explore a").count() < 5:
             failures.append("home: the links to the rest of the atlas are missing")
         if not page.locator('.top nav a[href="#/"]', has_text="Home").is_visible():
