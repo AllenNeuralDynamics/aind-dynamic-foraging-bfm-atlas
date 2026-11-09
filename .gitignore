@@ -6,3 +6,5 @@ __pycache__/
 /site/data/
 /build/
 /studies/
+# the poster is published as its JPEG only
+/site/poster/*.pdf

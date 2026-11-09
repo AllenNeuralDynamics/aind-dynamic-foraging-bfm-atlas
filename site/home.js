@@ -1,5 +1,6 @@
 /* The home page (#/): our SfN 2026 abstract, each claim linked to the studies and reports behind it (hover a
- * linked phrase for what each shows), then links to the rest of the atlas. Hand-written, like the leaderboard's
+ * linked phrase for what each shows, and the poster panel it is on), then links to the rest of the atlas. The
+ * poster view (#/poster/<panel>) shows the whole poster with one panel highlighted. Hand-written, like the leaderboard's
  * landscape: the abstract is not in the studies repo. A link whose study or report is not in this catalog is
  * dropped, and a phrase left with none is plain text. Registers through window.Atlas; uses map.js's tooltip.
  */
@@ -71,7 +72,30 @@ document.addEventListener("atlas:ready", () => {
       "behavioral representations to large-scale, simultaneously recorded neural dynamics."],
   ];
 
+  // the poster as one JPEG (scripts/poster_image.py renders it; the PDF is not published), and each panel's
+  // rectangle in PDF points, its top edge in the gap below the panel above
+  const POSTER = { img: "poster/sfn2026.jpg", w: 4032, h: 2688 };
+  const PANELS = [
+    ["introduction", "Introduction", [80, 380, 985, 925]],
+    ["task", "Behavioral task", [80, 1080, 990, 2160]],
+    ["dataset", "Large-scale dataset", [80, 2165, 1000, 2640]],
+    ["architecture", "Model architecture", [1040, 395, 1935, 1015]],
+    ["training", "Training and evaluation", [1040, 1020, 1935, 1945]],
+    ["ground-truth", "Ground-truth recovery", [1040, 1950, 1940, 2640]],
+    ["scaling", "Next-choice prediction and scaling", [2015, 505, 2960, 1232]],
+    ["rollouts", "Generative rollouts", [2015, 1240, 2960, 1785]],
+    ["external", "Generalization to external datasets", [2015, 1785, 2960, 2645]],
+    ["embedding", "Embedding captures individual variability", [3010, 505, 3985, 1105]],
+    ["gru-core", "Reverse engineering the GRU core", [3010, 1110, 3985, 2098]],
+    ["conclusion", "Conclusion and future work", [3010, 2115, 3985, 2500]],
+  ].map(([id, title, rect]) => ({ id, title, rect }));
+  const PANEL = Object.fromEntries(PANELS.map((p) => [p.id, p]));
+  // the panel each linked phrase of the abstract is on
+  const ON_POSTER = { arch: "architecture", cognitive: "scaling", capacity: "scaling", generative: "rollouts",
+    species: "external", analysis: "gru-core", classical: "embedding" };
+
   const EXPLORE = [
+    ["#/poster", "Poster", "The SfN 2026 poster; each panel links to the reports behind it."],
     ["#/studies", "Studies", "Every study, how they connect, and each report traced to its inputs and commits."],
     ["#/leaderboard", "Leaderboard", "Every model family's held-out choice likelihood on one axis, with model cards."],
     ["#/timeline", "Timeline", "When each launch ran and what each study is waiting on."],
@@ -99,13 +123,26 @@ document.addEventListener("atlas:ready", () => {
     return ls.length ? `<a class="abs-link" href="${esc(ls[0].href)}" data-key="${esc(key)}"${ls[0].card ? ` data-card="${esc(ls[0].card)}"` : ""}>${esc(text)}</a>`
       : esc(text);
   };
-  const card = (key) => `<b>Where this comes from</b><ul>${resolved[key].map((l) =>
+  const sources = (key) => `<ul>${resolved[key].map((l) =>
     `<li><a href="${esc(l.href)}"${l.card ? ` data-card="${esc(l.card)}"` : ""}>${esc(l.title)}</a><div class="tip-v">${esc(l.note)}</div></li>`).join("")}</ul>`;
+  // a panel cut from the poster JPEG by CSS (no image per panel); its height is known before the image loads, so the
+  // tooltip places itself right
+  const crop = (p, maxH) => {
+    const [x0, y0, x1, y1] = p.rect, w = x1 - x0, h = y1 - y0;
+    return `<span class="poster-crop" style="aspect-ratio: ${w} / ${h}; width: min(100%, ${Math.round(maxH * w / h)}px);
+      background-image: url(${POSTER.img}); background-size: ${(100 * POSTER.w / w).toFixed(2)}% auto;
+      background-position: ${(100 * x0 / (POSTER.w - w)).toFixed(2)}% ${(100 * y0 / (POSTER.h - h)).toFixed(2)}%"></span>`;
+  };
+  const card = (key) => {
+    const p = PANEL[ON_POSTER[key]];
+    return (p ? `<a class="tip-poster" href="#/poster/${p.id}" title="Open the poster with this panel highlighted">
+      ${crop(p, 230)}<span>On the poster: ${esc(p.title)} ↗</span></a>` : "") + `<b>Where this comes from</b>${sources(key)}`;
+  };
 
   VIEWS.home = () => {
     main().innerHTML = `
       <p class="home-kicker">SfN 2026 · Late-breaking poster LBP081.11 / B9 · Wed, Nov 18, 1–5 PM, WCC Halls A–C ·
-        presenter at the poster 2–3 PM</p>
+        presenter at the poster 2–3 PM · <a href="#/poster">See the poster</a></p>
       <h1 class="home-title">Modeling adaptive decision-making at scale</h1>
       <p class="home-authors">${AUTHORS.map(esc).join(", ")}</p>
       <p class="home-affil muted">* Equal contribution (Han Hou and Po-Chen Kuo). All authors: Allen Institute, Neural Dynamics,
@@ -115,12 +152,14 @@ document.addEventListener("atlas:ready", () => {
         <h2>Abstract</h2>
         ${ABSTRACT.map((para) => `<p>${para.map(piece).join("")}</p>`).join("")}
         <p class="muted home-hint">Linked phrases open the study, report or model card behind each claim; hover one (or Tab to it)
-          for every source it draws on.</p>
+          for every source it draws on and the poster panel that shows it.</p>
       </section>
       <h2>Explore the atlas</h2>
       <div class="home-explore">${EXPLORE.map(([href, name, line]) =>
         `<a class="home-tile" href="${href}"><b>${esc(name)}</b><span>${esc(line)}</span></a>`).join("")}</div>`;
     const host = main().querySelector(".home-abstract"), tip = A.tooltip(host);
+    // fetch the poster image on the first hover, not on every visit to the home page
+    host.addEventListener("pointerenter", () => { new Image().src = POSTER.img; }, { once: true });
     const tipEl = host.querySelector(".tip");
     // a model-card link opens the card in the drawer instead of leaving the page
     host.addEventListener("click", (ev) => {
@@ -137,5 +176,64 @@ document.addEventListener("atlas:ready", () => {
       a.addEventListener("blur", (ev) => { if (!tipEl.contains(ev.relatedTarget)) tip.hide(); });
       a.addEventListener("keydown", (ev) => { if (ev.key === "ArrowDown") { ev.preventDefault(); tipEl.querySelector("a")?.focus(); } });
     }
+  };
+
+  // #/poster or #/poster/<panel>: the whole poster, zoomed to the panel and with the rest dimmed. Clicking another
+  // panel moves the highlight there
+  VIEWS.poster = (id) => {
+    const p = PANEL[id];
+    const phrases = p ? Object.keys(ON_POSTER).filter((k) => ON_POSTER[k] === p.id && resolved[k].length) : [];
+    const pct = (v, of) => `${(100 * v / of).toFixed(3)}%`;
+    main().innerHTML = `
+      <p class="home-kicker">SfN 2026 · Late-breaking poster LBP081.11 / B9 · <a href="#/">the abstract</a></p>
+      <h1 class="home-title">${p ? esc(p.title) : "Modeling adaptive decision-making at scale"}</h1>
+      <div class="poster-tools">
+        <button type="button" class="btn" data-zoom="out" aria-label="Zoom out">−</button>
+        <button type="button" class="btn" data-zoom="in" aria-label="Zoom in">+</button>
+        ${p ? `<button type="button" class="btn" data-zoom="panel">Fit the panel</button>` : ""}
+        <button type="button" class="btn" data-zoom="all">Whole poster</button>
+        <span class="muted">Click a panel to highlight it.</span>
+      </div>
+      <div class="poster-stage"><div class="poster-canvas">
+        <img src="${POSTER.img}" width="5600" height="3734" alt="The SfN 2026 poster: Modeling adaptive decision-making at scale">
+        ${p ? `<div class="poster-hl" style="left: ${pct(p.rect[0], POSTER.w)}; top: ${pct(p.rect[1], POSTER.h)};
+          width: ${pct(p.rect[2] - p.rect[0], POSTER.w)}; height: ${pct(p.rect[3] - p.rect[1], POSTER.h)}"></div>` : ""}
+      </div></div>
+      ${phrases.length ? `<div class="poster-sources">${phrases.map((k) => `<div><span class="muted">In the abstract:</span>
+        “${esc(ABSTRACT.flat().find((x) => Array.isArray(x) && x[0] === k)[1])}”${sources(k)}</div>`).join("")}</div>` : ""}
+      <h2>Panels</h2>
+      <div class="chips poster-panels">${PANELS.map((x) =>
+        `<a class="chip${x === p ? " on" : ""}" href="#/poster/${x.id}">${esc(x.title)}</a>`).join("")}</div>
+`;
+    const stage = main().querySelector(".poster-stage"), canvas = stage.firstElementChild;
+    // zoom 1: the poster as wide as the stage; centre (cx, cy) in PDF points
+    let zoom = 1;
+    // the poster fills the window below the toolbar
+    stage.style.height = `${Math.max(320, innerHeight - stage.getBoundingClientRect().top - 12)}px`;
+    const set = (z, cx, cy) => {
+      zoom = Math.min(Math.max(z, 0.2), 8);
+      canvas.style.width = `${100 * zoom}%`;
+      const k = stage.clientWidth * zoom / POSTER.w;
+      stage.scrollLeft = cx * k - stage.clientWidth / 2;
+      stage.scrollTop = cy * k - stage.clientHeight / 2;
+    };
+    const centre = () => { const k = stage.clientWidth * zoom / POSTER.w;
+      return [(stage.scrollLeft + stage.clientWidth / 2) / k, (stage.scrollTop + stage.clientHeight / 2) / k]; };
+    const fit = (x0, y0, x1, y1, pad) => set(pad * Math.min(POSTER.w / (x1 - x0),
+      stage.clientHeight / stage.clientWidth * POSTER.w / (y1 - y0)), (x0 + x1) / 2, (y0 + y1) / 2);
+    const whole = () => fit(0, 0, POSTER.w, POSTER.h, 1);
+    p ? fit(...p.rect, 0.94) : whole();
+    main().querySelector(".poster-tools").addEventListener("click", (ev) => {
+      const z = ev.target.closest("[data-zoom]")?.dataset.zoom;
+      if (z === "in" || z === "out") set(zoom * (z === "in" ? 1.25 : 0.8), ...centre());
+      else if (z === "panel") fit(...p.rect, 0.94);
+      else if (z === "all") whole();
+    });
+    canvas.addEventListener("click", (ev) => {
+      const b = canvas.getBoundingClientRect(), k = b.width / POSTER.w;
+      const x = (ev.clientX - b.left) / k, y = (ev.clientY - b.top) / k;
+      const hit = PANELS.find((q) => x >= q.rect[0] && x <= q.rect[2] && y >= q.rect[1] && y <= q.rect[3]);
+      if (hit && hit !== p) location.hash = `#/poster/${hit.id}`;
+    });
   };
 });
