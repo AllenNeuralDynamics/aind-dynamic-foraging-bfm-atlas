@@ -475,11 +475,12 @@ a.lchip { color: var(--accent); }
 .home-tile:hover, .home-tile:focus-visible { border-color: var(--accent); }
 
 /* the poster panel in a home-page tooltip, and the poster view (home.js) */
-.home-abstract .tip { width: 380px; }
+/* the home tooltip follows the day/night theme (other tooltips invert it) */
+.home-abstract .tip { width: 380px; background: var(--surface); color: var(--text); border: 1px solid var(--line); }
 .tip-poster { display: grid; gap: 4px; margin-bottom: 8px; color: inherit; }
 .home-abstract .tip .tip-poster { text-decoration: none; }
 .tip-poster span:last-child { text-decoration: underline; font-weight: 600; }
-.poster-crop { display: block; background-color: #fff; background-repeat: no-repeat; border-radius: 4px; }
+.poster-crop { display: block; width: 100%; background-color: #fff; border: 1px solid var(--line); background-repeat: no-repeat; border-radius: 4px; }
 .poster-panels .chip.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .poster-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 4px 24px; max-width: 1100px;
   font-size: 0.9em; margin: 6px 0; }

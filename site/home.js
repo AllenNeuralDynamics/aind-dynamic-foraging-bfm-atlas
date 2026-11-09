@@ -41,7 +41,6 @@ document.addEventListener("atlas:ready", () => {
       R("09-gru-cross-species-transfer", "r2", "Where external subjects land in the embedding space.")],
     classical: [R("01-gru-scaling-law", "r10", "The GRU's subject embedding decodes classical-RL parameters."),
       R("50-gru-dynamics-embedding", "r8", "How the GRU's strategy differs from Q-learning.")],
-    bias: [P("#/leaderboard", "Leaderboard: Why these models", "The models laid out from hypothesis-driven to data-driven, and what each step buys on held-out mice.")],
   };
 
   // the abstract as SfN printed it, one array per paragraph; [key, phrase] pieces are linked
@@ -67,7 +66,7 @@ document.addEventListener("atlas:ready", () => {
       ["analysis", "analyze the learned RNN core and embedding space"], " to identify shared computational motifs and latent " +
       "representations of behavioral variability. These analyses reveal ", ["classical", "connections to classical cognitive " +
       "models"], " and suggest new directions for developing more comprehensive theories of adaptive decision-making."],
-    ["Together, our results demonstrate that ", ["bias", "data-driven models with minimal inductive bias"], " can capture both " +
+    ["Together, our results demonstrate that data-driven models with minimal inductive bias can capture both " +
       "shared computational structure and behavioral heterogeneity at scale, providing a framework for relating rich " +
       "behavioral representations to large-scale, simultaneously recorded neural dynamics."],
   ];
@@ -127,16 +126,16 @@ document.addEventListener("atlas:ready", () => {
     `<li><a href="${esc(l.href)}"${l.card ? ` data-card="${esc(l.card)}"` : ""}>${esc(l.title)}</a><div class="tip-v">${esc(l.note)}</div></li>`).join("")}</ul>`;
   // a panel cut from the poster JPEG by CSS (no image per panel); its height is known before the image loads, so the
   // tooltip places itself right
-  const crop = (p, maxH) => {
+  const crop = (p) => {
     const [x0, y0, x1, y1] = p.rect, w = x1 - x0, h = y1 - y0;
-    return `<span class="poster-crop" style="aspect-ratio: ${w} / ${h}; width: min(100%, ${Math.round(maxH * w / h)}px);
+    return `<span class="poster-crop" style="aspect-ratio: ${w} / ${h};
       background-image: url(${POSTER.img}); background-size: ${(100 * POSTER.w / w).toFixed(2)}% auto;
       background-position: ${(100 * x0 / (POSTER.w - w)).toFixed(2)}% ${(100 * y0 / (POSTER.h - h)).toFixed(2)}%"></span>`;
   };
   const card = (key) => {
     const p = PANEL[ON_POSTER[key]];
     return (p ? `<a class="tip-poster" href="#/poster/${p.id}" title="Open the poster with this panel highlighted">
-      ${crop(p, 230)}<span>On the poster: ${esc(p.title)} ↗</span></a>` : "") + `<b>Where this comes from</b>${sources(key)}`;
+      ${crop(p)}<span>On the poster: ${esc(p.title)} ↗</span></a>` : "") + `<b>Where this comes from</b>${sources(key)}`;
   };
 
   VIEWS.home = () => {
