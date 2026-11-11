@@ -25,7 +25,8 @@ draws how they connect; the About page embeds it.
   then links to the rest of the atlas.
 - **Study map** (`#/studies`): every study by creation order, in lanes by model family, with the
   relationships the studies repo declares (its ADR 0002): **motivation** (why a study exists),
-  **correction**, and **upstream** (a report uses another study's results) as a toggle layer.
+  **correction**, and **upstream** (a report uses another study's results), each a toggle layer;
+  only motivation is drawn by default.
   Hover a study for its question and verdict; select it to open its card in the side drawer: its
   reports first, then what motivated it, what it led to, and what it uses. Plain links between studies are citations and are not drawn.
 - **Lineage** of any result block: the report drawer (the block's *Provenance* button, or a

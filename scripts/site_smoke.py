@@ -202,6 +202,9 @@ def main(site: str, out: str) -> int:
             models = (own or {}).get("model") or ([s["model"]] if s.get("model") else [])
             if node.locator(".ring").count() != max(0, len(models) - 1):
                 failures.append(f"study map: {s['id']} draws {node.locator('.ring').count()} rings for models {models}")
+        pressed = page.locator(".layer").evaluate_all("bs => bs.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.kind)")
+        if pressed != ["motivation"]:
+            failures.append(f"study map: by default only the motivation links should be drawn, not {pressed}")
         up = page.locator('.layer[data-kind="upstream"]')
         before = up.get_attribute("aria-pressed")
         up.click()
