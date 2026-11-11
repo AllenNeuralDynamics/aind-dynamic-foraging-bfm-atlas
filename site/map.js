@@ -99,7 +99,8 @@ document.addEventListener("atlas:ready", () => {
     corrects: { label: "Corrected by", verb: "is corrected by", hint: "a later report amends this report (corrects)" },
     supersedes: { label: "Superseded by", verb: "is superseded by", hint: "a later report replaces this one (superseded_by)" },
   };
-  const LAYERS = { motivation: true, upstream: true, corrects: true, supersedes: true };
+  // only the motivation links are drawn by default; the others are a click away
+  const LAYERS = { motivation: true, upstream: false, corrects: false, supersedes: false };
   const PHYS_DEFAULT = { link: 0.15, distance: 110, repel: 400, island: 0.25, center: 0.07, hold: 0.6 };
   const SLIDERS = [
     ["link", "Link pull", 0, 1, 0.01, "how strongly linked studies attract"],
@@ -185,7 +186,8 @@ document.addEventListener("atlas:ready", () => {
     if (!d3) { host.innerHTML = `<p class="muted">The study map needs d3, which did not load.</p>`; return; }
     const VOCAB = vocabulary(), FACETS = Object.keys(VOCAB);
     const studies = [...S.cat.studies].sort((a, b) => a.id.localeCompare(b.id));
-    const layers = { ...LAYERS, ...store.get("atlas.graph.layers", {}) };
+    // ".v2": choices saved under the old all-on default are dropped once, so every reader starts from the new one
+    const layers = { ...LAYERS, ...store.get("atlas.graph.layers.v2", {}) };
     const PHYS = { ...PHYS_DEFAULT, ...store.get("atlas.graph.forces", {}) };
     let islands = store.get("atlas.graph.islands", "model");
     if (islands !== null && !VOCAB[islands]) islands = FACETS[0] || null;
@@ -425,7 +427,7 @@ document.addEventListener("atlas:ready", () => {
       layers[k] = !layers[k];
       b.setAttribute("aria-pressed", String(layers[k]));
       svg.querySelectorAll(`.e-${k}`).forEach((g) => g.classList.toggle("off", !layers[k]));
-      store.set("atlas.graph.layers", layers);
+      store.set("atlas.graph.layers.v2", layers);
     }));
     const cycle = [...FACETS, null];
     const islandsBtn = host.querySelector("#map-islands");
