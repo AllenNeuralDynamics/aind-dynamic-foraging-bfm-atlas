@@ -10,6 +10,7 @@ renders, and that nothing scrolls sideways at phone width.
 import functools
 import http.server
 import json
+import re
 import sys
 import threading
 import urllib.request
@@ -188,6 +189,17 @@ def main(site: str, out: str) -> int:
             failures.append("home: the links to the rest of the atlas are missing")
         if not page.locator('.top nav a[href="#/"]', has_text="Home").is_visible():
             failures.append("home: no Home link in the navigation")
+        # search: a word from a report's title finds that report, and Enter opens the full results page
+        title = report["title"]
+        word = max(re.findall(r"[A-Za-z]{5,}", title) or ["study"], key=len)
+        page.fill("#search", word)
+        page.wait_for_timeout(500)
+        if not page.locator("#search-results .search-hit").count():
+            failures.append(f"search: '{word}' (from {report['id']}'s title) found nothing")
+        page.press("#search", "Enter")
+        page.wait_for_timeout(500)
+        if not page.evaluate("location.hash.startsWith('#/search/')") or not page.locator(".search-page li").count():
+            failures.append("search: Enter did not open the full results page")
         page.goto(base + "#/studies")
         page.wait_for_selector("#study-map .node", timeout=20000)
         if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
