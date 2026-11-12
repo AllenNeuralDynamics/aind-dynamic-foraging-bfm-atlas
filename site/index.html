@@ -25,6 +25,11 @@
     <a href="#/health">Health</a>
     <a href="#/framework" data-view="framework" hidden>Framework</a>
   </nav>
+  <div class="search" role="search">
+    <input id="search" type="search" placeholder="Search studies and reports…" aria-label="Search studies and the full text of reports"
+      autocomplete="off" role="combobox" aria-controls="search-results" aria-expanded="false" aria-autocomplete="list">
+    <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
+  </div>
   <span class="pin" id="pin"></span>
   <!-- a static page cannot start a workflow without a token: this opens the deploy workflow, one "Run workflow" click away -->
   <a class="rebuild" id="rebuild" href="https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-bfm-atlas/actions/workflows/pages.yml"
@@ -48,13 +53,14 @@
   <button class="lightbox-close" type="button" aria-label="Close the figure">×</button>
   <img alt="">
 </dialog>
-<!-- views.js, map.js, about.js, leaderboard.js and home.js first: their atlas:ready listeners must exist before app.js
-     fires the event; about.js, leaderboard.js and home.js after map.js, whose tooltip and Export SVG they use -->
+<!-- views.js, map.js, about.js, leaderboard.js, home.js and search.js first: their atlas:ready listeners must exist
+     before app.js fires the event; about.js, leaderboard.js and home.js after map.js, whose tooltip and Export SVG they use -->
 <script src="views.js"></script>
 <script src="map.js"></script>
 <script src="about.js"></script>
 <script src="leaderboard.js"></script>
 <script src="home.js"></script>
+<script src="search.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

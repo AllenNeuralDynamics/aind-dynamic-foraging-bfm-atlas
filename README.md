@@ -23,6 +23,9 @@ draws how they connect; the About page embeds it.
   linked to the study, report or model card behind it, with a hover card listing every source it draws on
   (hand-written in `site/home.js`; a link whose study or report is not in the catalog is dropped),
   then links to the rest of the atlas.
+- **Search** (the box in the header; `#/search/<words>` lists every result): studies and the full text of every
+  report, in the browser with no index file (`site/search.js`). Every word must appear; "quoted words" must
+  appear together. A hit in a result block links to that block.
 - **Study map** (`#/studies`): every study by creation order, in lanes by model family, with the
   relationships the studies repo declares (its ADR 0002): **motivation** (why a study exists),
   **correction**, and **upstream** (a report uses another study's results), each a toggle layer;

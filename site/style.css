@@ -492,3 +492,21 @@ a.lchip { color: var(--accent); }
 .poster-canvas img { display: block; width: 100%; height: auto; }
 .poster-hl { position: absolute; border: 3px solid #f0a020; border-radius: 6px; box-shadow: 0 0 0 9999px rgba(20, 24, 30, 0.45);
   pointer-events: none; }
+
+/* search (search.js): the header box, its drop-down, and the #/search page */
+.search { position: relative; flex: 0 1 15rem; min-width: 10rem; }
+.search input { width: 100%; font: inherit; font-size: 0.9em; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--text); }
+.search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.search-results { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(34rem, calc(100vw - 32px)); max-height: 70vh;
+  overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+.search-hit { display: grid; gap: 2px; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--text); }
+.search-hit:hover, .search-hit.active { background: var(--accent-soft); }
+.search-title { font-weight: 600; font-size: 0.9em; }
+.search-snip { color: var(--muted); font-size: 0.85em; overflow-wrap: anywhere; }
+.search-snip mark, .search-page mark { background: var(--warn-soft); color: var(--text); border-radius: 2px; }
+.search-kind { display: inline-block; font-size: 0.75em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-right: 2px; }
+.search-all, .search-none { display: block; padding: 8px 12px; font-size: 0.88em; margin: 0; }
+.search-page { padding-left: 1.4em; max-width: 860px; }
+.search-page li { margin: 0 0 12px; }
