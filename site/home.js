@@ -98,7 +98,7 @@ document.addEventListener("atlas:ready", () => {
     ["#/leaderboard", "Leaderboard", "Every model family's held-out choice likelihood on one axis, with model cards."],
     ["#/timeline", "Timeline", "When each launch ran and what each study is waiting on."],
     ["#/health", "Health", "What the provenance checker found across the studies repo."],
-    ["#/framework", "Framework", "The provenance framework behind the atlas, for other ML projects to reuse."],
+    ["#/workflow", "Workflow", "How people and AI agents run these studies, and the provenance system behind every number."],
   ];
 
   // a link's target, title and href in this catalog, or null when the study or report is not in it

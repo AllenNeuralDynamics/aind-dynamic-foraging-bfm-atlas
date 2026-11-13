@@ -509,3 +509,8 @@ a.lchip { color: var(--accent); }
 .search-all, .search-none { display: block; padding: 8px 12px; font-size: 0.88em; margin: 0; }
 .search-page { padding-left: 1.4em; max-width: 860px; }
 .search-page li { margin: 0 0 12px; }
+
+/* the Framework page's workflow figure (about.js); its zoom button is a report figure's (app.js) */
+.fw-figure { margin: 14px 0 18px; max-width: 980px; }
+.fw-figure img { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.fw-figure figcaption { font-size: 0.88em; margin-top: 6px; max-width: 860px; }
