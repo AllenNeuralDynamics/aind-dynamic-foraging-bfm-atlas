@@ -217,6 +217,12 @@ def main(site: str, out: str) -> int:
         pressed = page.locator(".layer").evaluate_all("bs => bs.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.kind)")
         if pressed != ["motivation"]:
             failures.append(f"study map: by default only the motivation links should be drawn, not {pressed}")
+        # hovering a study lights only links whose layer is on: a switched-off layer stays hidden
+        page.locator("#study-map .node[data-id]:not(.issue)").first.dispatch_event("pointerenter")
+        if page.locator("#study-map .edge.off.lit").count() or page.evaluate(
+                "[...document.querySelectorAll('#study-map .edge.off')].some(e => getComputedStyle(e).display !== 'none')"):
+            failures.append("study map: hovering a study shows links of a layer that is switched off")
+        page.locator("#study-map .node[data-id]:not(.issue)").first.dispatch_event("pointerleave")
         up = page.locator('.layer[data-kind="upstream"]')
         before = up.get_attribute("aria-pressed")
         up.click()

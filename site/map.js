@@ -368,7 +368,8 @@ document.addEventListener("atlas:ready", () => {
       if (!id) return;
       svg.querySelector(`.node[data-id="${CSS.escape(id)}"]`)?.classList.add("lit");
       svg.querySelectorAll(".edge").forEach((g) => {
-        if (g.dataset.from !== id && g.dataset.to !== id) return;
+        // a layer switched off stays hidden on hover too: its links light no neighbour
+        if ((g.dataset.from !== id && g.dataset.to !== id) || g.classList.contains("off")) return;
         g.classList.add("lit");
         const other = g.dataset.from === id ? g.dataset.to : g.dataset.from;
         svg.querySelector(`.node[data-id="${CSS.escape(other)}"]`)?.classList.add("nbr");
