@@ -200,7 +200,6 @@ svg .axis { stroke: var(--line); }
 .mk-motivation { fill: var(--accent); } .mk-upstream { fill: var(--muted); }
 .mk-corrects { fill: var(--error); } .mk-supersedes { fill: var(--warn); }
 .edge.off { display: none; }
-.lighting .edge.off.lit { display: inline; }
 .lighting .edge:not(.lit) { opacity: 0.12; }
 .lighting .node:not(.lit):not(.nbr):not(.dim) { opacity: 0.35; }
 .edge.lit .line { stroke-opacity: 1; }
