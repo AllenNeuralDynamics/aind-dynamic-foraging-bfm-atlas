@@ -61,9 +61,9 @@ draws how they connect; the About page embeds it.
   the 3-way likelihood (left, right or ignore) and the engagement likelihood (respond vs ignore) of the
   models that predict an ignore, study 02's 3-way GRU by hidden size and training mice, and study 14's
   GLM-HMM by number of states (`IGNORE_BOARDS` in the same file).
-- **Framework** (`#/framework`; `#/about` still opens it), titled *AI-native MLOps workflow*: the workflow figure
+- **Workflow** (`#/workflow`; `#/framework` and `#/about` still open it), titled *AI-native MLOps workflow*: the workflow figure
   (`site/img/ai-native-workflow.webp`) and the provenance-system figure (`site/img/provenance-system.webp`),
-  then the framework itself, for other ML projects to reuse. The stack
+  then the provenance system itself, for other ML projects to reuse. The stack
   diagram of the four repositories (the dispatcher's `docs/diagrams/bfm-stack.html`, read from the
   same dispatcher commit as the skills and shipped under `data/dispatcher/`); an interactive map
   of the objects it defines (study, launch, launch record, freeze, producer, report, ...) by

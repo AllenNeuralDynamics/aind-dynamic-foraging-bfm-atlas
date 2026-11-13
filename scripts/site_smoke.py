@@ -18,7 +18,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-OPTIONAL_VIEWS = ("timeline", "framework", "leaderboard")   # visited when the nav shows them
+OPTIONAL_VIEWS = ("timeline", "workflow", "leaderboard")   # visited when the nav shows them
 
 
 def check_export(page, button, what, path, failures, sha):
@@ -278,11 +278,11 @@ def main(site: str, out: str) -> int:
             if page.locator("#study-map .node.dim").count() or chip.get_attribute("aria-pressed") != "false" \
                     or not reset.is_disabled():
                 failures.append("study map: Reset did not clear the tag filters")
-        # the Framework page: one box per framework object, a selection fills the panel with its
+        # the Workflow page: one box per framework object, a selection fills the panel with its
         # definition, the porting prompts render with copy buttons, and the map exports
         fw = cat.get("framework") or {}
         if fw.get("available"):
-            page.goto(base + "#/framework")
+            page.goto(base + "#/workflow")
             page.wait_for_selector("#fw-map .fw-node", timeout=20000)
             if page.locator("#fw-map .fw-node").count() != len(fw["objects"]):
                 failures.append("framework: not one box per framework object")
@@ -418,7 +418,7 @@ def main(site: str, out: str) -> int:
             if view not in views:
                 failures.append(f"{view}: navigation link hidden, so its view is not registered")
         page.set_viewport_size({"width": 390, "height": 844})
-        for name in ("landing", "studies", "report", "lineage", "framework"):
+        for name in ("landing", "studies", "report", "lineage", "workflow"):
             page.goto(base + views[name])
             page.wait_for_timeout(800)
             if name == "lineage":      # every step open, so the details must fit too

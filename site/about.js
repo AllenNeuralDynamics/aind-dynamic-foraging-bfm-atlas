@@ -1,4 +1,5 @@
-/* The Framework page (#/framework; #/about, its old name, still opens it): the framework behind the studies repo, described for other projects
+/* The Workflow page (#/workflow; #/framework and #/about, its old names, still open it): the AI-native MLOps workflow and
+ * the provenance system behind the studies repo, described for other projects
  * that train models on several compute platforms, track runs in W&B and analyse afterwards.
  * Everything comes from catalog.framework (src/bfm_atlas/framework.py): an editorial model of the
  * framework's objects, filled in at build time from the studies CONTEXT.md, schemas/, ADRs and
@@ -31,21 +32,23 @@ document.addEventListener("atlas:ready", () => {
   const ext = (href, text, cls = "") => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
   const level = (l) => { const [name, hint] = LEVELS[l || "none"]; return `<span class="lvl-chip lv-${esc(l || "none")}" title="${esc(hint)}">${esc(name)}</span>`; };
 
-  VIEWS.framework = () => {
+  VIEWS.workflow = () => {
     const fw = S.cat.framework;
     if (!fw || !fw.available) {
-      main().innerHTML = `<h1>Framework</h1><p class="muted">This catalog was built without the framework description
+      main().innerHTML = `<h1>AI-native MLOps workflow</h1><p class="muted">This catalog was built without the framework description
         (${esc(fw?.error || "no framework section")}).</p>`;
       return;
     }
     const L = srcs(fw);
     main().innerHTML = `
       <h1>AI-native MLOps workflow</h1>
-      <p class="about-lede">Every number in these reports traces back to the exact bytes, code and compute that produced
-        it, across Beaker, an on-premise SLURM cluster and Weights &amp; Biases, while people and coding agents work in the
-        same repositories. This page describes the framework that makes that hold, so that other machine-learning
-        projects can adopt it: the objects it defines and how they connect, the schemas and checker that enforce it, the
-        agent skills that operate it, and prompts to port it.</p>
+      <p class="about-lede">How these studies are run, with AI agents in the loop. People and coding agents (Claude Code,
+        Claude Science and our custom skills) share the same repositories and work at every step of the loop below, from
+        accessing data to interpreting results and choosing the next model.</p>
+      <p class="about-lede">A lightweight provenance system keeps that loop honest: every number in a report traces back to
+        the exact data, code, image and compute that produced it. This page describes both, so that other machine-learning
+        projects can adopt them: the objects the system defines, the schemas and checker that enforce it, the agent skills
+        that operate it, and prompts to port it.</p>
       <figure class="fw-figure">
         <span class="fig"><img src="img/ai-native-workflow.webp" alt="The workflow: data from Code Ocean; models developed and launched
           on AI2 Beaker and the AI1 HPC; experiments tracked in Weights &amp; Biases; results analysed into reports; the loop
@@ -76,14 +79,14 @@ document.addEventListener("atlas:ready", () => {
           each experiment, the query that reads W&amp;B, and the analysis behind each figure and report; a decision log carries
           each result back to the next study. The map below is the same system, object by object.</figcaption>
       </figure>
-      <p class="muted">Each box is an object the framework defines, in the stage of a run's life where it appears; dashed
+      <p class="muted">Each box is an object the provenance system defines, in the stage of a run's life where it appears; dashed
         boxes are fields of the launch record. Select one for its definition, its schema, the checker rules about it and
         the skills that operate it.</p>
       <section class="fw" id="fw">
         <div class="map-tools"><span class="muted fw-legend"><span class="sw sw-term"></span>term
           <span class="sw sw-field"></span>launch-record field</span>
           <button type="button" class="export" id="fw-export">Export SVG</button></div>
-        <div class="map-wrap"><svg id="fw-map" role="img" aria-label="The framework's objects by lifecycle stage, and how they connect"></svg></div>
+        <div class="map-wrap"><svg id="fw-map" role="img" aria-label="The provenance system's objects by lifecycle stage, and how they connect"></svg></div>
         <div class="fw-panel" id="fw-panel" aria-live="polite"></div>
       </section>
       <h2>Skills</h2>
@@ -117,7 +120,7 @@ document.addEventListener("atlas:ready", () => {
     const src = `data/dispatcher/${path}`;
     return `
       <h2>The stack</h2>
-      <p class="muted">Where the framework runs: four repositories and the services between them. A variant's manifests
+      <p class="muted">Where the workflow runs: four repositories and the services between them. A variant's manifests
         go to the dispatcher's launchers, which write its launch record and submit the job; the wrapper trains and logs to
         W&amp;B; the study freezes what it needs, its producers compute the reports, and this site publishes them. Drawn in
         the dispatcher's ${ext(`${L.dispatcher}/docs/diagrams/README.md`, "docs/diagrams/")}${L.dsha ? ` at ${esc(short(L.dsha))}` : ""};
@@ -320,5 +323,7 @@ document.addEventListener("atlas:ready", () => {
       .catch((err) => { host.innerHTML = `<p class="lvl-error">${esc(err.message)}</p>`; });
   }
 
-  VIEWS.about = () => VIEWS.framework();     // the page's old name: links to #/about keep working
+  // the page's old names: links to #/framework and #/about keep working
+  VIEWS.framework = () => VIEWS.workflow();
+  VIEWS.about = () => VIEWS.workflow();
 });
