@@ -40,12 +40,21 @@ document.addEventListener("atlas:ready", () => {
     }
     const L = srcs(fw);
     main().innerHTML = `
-      <h1>A provenance framework for ML studies</h1>
+      <h1>AI-native MLOps workflow</h1>
       <p class="about-lede">Every number in these reports traces back to the exact bytes, code and compute that produced
         it, across Beaker, an on-premise SLURM cluster and Weights &amp; Biases, while people and coding agents work in the
         same repositories. This page describes the framework that makes that hold, so that other machine-learning
         projects can adopt it: the objects it defines and how they connect, the schemas and checker that enforce it, the
         agent skills that operate it, and prompts to port it.</p>
+      <figure class="fw-figure">
+        <span class="fig"><img src="img/ai-native-workflow.webp" alt="The workflow: data from Code Ocean; models developed and launched
+          on AI2 Beaker and the AI1 HPC; experiments tracked in Weights &amp; Biases; results analysed into reports; the loop
+          closed by interpreting results and iterating models. Claude Code, Claude Science and custom skills work at every step."
+          width="2000" height="752"><button type="button" class="fig-zoom" title="Open larger" aria-label="Open larger: the AI-native MLOps workflow">⤢</button></span>
+        <figcaption class="muted">The loop: data on Code Ocean; models developed, and jobs launched, on AI2 Beaker and the AI1
+          HPC; experiments tracked and queried in Weights &amp; Biases; results analysed into reports, interpreted, and fed
+          back into the next model. Claude Code, Claude Science and custom skills work at every step.</figcaption>
+      </figure>
       <div class="pillars">
         <div><b>Record what went out</b>Every submission writes an immutable launch record: commits, data snapshot,
           image, manifests, and why it was run.</div>
@@ -57,7 +66,16 @@ document.addEventListener("atlas:ready", () => {
           that may only shrink.</div>
       </div>
       ${stack(fw, L)}
-      <h2>How it fits together</h2>
+      <h2>A lightweight provenance system for MLOps</h2>
+      <figure class="fw-figure">
+        <span class="fig"><img src="img/provenance-system.webp" alt="Data on Code Ocean feeds studies 1 to M; each study runs experiments
+          on the compute, each logged as a W&amp;B run, and the runs feed figures and reports, which feed back through a decision log.
+          Purple marks what is versioned at each hand-off: input data, model and Docker image, experiment, query, analysis."
+          width="2000" height="844"><button type="button" class="fig-zoom" title="Open larger" aria-label="Open larger: the provenance system">⤢</button></span>
+        <figcaption class="muted">What is versioned at each hand-off (purple): the input data, the model and its Docker image,
+          each experiment, the query that reads W&amp;B, and the analysis behind each figure and report; a decision log carries
+          each result back to the next study. The map below is the same system, object by object.</figcaption>
+      </figure>
       <p class="muted">Each box is an object the framework defines, in the stage of a run's life where it appears; dashed
         boxes are fields of the launch record. Select one for its definition, its schema, the checker rules about it and
         the skills that operate it.</p>
