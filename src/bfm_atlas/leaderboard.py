@@ -27,6 +27,7 @@ S10 = "studies/10-gru-reservoir-ablation"
 S13 = "studies/13-hb-subject-vs-gru-heldout/analysis"
 S14 = "studies/14-glmhmm-vs-gru-heldout/analysis"
 S02 = "studies/02-gru-scaling-law-ignore/analysis"
+S40 = "studies/40-cognitive-llm-discovery/analysis"
 
 METRIC = ("Choice likelihood on 149 held-out mice, outside every model's training mice (geometric-mean "
           "probability of each left/right choice). What a model may fit to these mice before it is scored "
@@ -38,6 +39,7 @@ PANELS = [
      "groups": [{"label": "CTT", "x": ["CTT MLE", "CTT HB"]}, {"label": "Hattori", "x": ["Hattori MLE", "Hattori HB"]}]},
     # x is filled at build time from the source's ranks, which move as models are added
     {"id": "literature", "label": "Models from the literature, headline score (ranked; study 12)", "x": [], "from_data": True},
+    {"id": "mevolve", "label": "MEvolve search (study 40)", "x": ["best", "75%", "50%"]},
     {"id": "glmhmm", "label": "GLM-HMM (hurdle), states K", "x": list(range(1, 11))},
     {"id": "disrnn", "label": "disRNN, training mice D", "x": [30, 100, 300, 614]},
     {"id": "gru", "label": "GRU, hidden size H, training mice D", "x": list(D_NOMINAL)},
@@ -159,6 +161,36 @@ def json_ranked(pointer: str, value: str | Callable[[dict], str], rank: str = "r
     return read
 
 
+def json_programs(pointer: str, items: list[tuple[str, str]], value: str, fit: dict) -> Callable:
+    """One point per (key, x) in `items`, at `pointer`/key/`value`; each point says which fit it is (`fit`).
+    A 2-level point also carries its per-mouse fallback (failed 2-level fits and the score without them).
+    A point carries the program's description and equations when the entry has them, and its code's path
+    in the studies repo (the entry's `program` is relative to its study)."""
+    def read(doc, path):
+        out = []
+        for key, x in items:
+            ptr = f"{pointer}/{key}"
+            e = _pointer(doc, ptr, path)
+            info = {"name": key, **fit, **{k: e[k] for k in ("summary", "equations") if e.get(k)}}
+            if e.get("program"):
+                info["program"] = "/".join(path.split("/")[:2] + [e["program"]])
+            if fit.get("fit_kind") == "em":
+                try:
+                    info["fallback"] = {"n": e["n_fallback"], "of": e["n_subjects"], "score": e["with_fallback"]}
+                except KeyError as k:
+                    raise LeaderboardError(f"{path}: {ptr} lacks {k}") from None
+            out.append((x, _values(e[value], path, f"{ptr}/{value}"), f"{ptr}/{value}", info))
+        return out
+    return read
+
+
+def study12_fallback(doc: dict) -> dict:
+    """Study 12 r3's per-mouse fallback (r3_fallback.json, result-3), by EM- label, for the hover card."""
+    tol = doc["tolerance_nats_per_trial"]
+    return {label: {"fallback": {"n": e["n_fallback_heldout"], "of": e["n_heldout"], "score": e["pooled_heldout_fallback"],
+                                 "tol": tol}} for label, e in doc["by_model"].items()}
+
+
 def csv_by_d(value: str, where: dict[str, Callable[[str], bool]], xs: list, describe: str) -> Callable:
     """Rows passing every `where` test, grouped by nominal D; rows with an empty `value` are skipped."""
     def read(rows, path):
@@ -182,6 +214,15 @@ def eq(v: float) -> Callable[[str], bool]:
 def false(s: str) -> bool:
     return s.strip().lower() in ("false", "0", "")
 
+
+# study 40's three test programs: the search's best and the programs chosen at the 75% and 50% floors
+MEVOLVE_PROGRAMS = [("rank3_e3819885", "best"), ("simplify-75_c1_141c8a13", "75%"), ("simplify-50_c1_cd994c73", "50%")]
+MEVOLVE_EM = ("A program found by study 40's LLM-driven search (MEvolve) on training-pool mice, chosen on other training-pool "
+              "mice and scored once on these 149. Fitted like study 12's models (the same MEvolve evaluator and data "
+              "freeze): 2-level EM, each session's parameters varying around the mouse's own typical values under a fixed "
+              "prior, fitted on even sessions, scored on odd ones. The floors are simplified rewrites of the search's best.")
+MEVOLVE_PS = ("The same program fitted per mouse by maximum likelihood (MEvolve's fitter; study 12's per-subject fits used "
+              "another fitter, so these hollow markers compare less exactly than the 2-level ones).")
 
 # ------------------------------------------------------------------ the spec
 # id, panel, legend label, then one or more parts: (file, reader, result block, description).
@@ -216,7 +257,7 @@ SERIES = [
          "parameters vary around the mouse's own typical values under a fixed prior, nothing shared across "
          "mice), or its per-subject MLE fit where its 2-level score is below its per-subject one. Fitted on even "
          "sessions, scored on odd ones."),
-    ]},
+    ], "annotate": (f"{S12}/r3_fallback.json", study12_fallback)},
     # the same model's other fit, drawn hollow over it: per-subject where the headline is 2-level EM, and the
     # 2-level fit where the headline is per-subject (its 2-level score is the lower one)
     {"id": "literature-other", "panel": "literature", "label": "Models from the literature, the other fit (study 12)",
@@ -229,6 +270,18 @@ SERIES = [
          _block("12-cognitive-literature-leaderboard", "r3", "result-1"),
          "The same model's other fit: per-subject MLE (every parameter fitted to the mouse alone, no prior), or, "
          "where that is the headline, the 2-level EM fit, whose score is below it (study 12's flag says why)."),
+    ], "annotate": (f"{S12}/r3_fallback.json", study12_fallback)},
+    # study 40's search programs on the same 149 mice, fitted the same way as study 12's models (same evaluator,
+    # data freeze and settings); the raw 2-level score, as study 12's headline, with its per-mouse fallback in the card
+    {"id": "mevolve", "panel": "mevolve", "label": "MEvolve search, 2-level EM", "parts": [
+        (f"{S40}/r4_simplification.json", json_programs("/test_149", MEVOLVE_PROGRAMS, "two_level",
+                                                         {"fit": "2-level EM", "fit_kind": "em"}),
+         _block("40-cognitive-llm-discovery", "r4", "result-5"), MEVOLVE_EM),
+    ]},
+    {"id": "mevolve-per-subject", "panel": "mevolve", "label": "MEvolve search, per subject", "parts": [
+        (f"{S40}/r4_simplification.json", json_programs("/test_149", MEVOLVE_PROGRAMS, "per_subject",
+                                                         {"fit": "per-subject fit", "fit_kind": "per_subject"}),
+         _block("40-cognitive-llm-discovery", "r4", "result-5"), MEVOLVE_PS),
     ]},
     {"id": "glmhmm-refit", "panel": "glmhmm", "label": "GLM-HMM, refit per held-out mouse", "parts": [
         (f"{S14}/r1_round_1.json", json_by_x("/scores/hurdle/{x}/LR_engaged", list(range(1, 11))),
@@ -432,6 +485,14 @@ def build_leaderboard(root: Path, reports: dict[tuple[str, str], dict], tracked:
                                "source": {"path": path, "where": where},
                                "block": {**block, "report_path": r["path"]}, "description": description,
                                **(info[0] if info else {})})
+        if points and spec.get("annotate"):      # extra card text from another committed file, by entry name
+            a_path, annotate = spec["annotate"]
+            ap = root / a_path
+            if ap.is_file() and tracked(ap):
+                extra = annotate(_load(ap))
+                for pt in points:
+                    if pt.get("fit_kind") == "em":
+                        pt.update(extra.get(pt.get("name"), {}))
         panel = next(p for p in panels if p["id"] == spec["panel"])
         if points and spec.get("overlay") and not panel["x"]:   # the twins it is drawn over are not drawn
             missing += [{"series": spec["id"], "label": spec["label"], "path": part[0], "block": part[2]}

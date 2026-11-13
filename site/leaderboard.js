@@ -39,6 +39,9 @@ document.addEventListener("atlas:ready", () => {
     "disrnn-b3e-4": { c: "--lb-dis-op", m: HEXAGON, dash: "5 3" },
     "disrnn-b1e-4": { c: "--lb-dis-best", m: HEXAGON },
     "gru-reservoir": { c: "--lb-res", m: d3.symbolTimes, dash: "4 2", stroke: true, size: 60 },
+    // study 40's search programs: a pair per program, like the models from the literature
+    "mevolve": { c: "--lb-mev", m: d3.symbolCircle, size: 40, noline: true, hit: 6 },
+    "mevolve-per-subject": { c: "--lb-mev", m: d3.symbolCircle, size: 40, noline: true, hit: 6, twin: "mevolve" },
     ...Object.fromEntries(H_ALL.map((h) => [`gru-h${h}`, { c: `--lb-h${h}`, m: d3.symbolDiamond }])),
   };
   // study 12's families: a colour each, in the panel's family order; different models, so no line
@@ -51,6 +54,7 @@ document.addEventListener("atlas:ready", () => {
   const legendLabel = (s) => s.overlay ? `From the literature (other fit): ${s.label}` : s.family ? `From the literature: ${s.label}` : s.label;
   const signed = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
   let twinOf = new Map(), emOf = new Map();     // per draw: literature model -> its headline / other-fit point
+  let pairOf = new Map();                       // per draw: series id -> the series its points pair with (STYLE twin)
   const FORAGING_MODELS = "https://github.com/AllenNeuralDynamics/aind-dynamic-foraging-models";
   const httpsOnly = (u) => (/^https:\/\//.test(u || "") ? u : null);
   const colour = (s) => `var(${styleOf(s).c})`;
@@ -59,6 +63,7 @@ document.addEventListener("atlas:ready", () => {
   let rankOf = () => 0;          // set per draw from the literature panel's order
   const xText = (panel, x) => panel === "cognitive" ? x.replace(" MLE", ", per-mouse fit (MLE)").replace(" HB", ", hierarchical Bayes (HB)")
     : panel === "literature" ? `${x}, rank ${rankOf(x)}`
+    : panel === "mevolve" ? `MEvolve search: ${{ best: "the search's best program", "75%": "the program at the 75% floor", "50%": "the program at the 50% floor" }[x] || x}`
     : panel === "glmhmm" ? `K = ${x} states` : `D = ${x} training mice`;
   const blockRoute = (b) => `#/report/${encodeURIComponent(b.study)}/${encodeURIComponent(b.report)}?block-${encodeURIComponent(b.block)}`;
   const lineageRoute = (b) => `#/lineage/${encodeURIComponent(b.study)}/${encodeURIComponent(b.report)}/${encodeURIComponent(b.block)}`;
@@ -82,6 +87,9 @@ document.addEventListener("atlas:ready", () => {
         <tr><td>Study 12's models from the literature: 2-level EM</td><td>nothing</td><td>its own typical parameters, with each
           session's parameters varying around them under a fixed prior (Laplace-EM on its even sessions; odd sessions
           scored by the session marginal)</td></tr>
+        <tr><td>MEvolve search (study 40): 2-level EM and per subject</td><td>nothing (the programs were found and chosen on
+          training-pool mice)</td><td>the same as study 12's models: its own typical parameters with session-to-session
+          variation (2-level EM), or one parameter set by maximum likelihood (per subject)</td></tr>
         <tr><td>CTT, Hattori: HB</td><td>nothing</td><td>its own parameters plus how they vary from session to session
           (hierarchical Bayes, one mouse at a time, under a fixed prior)</td></tr>
         <tr><td>GLM-HMM, refit</td><td>one shared GLM-HMM</td><td>its own GLM-HMM, started from the shared fit</td></tr>
@@ -187,10 +195,10 @@ document.addEventListener("atlas:ready", () => {
      { label: "HMM + GLM", col: [3, 1], series: ["glmhmm-"], key: "glmhmm",
        note: "GLM-HMM: the GLM's weights switch between a few hidden states (study 14)." },
      { label: "Dynamic GLM", col: [4, 1], note: "GLM weights that drift from trial to trial. Not on the leaderboard yet." }],
-    [{ label: "Per-session / per-subject cognitive models", col: [1, 1], series: ["ctt", "hattori", "literature-"], key: "cog-subject",
-       note: "A named strategy (e.g. Q-learning, compare-to-threshold) fitted to each session or each mouse alone (on the leaderboard: per mouse): CTT and Hattori MLE, and the hollow per-subject markers of the models from the literature." },
-     { label: "Hierarchical cognitive models", col: [2, 1], series: ["ctt", "hattori", "literature-"], key: "cog-hier",
-       note: "The same strategies with each session's parameters varying around the mouse's own: CTT and Hattori HB, and the filled (2-level EM) markers of the models from the literature." },
+    [{ label: "Per-session / per-subject cognitive models", col: [1, 1], series: ["ctt", "hattori", "literature-", "mevolve"], key: "cog-subject",
+       note: "A named strategy (e.g. Q-learning, compare-to-threshold) fitted to each session or each mouse alone (on the leaderboard: per mouse): CTT and Hattori MLE, and the hollow per-subject markers of the models from the literature and of MEvolve search." },
+     { label: "Hierarchical cognitive models", col: [2, 1], series: ["ctt", "hattori", "literature-", "mevolve"], key: "cog-hier",
+       note: "The same strategies with each session's parameters varying around the mouse's own: CTT and Hattori HB, and the filled (2-level EM) markers of the models from the literature and of MEvolve search." },
      { label: "HMM + cognitive", col: [3, 1], note: "A cognitive model whose parameters switch between hidden states. Not on the leaderboard yet." },
      { label: "Dynamic cognitive", col: [4, 1], note: "Cognitive parameters that drift over time. Not on the leaderboard yet." }],
   ];
@@ -212,7 +220,7 @@ document.addEventListener("atlas:ready", () => {
   function markCell(s, p) {
     const key = !s ? null
       : s.panel === "cognitive" ? (/ HB$/.test(p.x) ? "cog-hier" : "cog-subject")
-      : s.panel === "literature" ? (p.fit_kind === "em" ? "cog-hier" : "cog-subject")
+      : s.panel === "literature" || s.panel === "mevolve" ? (p.fit_kind === "em" ? "cog-hier" : "cog-subject")
       : LANDSCAPE.flat().find((c) => c.series && c.series.some((q) => s.id.startsWith(q)))?.key;
     for (const cell of main().querySelectorAll(".lsc-cell[data-key]")) cell.classList.toggle("lsc-lit", cell.dataset.key === key);
   }
@@ -288,7 +296,9 @@ document.addEventListener("atlas:ready", () => {
         (a model from the literature opens its own panel: what it is, its equations, paper and code).
         In the panel of models from the literature each model is a pair, its per-subject fit (hollow, left) and its 2-level EM fit (filled,
         right), joined by a line and named above; pairs are ranked by study 12's headline score (the 2-level EM score, or
-        the per-subject one where it is higher). With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
+        the per-subject one where it is higher). The MEvolve search panel shows study 40's programs as the same kind of pair.
+        Every 2-level score is shown raw; its card says how many mice's 2-level fits failed and the score with those mice
+        scored by their per-subject fit (MEvolve's per-mouse fallback). With the keyboard: Tab to a marker, Enter opens its block, Down arrow moves into its card, Escape returns.</p>
       ${missingNote}
       ${landscape()}
       <div class="map-tools"><button type="button" class="export" id="lb-export">Export SVG</button></div>
@@ -321,6 +331,10 @@ document.addEventListener("atlas:ready", () => {
     const ranks = new Map(series.filter((s) => s.family && !s.overlay).flatMap((s) => s.points.map((p) => [p.x, p.rank])));
     twinOf = new Map(series.filter((s) => s.family && !s.overlay).flatMap((s) => s.points.map((p) => [p.x, p])));
     emOf = new Map(series.filter((s) => s.overlay).flatMap((s) => s.points.map((p) => [p.x, p])));
+    pairOf = new Map(series.filter((s) => styleOf(s).twin).flatMap((s) => {
+      const t = series.find((q) => q.id === styleOf(s).twin);
+      return t ? [[s.id, t], [t.id, s]] : [];
+    }));
     rankOf = (v) => ranks.get(v) || 0;
     familyIndex = (f) => Math.max(0, (litPanel?.groups || []).findIndex((g) => g.label === f));
     // legend rows above the plot
@@ -438,6 +452,14 @@ document.addEventListener("atlas:ready", () => {
             .attr("x1", x(pos[`${s.panel}|${p.x}`] + fitDx(base))).attr("y1", yPos(base.mean)).attr("x2", x(xAt(s, p))).attr("y2", yPos(p.mean));
         }
       }
+      if (st.twin) {                     // a pair drawn as two series: join each point to its twin's
+        const twins = new Map((series.find((q) => q.id === st.twin)?.points || []).map((q) => [q.x, q]));
+        for (const p of pts) {
+          const t = twins.get(p.x);
+          if (t) lg_.append("line").attr("class", "lb-twin")
+            .attr("x1", x(xAt(s, p))).attr("y1", yPos(p.mean)).attr("x2", x(pos[`${s.panel}|${t.x}`] + fitDx(t))).attr("y2", yPos(t.mean));
+        }
+      }
       for (const p of pts) {
         const off = p.mean < y0 ? "below" : p.mean > y1 ? "above" : null;
         const hollow = st.fill === "hollow" || (st.fill === "hb" && String(p.x).endsWith("MLE")) || p.fit_kind === "per_subject";
@@ -511,11 +533,13 @@ document.addEventListener("atlas:ready", () => {
       : p.n > 1 ? `<b>${fmt(p.mean)}</b> ± ${fmt(p.sem)} (mean ± SEM, ${p.n} seeds: ${p.values.map(fmt).join(", ")})`
       : `<b>${fmt(p.mean)}</b>`;
     const head = s.overlay ? `<b>${esc(p.x)}</b><div>${esc(s.label)} · its ${esc(p.fit)}</div>`
+      : s.panel === "mevolve" ? `<b>${esc(s.label)}</b><div>${esc(xText(s.panel, p.x))}</div>`
       : p.summary ? `<b>${esc(p.x)}</b><div>${esc(s.label)} · rank ${esc(p.rank)}${p.fit ? ` · ${esc(p.fit)}` : ""}</div>`
       : `<b>${esc(s.label)}</b><div>${esc(xText(s.panel, p.x))}</div>`;
     return `${head}
       <div class="lb-tip-value">${value}${off ? ` <span class="tip-v">(${off} the axis, drawn at its edge)</span>` : ""}</div>
       ${twinLine(s, p)}
+      ${fallbackLine(p, "div")}
       ${p.fit_flag ? `<div class="lb-tip-flag">Flagged by study 12: ${esc(p.fit_flag.reason || p.fit_flag.kind)}</div>` : ""}
       ${p.summary ? `<div class="lb-tip-summary">${esc(p.summary)}</div>`        // its fitting text is in the model panel
         : `<div class="tip-v">${esc(p.description)}</div>`}
@@ -524,18 +548,31 @@ document.addEventListener("atlas:ready", () => {
       <div class="lb-tip-links">${(p.summary || cardOf(s)) && seed === undefined ? `Click for its equations · ` : ""}<a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></div>`;
   }
 
+  // a 2-level score's per-mouse fallback (MEvolve's rule): how many mice's 2-level fits failed numerically, and the
+  // score with those mice scored by their per-subject fit; the chart keeps the raw 2-level score
+  function fallbackLine(p, tag) {
+    const f = p.fallback;
+    if (!f || p.fit_kind !== "em") return "";
+    const tol = f.tol !== undefined ? f.tol : 0.005;
+    return f.n ? `<${tag} class="tip-v">2-level fit failed on ${esc(f.n)} of ${esc(f.of)} mice (their 2-level score more than ${esc(tol)}
+        nats per trial below their per-subject fit). Scoring those mice by their per-subject fit instead: <b>${fmt(f.score)}</b>
+        (${signed(f.score - p.mean)}). Shown here raw.</${tag}>`
+      : `<${tag} class="tip-v">2-level fit succeeded on all ${esc(f.of)} mice: no per-mouse fallback needed.</${tag}>`;
+  }
+
   // a literature model's two fits: the headline marker names the other fit, and the other fit the headline
   function twinLine(s, p) {
     if (s.overlay) {
       const base = twinOf.get(p.x);
       return base ? `<div class="tip-v">Headline (${esc(base.fit || "")}): ${fmt(base.mean)}; this fit ${signed(p.mean - base.mean)}</div>` : "";
     }
-    const other = s.family ? emOf.get(p.x) : null;
+    const other = s.family ? emOf.get(p.x) : pairOf.get(s.id)?.points.find((q) => q.x === p.x);
     return other ? `<div class="tip-v">Its ${esc(other.fit)}: ${fmt(other.mean)} (${signed(other.mean - p.mean)})</div>` : "";
   }
 
   // a literature model's panel, in the page's drawer: what it is, its equations, paper and code
   function openModel(s, p) {
+    if (s.panel === "mevolve") return openProgram(s, p);
     const b = p.block, paper = p.paper || {}, code = p.code || {};
     const body = document.getElementById("drawer-body");
     const codeUrl = code.path && code.commit ? `${FORAGING_MODELS}/blob/${encodeURIComponent(code.commit)}/${code.path.split("/").map(encodeURIComponent).join("/")}` : null;
@@ -546,6 +583,7 @@ document.addEventListener("atlas:ready", () => {
         <b>${fmt(p.mean)}</b></p>
       ${p.family_note ? `<p class="muted">${esc(p.family_note)}</p>` : ""}
       ${twinLine(s, p)}
+      ${fallbackLine(p, "p")}
       ${p.fit_flag ? `<p><b>Flagged by study 12:</b> ${esc(p.fit_flag.reason || p.fit_flag.kind)}</p>` : ""}
       <p>${esc(p.summary)}</p>
       <h3>Equations</h3><div class="lb-model-eq">${p.equations ? "" : `<p class="muted">Not written yet.</p>`}</div>
@@ -554,6 +592,31 @@ document.addEventListener("atlas:ready", () => {
         <li>Paper: ${httpsOnly(paper.url) ? `<a href="${esc(paper.url)}" target="_blank" rel="noopener">${esc(paper.cite || paper.url)}</a>` : esc(paper.cite || "not given")}</li>
         <li>Code: ${codeUrl ? `<a href="${esc(codeUrl)}" target="_blank" rel="noopener"><code>${esc(code.agent_class || code.path)}</code></a> in aind-dynamic-foraging-models @ <span class="mono">${esc(String(code.commit).slice(0, 8))}</span>`
           : code.agent_class ? `<code>${esc(code.agent_class)}</code>` : "not given"}</li>
+      </ul>
+      <p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`;
+    if (p.equations) body.querySelector(".lb-model-eq").append(A.renderMarkdown(p.equations, b.report_path));
+    const drawer = document.getElementById("drawer");
+    if (drawer.hidden) S.drawerOpener = document.activeElement;   // focus returns here on close
+    drawer.hidden = false;
+    drawer.focus();
+  }
+
+  // a program found by MEvolve's search (study 40), in the page's drawer: what it does, its equations, its code
+  function openProgram(s, p) {
+    const b = p.block, body = document.getElementById("drawer-body");
+    body.innerHTML = `
+      <div class="k muted">Program found by MEvolve's search · study ${esc(studyNo(b.study))} ${esc(b.report)}</div>
+      <h2 style="margin-top:0">${esc(xText(s.panel, p.x))}</h2>
+      <p>${A.chip(s.label)} <b>${fmt(p.mean)}</b></p>
+      ${twinLine(s, p)}
+      ${fallbackLine(p, "p")}
+      <p>${esc(p.summary)}</p>
+      <h3>Equations</h3><div class="lb-model-eq">${p.equations ? "" : `<p class="muted">Not written yet.</p>`}</div>
+      <h3>How it was fitted</h3><p>${esc(p.description)}</p>
+      <h3>Sources</h3><ul>
+        <li>Report: <a href="${blockRoute(b)}">study ${esc(studyNo(b.study))} ${esc(b.report)}, ${esc(b.block)}</a> (scores, the description and the equations)</li>
+        <li>Code: ${p.program ? `<a href="${A.STUDIES_REPO}/blob/${encodeURIComponent(S.sha || "main")}/${p.program.split("/").map(encodeURIComponent).join("/")}"
+          target="_blank" rel="noopener"><code>${esc(p.program.split("/").pop())}</code></a> in the studies repo` : "not given"}</li>
       </ul>
       <p><a href="${blockRoute(b)}">Open the result block →</a> · <a href="${lineageRoute(b)}">Lineage</a></p>`;
     if (p.equations) body.querySelector(".lb-model-eq").append(A.renderMarkdown(p.equations, b.report_path));
