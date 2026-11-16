@@ -139,8 +139,9 @@ document.addEventListener("atlas:ready", () => {
     return `
       <h2>How a report is reviewed</h2>
       <p class="muted">Before a report goes live, two reviewers with separate jobs read it. The claims check, a fresh
-        agent that did not write the report, does the scientific review: each claim against its number, the estimands,
-        the uncertainty and the caveats. Copilot, the technical reviewer, checks the code. Each claims check is committed
+        agent that did not write the report, does the scientific review by the
+        ${ext(`${L.dispatcher}/aind-behavior-foundation-model-skills/skills/posthoc-reporting/references/claims-check-rubric.md`, "claims-check rubric")}
+        (checks C1–C9): each claim against its number, the estimands, the uncertainty and the caveats. Copilot, the technical reviewer, checks the code. Each claims check is committed
         as a record keyed by digests of the report and of the evidence it read, and CI refuses a live report whose record
         no longer matches. Stop rules keep the loop short: at most three claims-check runs per report version, and after
         the final one only blocking findings are fixed. Drawn in the dispatcher's
