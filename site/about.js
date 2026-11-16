@@ -139,7 +139,7 @@ document.addEventListener("atlas:ready", () => {
     return `
       <h2>How a report is reviewed</h2>
       <p class="muted">Before a report goes live, two reviewers with separate jobs read it. The claims check, a fresh
-        agent that did not write the report, checks its scientific facts: each claim against its number, the estimands,
+        agent that did not write the report, does the scientific review: each claim against its number, the estimands,
         the uncertainty and the caveats. Copilot, the technical reviewer, checks the code. Each claims check is committed
         as a record keyed by digests of the report and of the evidence it read, and CI refuses a live report whose record
         no longer matches. Stop rules keep the loop short: at most three claims-check runs per report version, and after
