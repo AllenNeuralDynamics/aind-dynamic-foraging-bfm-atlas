@@ -308,15 +308,19 @@ def main(site: str, out: str) -> int:
                 failures.append("framework: the porting prompts' dispatcher links are not pinned, or not flagged as unpinned")
             if fw.get("skills") and page.locator("#fw-skills .skill-card").count() != len(fw["skills"]):
                 failures.append("framework: not one card per skill")
-            # the dispatcher's stack diagram, when the build shipped it, renders inside its frame
-            if ((fw.get("sources") or {}).get("dispatcher") or {}).get("diagram"):
-                frame = page.locator("iframe.stack")
+            # each dispatcher diagram the build shipped (stack, report review) renders inside its own frame
+            shipped = (fw.get("sources") or {}).get("dispatcher") or {}
+            for key, sel, name in (("diagram", "iframe.stack:not(.review)", "stack"),
+                                   ("review_diagram", "iframe.review", "review")):
+                if not shipped.get(key):
+                    continue
+                frame = page.locator(sel)
                 frame.scroll_into_view_if_needed()
                 try:
                     frame.content_frame.locator("svg").first.wait_for(timeout=20000)
-                    frame.screenshot(path=str(out / "framework-stack.png"))
+                    frame.screenshot(path=str(out / f"framework-{name}.png"))
                 except Exception as exc:          # noqa: BLE001 - any failure to render is the finding
-                    failures.append(f"framework: the stack diagram did not render ({type(exc).__name__})")
+                    failures.append(f"framework: the {name} diagram did not render ({type(exc).__name__})")
             page.screenshot(path=str(out / "framework.png"), full_page=True)
             check_export(page, "#fw-export", "framework map", out / "framework.svg", failures, sha=cat["_meta"]["studies_git_sha"])
         # the leaderboard: one marker per point; hover shows its card, a click opens the result block
