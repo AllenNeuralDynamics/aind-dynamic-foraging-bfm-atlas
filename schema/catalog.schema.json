@@ -310,6 +310,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "review_diagram": {
+                      "description": "Dispatcher-relative path of the interactive report-review diagram the build shipped under data/dispatcher/, or null when that commit has none.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }

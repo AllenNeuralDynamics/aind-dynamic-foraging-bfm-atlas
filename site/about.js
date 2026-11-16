@@ -89,6 +89,7 @@ document.addEventListener("atlas:ready", () => {
         <div class="map-wrap"><svg id="fw-map" role="img" aria-label="The provenance system's objects by lifecycle stage, and how they connect"></svg></div>
         <div class="fw-panel" id="fw-panel" aria-live="polite"></div>
       </section>
+      ${review(fw, L)}
       <h2>Skills</h2>
       <p class="muted">Agent skills (Claude Code plugin) that carry the workflow and the why behind each rule, from the
         ${ext(`${L.dispatcher}/aind-behavior-foundation-model-skills/README.md`, "dispatcher's skills pack")}${L.dsha ? ` at ${esc(short(L.dsha))}` : ""}.
@@ -113,7 +114,7 @@ document.addEventListener("atlas:ready", () => {
 
   // ------------------------------------------------------------ the stack diagram
   // The dispatcher's interactive diagram of the four repositories, shipped by the build from the
-  // dispatcher commit the skills were read at (framework.copy_stack_diagram), so it is pinned too.
+  // dispatcher commit the skills were read at (framework.copy_dispatcher_diagrams), so it is pinned too.
   function stack(fw, L) {
     const path = fw.sources?.dispatcher?.diagram;
     if (!path) return "";
@@ -126,6 +127,27 @@ document.addEventListener("atlas:ready", () => {
         the dispatcher's ${ext(`${L.dispatcher}/docs/diagrams/README.md`, "docs/diagrams/")}${L.dsha ? ` at ${esc(short(L.dsha))}` : ""};
         ${ext(src, "open it full screen")} to pan, zoom and trace one relationship.</p>
       <div class="stack-wrap"><iframe class="stack" src="${esc(src)}" title="The behavioral foundation model stack across its four repositories"
+        loading="lazy"></iframe></div>`;
+  }
+
+  // ------------------------------------------------------------ the review diagram
+  // How a study report is reviewed before it goes live (dispatcher#236), shipped and pinned like the stack.
+  function review(fw, L) {
+    const path = fw.sources?.dispatcher?.review_diagram;
+    if (!path) return "";
+    const src = `data/dispatcher/${path}`;
+    return `
+      <h2>How a report is reviewed</h2>
+      <p class="muted">Before a report goes live, two reviewers with separate jobs read it. The claims check, a fresh
+        agent that did not write the report, does the scientific review by the
+        ${ext(`${L.dispatcher}/aind-behavior-foundation-model-skills/skills/posthoc-reporting/references/claims-check-rubric.md`, "claims-check rubric")}
+        (checks C1–C9): each claim against its number, the estimands, the uncertainty and the caveats. Copilot, the technical reviewer, checks the code. Each claims check is committed
+        as a record keyed by digests of the report and of the evidence it read, and CI refuses a live report whose record
+        no longer matches. Stop rules keep the loop short: at most three claims-check runs per report version, and after
+        the final one only blocking findings are fixed. Drawn in the dispatcher's
+        ${ext(`${L.dispatcher}/docs/diagrams/README.md`, "docs/diagrams/")}${L.dsha ? ` at ${esc(short(L.dsha))}` : ""};
+        ${ext(src, "open it full screen")}; the rules are in the cards below the diagram.</p>
+      <div class="stack-wrap"><iframe class="stack review" src="${esc(src)}" title="How a study report is reviewed before it goes live"
         loading="lazy"></iframe></div>`;
   }
 

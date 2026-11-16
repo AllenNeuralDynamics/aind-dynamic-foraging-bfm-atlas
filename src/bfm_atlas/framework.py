@@ -237,8 +237,11 @@ def _skills(skills_dir: Path) -> dict:
             "skills": found}
 
 
-# the dispatcher's interactive stack diagram (archify HTML), shown on the About page
+# the dispatcher's interactive diagrams (archify HTML), shown on the Workflow page: the stack, and
+# how a study report is reviewed (dispatcher#236)
 STACK_DIAGRAM = "docs/diagrams/bfm-stack.html"
+REVIEW_DIAGRAM = "docs/diagrams/report-review.html"
+DIAGRAMS = {"diagram": STACK_DIAGRAM, "review_diagram": REVIEW_DIAGRAM}   # catalog key -> dispatcher path
 
 
 def dispatcher_file(skills_dir: Path | str, path: str) -> bytes | None:
@@ -255,17 +258,20 @@ def dispatcher_file(skills_dir: Path | str, path: str) -> bytes | None:
     return out.stdout
 
 
-def copy_stack_diagram(catalog: dict, skills_dir: Path | str | None, dest: Path | str) -> Path | None:
-    """Write the stack diagram the catalog names to dest/dispatcher/<path>, where the About page
-    loads it; None when the build had no skills pack or its commit has no diagram."""
+def copy_dispatcher_diagrams(catalog: dict, skills_dir: Path | str | None, dest: Path | str) -> list[Path]:
+    """Write each diagram the catalog names to dest/dispatcher/<path>, where the Workflow page
+    loads it; none when the build had no skills pack or its commit has no diagrams."""
     d = ((catalog.get("framework") or {}).get("sources") or {}).get("dispatcher") or {}
-    data = dispatcher_file(skills_dir, d["diagram"]) if skills_dir and d.get("diagram") else None
-    if data is None:
-        return None
-    out = Path(dest) / "dispatcher" / d["diagram"]
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(data)
-    return out
+    written = []
+    for key in DIAGRAMS:
+        data = dispatcher_file(skills_dir, d[key]) if skills_dir and d.get(key) else None
+        if data is None:
+            continue
+        out = Path(dest) / "dispatcher" / d[key]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(data)
+        written.append(out)
+    return written
 
 
 # ---------------------------------------------------------------- assembly
@@ -316,9 +322,10 @@ def build_framework(studies_root: Path | str, ok=None, skills_dir: Path | str | 
         if not pack["skills"]:
             skills_error = f"no SKILL.md under {skills_dir}"
         else:
-            diagram = pack["root"] and _git(Path(pack["root"]), "ls-tree", "--name-only", "HEAD", "--", STACK_DIAGRAM)
-            dispatcher = {"sha": pack["sha"], "dirty": pack["dirty"], "remote": pack["remote"],
-                          "diagram": STACK_DIAGRAM if diagram else None}
+            dispatcher = {"sha": pack["sha"], "dirty": pack["dirty"], "remote": pack["remote"]}
+            for key, path in DIAGRAMS.items():
+                found = pack["root"] and _git(Path(pack["root"]), "ls-tree", "--name-only", "HEAD", "--", path)
+                dispatcher[key] = path if found else None
             skills = []
             for name, s in pack["skills"].items():
                 ed = SKILLS.get(name, {})
