@@ -563,17 +563,20 @@ RECORD_SECTIONS = ("## Prompt given to the reviewer", "## Reviewer's response", 
 REVIEW_JSON = re.compile(r"(?:```json\n)?(\{.*?\n\})", re.S)
 
 
-def _claims_check_module(root: Path):
+def _claims_check_module(root: Path, ok: "_Tracked"):
     import importlib.util
     path = root / "studies" / "util" / "claims_check.py"
-    if not path.is_file():
+    if not path.is_file() or not ok(path):      # only code the pinned commit holds runs
         return None
     spec = importlib.util.spec_from_file_location(f"_atlas_claims_check_{abs(hash(str(root)))}", path)
     mod = importlib.util.module_from_spec(spec)
+    write_bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True   # leave no __pycache__ in the checkout
     try:
         spec.loader.exec_module(mod)
     except Exception:                    # an old or broken checkout: no claims-check data, not a failed build
         return None
+    finally:
+        sys.dont_write_bytecode = write_bytecode
     return mod
 
 
@@ -662,7 +665,7 @@ def _answers(responses: str) -> dict | None:
             "deferred": sum(pick(c, a, "deferred") or pick(c, a, "already deferred") for c in body)}
 
 
-def _claims_checks(mod, root: Path, study_dir: Path, report: dict) -> dict | None:
+def _claims_checks(mod, root: Path, study_dir: Path, report: dict, ok: "_Tracked") -> dict | None:
     """Every claims check of one report, newest first, and the report's claims-check status:
     current (the newest record still matches), stale, missing (a version-2 report never checked),
     not_required (a version-1 report has no claims to check), history (superseded or retracted)."""
@@ -671,7 +674,7 @@ def _claims_checks(mod, root: Path, study_dir: Path, report: dict) -> dict | Non
     fm = report["frontmatter"] if isinstance(report["frontmatter"], dict) else {}
     v2 = fm.get("schema_version") == 2
     runs = []
-    paths = mod.records(study_dir, report["id"])
+    paths = [p for p in mod.records(study_dir, report["id"]) if ok(p)]   # an ignored local record is not history
     for k, rec in enumerate(paths):
         try:
             header = mod.read_header(rec)
@@ -833,11 +836,11 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
                   and (ok.paths is None or any(x.startswith(f"studies/{p.name}/") for x in ok.paths)))
     ids = {p.name for p in dirs}
     studies = [_study(p, root, ids, ok) for p in dirs]
-    cc = _claims_check_module(root)
+    cc = _claims_check_module(root, ok)
     for s, d in zip(studies, dirs):
         for r in s["reports"]:
             r["history"] = _report_history(root, r["path"])
-            r["claims_check"] = _claims_checks(cc, root, d, r)
+            r["claims_check"] = _claims_checks(cc, root, d, r, ok)
     _number_links(studies, root)
     wandb = {s["id"]: s["cover"]["wandb"] for s in studies}
 

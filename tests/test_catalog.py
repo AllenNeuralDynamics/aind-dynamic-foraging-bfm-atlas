@@ -735,3 +735,23 @@ def test_claims_check_missing_only_for_version_2(studies):
     c = by_id(cat, "01-gru-alpha")["reports"][0]["claims_check"]
     assert (c["status"], c["required"], c["runs"]) == ("missing", True, [])
     assert by_id(cat, "02-disrnn-beta")["reports"][0]["claims_check"]["status"] == "not_required"
+
+
+def test_an_ignored_record_is_not_a_run(studies):
+    """A local record git ignores is not in the commit the catalog is labelled with."""
+    with open(studies / ".gitignore", "a") as f:
+        f.write("claims_check_r1_2026-11-17.md\n")
+    _with_claims_checks(studies, records=("2026-11-15",))
+    p = studies / "studies/01-gru-alpha/analysis/provenance/claims_check_r1_2026-11-17.md"
+    p.write_text(RECORD.format(date="2026-11-17", d="0" * 64))
+    runs = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"]["runs"]
+    assert [r["checked_on"] for r in runs] == ["2026-11-15"]
+
+
+def test_an_ignored_helper_is_not_run(studies):
+    with open(studies / ".gitignore", "a") as f:
+        f.write("studies/util/\n")
+    _commit(studies, "ignore util")
+    (studies / "studies/util").mkdir(parents=True)
+    (studies / "studies/util/claims_check.py").write_text(FAKE_CLAIMS_CHECK)
+    assert by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"] is None

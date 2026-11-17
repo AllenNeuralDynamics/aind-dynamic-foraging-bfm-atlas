@@ -558,12 +558,14 @@ function ccHealth() {
   if (!all.some((x) => x.c)) return `<h2>Claims check</h2><p class="muted">This build has no claims-check data
     (the studies checkout has no <code>studies/util/claims_check.py</code>).</p>`;
   const KEYS = ["current", "stale", "missing", "not_required", "history"];
-  const count = (xs) => Object.fromEntries(KEYS.map((k) => [k, xs.filter((x) => x.c?.status === k)]));
+  // version-1 reports are counted apart whatever their review history: the pass counts are of version-2 reports
+  const bucket = (c) => !c ? null : c.status === "history" ? "history" : c.schema_version === 1 ? "not_required" : c.status;
+  const count = (xs) => Object.fromEntries(KEYS.map((k) => [k, xs.filter((x) => bucket(x.c) === k)]));
   const link = (x) => `<a href="#/report/${esc(x.s.id)}/${esc(x.r.id)}" title="${esc(x.r.title)}">${esc(x.r.id)}</a>`;
   const cell = (xs, cls, list) => !xs.length ? `<td class="muted">0</td>` : !cls ? `<td>${xs.length}</td>`
     : `<td><span class="badge ${cls}">${xs.length}</span>${list ? ` <span class="cc-ids">${xs.map(link).join(" ")}</span>` : ""}</td>`;
   const tot = count(all);
-  const v2 = all.filter((x) => x.c && x.c.schema_version === 2 && x.c.status !== "history");
+  const v2 = [...tot.current, ...tot.stale, ...tot.missing];
   const failing = tot.stale.length + tot.missing.length;
   const rows = S.cat.studies.filter((s) => s.reports.length).map((s) => {
     const c = count(all.filter((x) => x.s === s));
