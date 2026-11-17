@@ -427,6 +427,21 @@ def main(site: str, out: str) -> int:
         for view in OPTIONAL_VIEWS:
             if view not in views:
                 failures.append(f"{view}: navigation link hidden, so its view is not registered")
+        # timeline: the job list has one row per JSON launch record, sorts on a click and filters
+        if "timeline" in views:
+            page.goto(base + views["timeline"])
+            page.wait_for_selector("#job-list tbody tr", timeout=20000)
+            want = page.evaluate("""() => window.Atlas.S.cat.studies.reduce((n, s) => n + [...s.variants.flatMap((v) =>
+                v.launch_records), ...(s.root_launch_records || [])].filter((r) => r.format === "json").length, 0)""")
+            rows = page.locator("#job-list tbody tr")
+            if rows.count() != want:
+                failures.append(f"job list: {rows.count()} rows for {want} launch records")
+            page.locator("#job-list th[data-col='1'] button").click()
+            if page.locator("#job-list th[data-col='1']").get_attribute("aria-sort") != "ascending":
+                failures.append("job list: a click on Study did not sort by it")
+            page.fill("#job-filter", "no launch is called this")
+            if not page.locator("#job-list tbody", has_text="No launch matches").count():
+                failures.append("job list: the filter does not filter")
         page.set_viewport_size({"width": 390, "height": 844})
         for name in ("landing", "studies", "report", "lineage", "workflow"):
             page.goto(base + views[name])
