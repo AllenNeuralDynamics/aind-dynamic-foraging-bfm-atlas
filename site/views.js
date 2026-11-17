@@ -1,4 +1,4 @@
-/* Launch timeline, report history, and
+/* Launch timeline and job list, report history, and
  * click-a-number. Registers into app.js through window.Atlas once the catalog is loaded.
  */
 "use strict";
@@ -30,7 +30,7 @@ document.addEventListener("atlas:ready", () => {
     const undated = rows.reduce((n, x) => n + [...x.s.variants.flatMap((v) => v.launch_records), ...(x.s.root_launch_records || [])]
       .filter((r) => r.format === "json" && isNaN(Date.parse(r.time))).length, 0);
     main().innerHTML = `<h1>Launch timeline</h1>
-      <p class="muted">Every launch record with a time, by study. <span style="color:var(--accent)">●</span> initial launch,
+      <p class="muted">Every launch record with a time, by study; every launch is listed in the table below. <span style="color:var(--accent)">●</span> initial launch,
         <span style="color:var(--warn)">●</span> intervention (resubmit, rescue, probe, tier change, backfill, extend).
         ${undated ? `${undated} records carry no time and are not shown.` : ""}</p>
       <div class="table-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:720px" role="img" aria-label="Launch timeline across studies">
@@ -41,8 +41,71 @@ document.addEventListener("atlas:ready", () => {
             <circle cx="${x(p.t)}" cy="${20 + i * RH}" r="5" fill="${p.r.kind === "initial" || !p.r.kind ? "var(--accent)" : "var(--warn)"}"
               fill-opacity="${p.r.schema_version === 2 ? 1 : 0.65}">
             <title>${esc(s.id)} · ${esc(p.r.path.split("/variants/")[1] || p.r.path)}\n${esc(p.r.kind || "")} · ${esc(p.r.time)}\n${esc(p.r.note || "")}</title></circle></a>`).join("")}`).join("")}
-      </svg></div>`;
+      </svg></div>
+      <h2>All launches</h2>
+      <p class="muted">One row per launch record, newest first; click a column to sort. Times are Seattle time.
+        Status is not shown: launch records are written at submission and never change, so open the job or
+        W&amp;B group for its current state.</p>
+      <input class="filter" id="job-filter" placeholder="Filter launches…" aria-label="Filter launches">
+      <div class="table-wrap"><table id="job-list"><thead><tr>${JOB_COLS.map((c, k) =>
+        `<th data-col="${k}" aria-sort="none"><button type="button" class="sort">${c.label}</button></th>`).join("")}</tr></thead>
+        <tbody></tbody></table></div>`;
+    jobList(rows.map((x) => x.s));
   };
+
+  // ------------------------------------------------------------ job list (under the timeline)
+  const PT = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  // a Beaker id is 26 characters: show its head, keep the whole id in the link and tooltip
+  const jobRef = (j) => j.type === "beaker_experiment"
+    ? `<a class="mono" href="https://beaker.org/ex/${esc(j.id)}" target="_blank" rel="noopener" title="Beaker experiment ${esc(j.id)}">${esc(j.id.slice(0, 10))}…</a>`
+    : `<span class="mono" title="${esc(j.type.replace(/_/g, " "))} ${esc(j.id)}">${esc(j.type.split("_")[0])} ${esc(j.id)}</span>`;
+  const groupCell = (g) => {
+    const e = S.cat.wandb_groups[g];
+    return `<a class="mono" href="#/group/${encodeURIComponent(g)}">${esc(g).replace("@", "@<wbr>")}</a>${e?.url
+      ? ` <a href="${esc(e.url)}" target="_blank" rel="noopener" title="open in W&amp;B">↗</a>` : ""}`;
+  };
+  // each column: header, sort key, cell
+  const JOB_COLS = [
+    { label: "When (PT)", key: (j) => j.t, cell: (j) =>
+      srcLink(j.r.path, isNaN(j.t) ? "no time" : PT.format(j.t)).replace("<a ", `<a title="${esc(j.r.path)}" `) },
+    { label: "Study · variant", key: (j) => `${j.study} ${j.variant || ""}`, cell: (j) =>
+      `<a href="#/study/${esc(j.study)}">${esc(studyLabel(j.study))}</a><div class="muted">${esc(j.variant || "(study root)")}</div>` },
+    { label: "Kind · platform", key: (j) => `${j.r.kind || ""} ${j.r.platform || ""}`, cell: (j) =>
+      `${chip(j.r.kind || "?")}<div class="muted">${esc(j.r.platform || "—")}</div>` },
+    { label: "Jobs", key: (j) => j.r.job_refs.map((x) => x.id).join(" "), cell: (j) => j.r.job_refs.map(jobRef).join("<br>") || "—" },
+    { label: "Tasks", key: (j) => j.r.n_tasks ?? -1, cell: (j) => esc(j.r.n_tasks ?? "—") },
+    { label: "W&amp;B group", key: (j) => j.r.wandb_groups[0] || "", cell: (j) => j.r.wandb_groups.map(groupCell).join("<br>") || "—" },
+    { label: "Why", key: (j) => j.r.note || "", cell: (j) => `<div class="note" title="${esc(j.r.note || "")}">${esc(j.r.note || "")}</div>` },
+  ];
+
+  function jobList(studies) {
+    const jobs = studies.flatMap((s) => [
+      ...s.variants.flatMap((v) => v.launch_records.map((r) => ({ r, variant: v.name }))),
+      ...(s.root_launch_records || []).map((r) => ({ r, variant: null })),
+    ].filter(({ r }) => r.format === "json").map((j) => ({ ...j, study: s.id, t: Date.parse(j.r.time) })));
+    let col = 0, dir = -1, q = "";
+    const draw = () => {
+      const c = JOB_COLS[col];
+      const cmp = (a, b) => { const x = c.key(a), y = c.key(b);
+        // undated records always sort last
+        if (col === 0 && (isNaN(x) || isNaN(y))) return isNaN(x) - isNaN(y);
+        return (x < y ? -1 : x > y ? 1 : 0) * dir; };
+      const shown = jobs.filter((j) => !q || [j.study, j.variant, j.r.kind, j.r.platform, j.r.note, j.r.path,
+        ...j.r.wandb_groups, ...j.r.job_refs.map((x) => x.id)].join(" ").toLowerCase().includes(q)).sort(cmp);
+      document.querySelector("#job-list tbody").innerHTML = shown.map((j) =>
+        `<tr>${JOB_COLS.map((k) => `<td>${k.cell(j)}</td>`).join("")}</tr>`).join("")
+        || `<tr><td colspan="${JOB_COLS.length}" class="muted">No launch matches.</td></tr>`;
+      document.querySelectorAll("#job-list th").forEach((th, k) =>
+        th.setAttribute("aria-sort", k === col ? (dir > 0 ? "ascending" : "descending") : "none"));
+    };
+    document.querySelectorAll("#job-list th").forEach((th, k) => th.querySelector("button").addEventListener("click", () => {
+      dir = k === col ? -dir : (k === 0 ? -1 : 1); col = k; draw();
+    }));
+    const input = document.getElementById("job-filter");
+    input.addEventListener("input", () => { q = input.value.toLowerCase(); draw(); });
+    draw();
+  }
 
   // ------------------------------------------------------------ report history
   function lineDiff(a, b) {
