@@ -44,8 +44,8 @@ document.addEventListener("atlas:ready", () => {
       </svg></div>
       <h2>All launches</h2>
       <p class="muted">One row per launch record, newest first; click a column to sort. Times are Seattle time.
-        Status is not shown: launch records are written at submission and never change, so open the job or
-        W&amp;B group for its current state.</p>
+        Status is not shown: launch records are written at submission and never change, so open the job (Beaker,
+        SLURM or Cedar) or the W&amp;B group for its current state.</p>
       <input class="filter" id="job-filter" placeholder="Filter launches…" aria-label="Filter launches">
       <div class="table-wrap"><table id="job-list"><thead><tr>${JOB_COLS.map((c, k) =>
         `<th data-col="${k}" aria-sort="none"><button type="button" class="sort">${c.label}</button></th>`).join("")}</tr></thead>
@@ -59,6 +59,9 @@ document.addEventListener("atlas:ready", () => {
   // a Beaker id is 26 characters: show its head, keep the whole id in the link and tooltip
   const jobRef = (j) => j.type === "beaker_experiment"
     ? `<a class="mono" href="https://beaker.org/ex/${esc(j.id)}" target="_blank" rel="noopener" title="Beaker experiment ${esc(j.id)}">${esc(j.id.slice(0, 10))}…</a>`
+    // a Cedar session has no documented web link: show its name; id and CLI command on hover
+    : j.type === "cedar_session" && j.name
+    ? `<span class="mono" title="Cedar session ${esc(j.id)}\ncedar session get ${esc(j.name)}">cedar ${esc(j.name)}</span>`
     : `<span class="mono" title="${esc(j.type.replace(/_/g, " "))} ${esc(j.id)}">${esc(j.type.split("_")[0])} ${esc(j.id)}</span>`;
   const groupCell = (g) => {
     const e = S.cat.wandb_groups[g];
