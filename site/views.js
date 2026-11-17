@@ -16,8 +16,7 @@ document.addEventListener("atlas:ready", () => {
         .map((r) => ({ r, t: Date.parse(r.time) })).filter((p) => !isNaN(p.t)),
     }));
     const all = rows.flatMap((x) => x.pts.map((p) => p.t));
-    if (!all.length) { main().innerHTML = `<h1>Launch timeline</h1><div class="empty">No launch record carries a time.</div>`; return; }
-    const t0 = Math.min(...all), t1 = Math.max(...all);
+    const t0 = all.length ? Math.min(...all) : 0, t1 = all.length ? Math.max(...all) : 0;
     const L = 250, R = 20, W = 1000, RH = 28, H = rows.length * RH + 40;
     const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
     const ticks = [];
@@ -33,7 +32,7 @@ document.addEventListener("atlas:ready", () => {
       <p class="muted">Every launch record with a time, by study; every launch is listed in the table below. <span style="color:var(--accent)">●</span> initial launch,
         <span style="color:var(--warn)">●</span> intervention (resubmit, rescue, probe, tier change, backfill, extend).
         ${undated ? `${undated} records carry no time and are not shown.` : ""}</p>
-      <div class="table-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:720px" role="img" aria-label="Launch timeline across studies">
+      ${!all.length ? `<div class="empty">No launch record carries a time.</div>` : `<div class="table-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:720px" role="img" aria-label="Launch timeline across studies">
         ${ticks.map((t) => `<line class="axis" x1="${x(t)}" x2="${x(t)}" y1="10" y2="${H - 24}"/>
           <text x="${x(t)}" y="${H - 8}" text-anchor="middle">${new Date(t).toISOString().slice(0, 7)}</text>`).join("")}
         ${rows.map(({ s, pts }, i) => `<a href="#/study/${esc(s.id)}"><text x="4" y="${24 + i * RH}">${esc(studyLabel(s.id))}</text></a>
@@ -41,7 +40,7 @@ document.addEventListener("atlas:ready", () => {
             <circle cx="${x(p.t)}" cy="${20 + i * RH}" r="5" fill="${p.r.kind === "initial" || !p.r.kind ? "var(--accent)" : "var(--warn)"}"
               fill-opacity="${p.r.schema_version === 2 ? 1 : 0.65}">
             <title>${esc(s.id)} · ${esc(p.r.path.split("/variants/")[1] || p.r.path)}\n${esc(p.r.kind || "")} · ${esc(p.r.time)}\n${esc(p.r.note || "")}</title></circle></a>`).join("")}`).join("")}
-      </svg></div>
+      </svg></div>`}
       <h2>All launches</h2>
       <p class="muted">One row per launch record, newest first; click a column to sort. Times are Seattle time.
         Status is not shown: launch records are written at submission and never change, so open the job (Beaker,
@@ -76,7 +75,7 @@ document.addEventListener("atlas:ready", () => {
       `<a href="#/study/${esc(j.study)}">${esc(studyLabel(j.study))}</a><div class="muted">${esc(j.variant || "(study root)")}</div>` },
     { label: "Kind · platform", key: (j) => `${j.r.kind || ""} ${j.r.platform || ""}`, cell: (j) =>
       `${chip(j.r.kind || "?")}<div class="muted">${esc(j.r.platform || "—")}</div>` },
-    { label: "Jobs", key: (j) => j.r.job_refs.map((x) => x.id).join(" "), cell: (j) => j.r.job_refs.map(jobRef).join("<br>") || "—" },
+    { label: "Jobs", key: (j) => j.refs.map((x) => x.id).join(" "), cell: (j) => j.refs.map(jobRef).join("<br>") || "—" },
     { label: "Tasks", key: (j) => j.r.n_tasks ?? -1, cell: (j) => esc(j.r.n_tasks ?? "—") },
     { label: "W&amp;B group", key: (j) => j.r.wandb_groups[0] || "", cell: (j) => j.r.wandb_groups.map(groupCell).join("<br>") || "—" },
     { label: "Why", key: (j) => j.r.note || "", cell: (j) => `<div class="note" title="${esc(j.r.note || "")}">${esc(j.r.note || "")}</div>` },
@@ -86,7 +85,12 @@ document.addEventListener("atlas:ready", () => {
     const jobs = studies.flatMap((s) => [
       ...s.variants.flatMap((v) => v.launch_records.map((r) => ({ r, variant: v.name }))),
       ...(s.root_launch_records || []).map((r) => ({ r, variant: null })),
-    ].filter(({ r }) => r.format === "json").map((j) => ({ ...j, study: s.id, t: Date.parse(j.r.time) })));
+    ].filter(({ r }) => r.format === "json").map((j) => ({ ...j, study: s.id, t: Date.parse(j.r.time),
+      // a record the catalog could not parse has no job_refs; keep its row, with only well-formed refs
+      refs: (Array.isArray(j.r.job_refs) ? j.r.job_refs : [])
+        .filter((x) => x && (typeof x.id === "string" || typeof x.id === "number"))
+        .map((x) => ({ type: typeof x.type === "string" ? x.type : "job", id: String(x.id),
+          name: typeof x.name === "string" ? x.name : null })) })));
     let col = 0, dir = -1, q = "";
     const draw = () => {
       const c = JOB_COLS[col];
@@ -95,7 +99,7 @@ document.addEventListener("atlas:ready", () => {
         if (col === 0 && (isNaN(x) || isNaN(y))) return isNaN(x) - isNaN(y);
         return (x < y ? -1 : x > y ? 1 : 0) * dir; };
       const shown = jobs.filter((j) => !q || [j.study, j.variant, j.r.kind, j.r.platform, j.r.note, j.r.path,
-        ...j.r.wandb_groups, ...j.r.job_refs.map((x) => x.id)].join(" ").toLowerCase().includes(q)).sort(cmp);
+        ...j.r.wandb_groups, ...j.refs.flatMap((x) => [x.id, x.name])].join(" ").toLowerCase().includes(q)).sort(cmp);
       document.querySelector("#job-list tbody").innerHTML = shown.map((j) =>
         `<tr>${JOB_COLS.map((k) => `<td>${k.cell(j)}</td>`).join("")}</tr>`).join("")
         || `<tr><td colspan="${JOB_COLS.length}" class="muted">No launch matches.</td></tr>`;
