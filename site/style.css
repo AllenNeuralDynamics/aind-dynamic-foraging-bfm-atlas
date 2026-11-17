@@ -515,3 +515,19 @@ a.lchip { color: var(--accent); }
 .fw-figure { margin: 14px 0 18px; max-width: 980px; }
 .fw-figure img { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
 .fw-figure figcaption { font-size: 0.88em; margin-top: 6px; max-width: 860px; }
+
+/* claims check: Health table and the report page's review history */
+.cc-chip { cursor: pointer; font-family: inherit; }
+.cc-chip.cc-ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.cc-chip.cc-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.cc-chip.cc-error { background: var(--error-soft); color: var(--error); border-color: transparent; }
+.cc-ids { font-size: 0.85em; }
+.cc-ids a + a { margin-left: 4px; }
+.cc-history { margin: 10px 0; }
+.cc-history > summary { font-weight: 600; }
+.cc-run { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.cc-run > summary { cursor: pointer; }
+.cc-run h4 { margin: 12px 0 4px; }
+.cc-sub { margin-top: 8px; }
+.cc-md { font-size: 0.9em; overflow-x: auto; }
+.cc-md table { font-size: 0.95em; }

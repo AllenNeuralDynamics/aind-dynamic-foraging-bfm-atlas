@@ -614,3 +614,122 @@ def test_a_locally_edited_skill_publishes_its_committed_text(studies, tmp_path):
     skill = next(s for s in fw["skills"] if s["name"] == "study-conventions")
     assert skill["description"] == "Organize studies." and skill["headings"] == ["Hard rules first"]
     assert fw["sources"]["dispatcher"]["dirty"] is True
+
+
+# --- claims checks -------------------------------------------------------------------------------
+# A stand-in for the studies repo's studies/util/claims_check.py with the same four functions; the
+# atlas reads records through whatever module the checkout ships. A report is stale here when a
+# file named STALE sits next to the records.
+FAKE_CLAIMS_CHECK = '''
+import re
+from pathlib import Path
+import yaml
+RECORD_DIR = "analysis/provenance"
+NAME = re.compile(r"^claims_check_(r\\d+)_(\\d{4}-\\d{2}-\\d{2})(?:_(\\d+))?\\.md$")
+def split_frontmatter(text):
+    m = re.match(r"\\A---\\n(.*?)\\n---\\n", text, re.S)
+    return (yaml.safe_load(m.group(1)), text[m.end():]) if m else ({}, text)
+def records(study, rid):
+    found = [(m.group(2), int(m.group(3) or 0), p) for p in (Path(study) / RECORD_DIR).glob(f"claims_check_{rid}_*.md")
+             if (m := NAME.match(p.name)) and m.group(1) == rid]
+    return [p for *_, p in sorted(found)]
+def read_header(record):
+    return {k: str(v) if k == "checked_on" else v for k, v in split_frontmatter(Path(record).read_text())[0].items()}
+def stale_reasons(root, study, header):
+    return ["the report's claims or text changed"] if (Path(study) / RECORD_DIR / "STALE").exists() else []
+'''
+
+RECORD = '''---
+schema_version: 1
+report: analysis/reports/r1-curve.md
+checked_on: '{date}'
+content_digest: {d}
+inputs: {{studies/01-gru-alpha/analysis/summary.json: {d}}}
+rubric_version: claims-check/2 @ abcdef1
+model: reviewer-model
+prompt_sha256: {d}
+response_sha256: {d}
+---
+
+# Claims check — r1, {date}
+
+## Prompt given to the reviewer
+
+~~~~text
+Check r1.
+~~~~
+
+## Reviewer's response
+
+~~~~text
+```json
+{{
+  "claims": [{{"id": "F1", "verdict": "supported"}}, {{"id": "F2", "verdict": "contradicted"}}],
+  "stale_sentences": [{{"line": 3, "blocking": true}}],
+  "missing_caveats": [{{"claim": "F1", "severity": "Medium"}}, {{"claim": "F2"}}]
+}}
+```
+
+## Summary written by the reviewer
+
+F2 is contradicted.
+~~~~
+
+## Responses to the findings
+
+| # | Check | Finding | Blocking? | Response |
+|---|---|---|---|---|
+| 1 | C2 | F2 is wrong | **yes** (wrong number) | Fixed in `abc1234` |
+| 2 | C5 | caveat | no | Deferred (#9) |
+| 3 | C5 | caveat | no | Already deferred in run 1 |
+'''
+
+
+def _with_claims_checks(studies, records=("2026-11-15", "2026-11-16"), v2=False, stale=False):
+    a = studies / "studies/01-gru-alpha"
+    (studies / "studies/util").mkdir(parents=True, exist_ok=True)
+    (studies / "studies/util/claims_check.py").write_text(FAKE_CLAIMS_CHECK)
+    for date in records:
+        p = a / "analysis/provenance" / f"claims_check_r1_{date}.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(RECORD.format(date=date, d="0" * 64))
+    if stale:
+        (a / "analysis/provenance/STALE").write_text("")
+    if v2:
+        rep = a / "analysis/reports/r1-curve.md"
+        rep.write_text(rep.read_text().replace("schema_version: 1", "schema_version: 2"))
+    _commit(studies, "claims checks")
+    return build_catalog(studies)
+
+
+def test_without_the_module_there_is_no_claims_check_data(studies):
+    assert by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"] is None
+
+
+def test_claims_check_runs_newest_first_with_counts(studies):
+    cat = _with_claims_checks(studies)
+    assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
+    c = by_id(cat, "01-gru-alpha")["reports"][0]["claims_check"]
+    assert (c["status"], c["schema_version"], c["required"]) == ("current", 1, False)
+    new, old = c["runs"]
+    assert (new["run"], new["checked_on"], new["current"], old["current"]) == (2, "2026-11-16", True, None)
+    assert new["claims"] == {"supported": 1, "contradicted": 1}
+    assert new["findings"] == {"total": 3, "by_kind": {"stale_sentences": 1, "missing_caveats": 2},
+                               "by_level": {"blocking": 1, "Medium": 1}}
+    # the reviewer's own "## " heading sits inside the fence: it neither starts a section nor ends the response
+    assert new["summary_md"].startswith("## Summary written by the reviewer") and "F2 is contradicted." in new["summary_md"]
+    assert new["responses_md"].startswith("| # |")
+    assert new["answers"] == {"rows": 3, "blocking": 1, "fixed": 1, "deferred": 2}
+    assert (new["model"], new["rubric_version"], new["inputs"]) == ("reviewer-model", "claims-check/2 @ abcdef1", 1)
+
+
+def test_claims_check_status(studies):
+    c = by_id(_with_claims_checks(studies, stale=True), "01-gru-alpha")["reports"][0]["claims_check"]
+    assert c["status"] == "stale" and c["runs"][0]["stale_reasons"] == ["the report's claims or text changed"]
+
+
+def test_claims_check_missing_only_for_version_2(studies):
+    cat = _with_claims_checks(studies, records=(), v2=True)
+    c = by_id(cat, "01-gru-alpha")["reports"][0]["claims_check"]
+    assert (c["status"], c["required"], c["runs"]) == ("missing", True, [])
+    assert by_id(cat, "02-disrnn-beta")["reports"][0]["claims_check"]["status"] == "not_required"

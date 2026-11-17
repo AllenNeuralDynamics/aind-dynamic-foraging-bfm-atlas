@@ -553,6 +553,155 @@ def _report_history(root: Path, rel: str) -> list[dict]:
     return out
 
 
+# --- claims checks ------------------------------------------------------------------------------
+# Each claims check of a report is committed as analysis/provenance/claims_check_<rN>_<date>[_<k>].md
+# (studies#160): a YAML header, the prompt, the reviewer's response verbatim, the author's answers.
+# Which records belong to a report and whether the newest still matches the report and its evidence
+# are read with the studies checkout's own studies/util/claims_check.py, so the atlas and the
+# checker agree; a checkout without that module yields no claims-check data.
+RECORD_SECTIONS = ("## Prompt given to the reviewer", "## Reviewer's response", "## Responses to the findings")
+REVIEW_JSON = re.compile(r"(?:```json\n)?(\{.*?\n\})", re.S)
+
+
+def _claims_check_module(root: Path):
+    import importlib.util
+    path = root / "studies" / "util" / "claims_check.py"
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location(f"_atlas_claims_check_{abs(hash(str(root)))}", path)
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:                    # an old or broken checkout: no claims-check data, not a failed build
+        return None
+    return mod
+
+
+def _record_sections(body: str) -> dict[str, str]:
+    """The record's three sections. The reviewer's response is fenced and has its own ## headings,
+    so a heading counts only outside a fence."""
+    out: dict[str, list[str]] = {}
+    current, fence = None, None
+    for line in body.splitlines():
+        m = re.match(r"^(`{3,}|~{3,})", line)
+        if fence is None and line in RECORD_SECTIONS:
+            current = line[3:]
+            out[current] = []
+            continue
+        if m:
+            if fence is None:
+                fence = m.group(1)
+            elif line.strip() == fence[0] * len(line.strip()) and len(line.strip()) >= len(fence):
+                fence = None
+        if current:
+            out[current].append(line)
+    return {k: "\n".join(v).strip() for k, v in out.items()}
+
+
+def _unfence(text: str) -> str:
+    """The response as the reviewer returned it: the record wraps it in one outer ~~~~ fence."""
+    lines = text.strip().splitlines()
+    if len(lines) >= 2 and re.match(r"^~{3,}", lines[0]) and re.match(r"^~{3,}\s*$", lines[-1]):
+        return "\n".join(lines[1:-1])
+    return text
+
+
+def _review_summary(response: str) -> dict:
+    """Claim verdicts and finding counts from the rubric's JSON at the top of the response; the
+    markdown after it is the reviewer's own summary."""
+    m = REVIEW_JSON.search(response)
+    data = None
+    if m:
+        try:
+            data = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            data = None
+    if not isinstance(data, dict):
+        return {"claims": None, "findings": None, "summary_md": response.strip()}
+    verdicts: dict[str, int] = {}
+    for c in data.get("claims") or []:
+        if isinstance(c, dict):
+            v = str(c.get("verdict", "?"))
+            verdicts[v] = verdicts.get(v, 0) + 1
+    kinds: dict[str, int] = {}
+    levels: dict[str, int] = {}
+    for k, v in data.items():
+        if k == "claims" or not isinstance(v, list):
+            continue
+        kinds[k] = len(v)
+        for f in v:
+            if isinstance(f, dict):
+                lvl = f.get("severity") or ("blocking" if f.get("blocking") is True else None)
+                if lvl:
+                    levels[str(lvl)] = levels.get(str(lvl), 0) + 1
+    rest = response[m.end():].strip().lstrip("`").strip()
+    return {"claims": verdicts, "findings": {"total": sum(kinds.values()), "by_kind": kinds, "by_level": levels or None},
+            "summary_md": rest}
+
+
+def _answers(responses: str) -> dict | None:
+    """The author's answers table: how many findings were fixed, deferred, or marked blocking (the
+    "Blocking?" column of rubric claims-check/2; None when the table has no such column)."""
+    rows = [r for r in responses.splitlines() if r.startswith("|")]
+    if len(rows) < 3:
+        return None
+    cell = lambda r: [re.sub(r"[*_`]", "", c).strip().lower() for c in r.strip().strip("|").split("|")]
+    head, body = cell(rows[0]), [cell(r) for r in rows[2:]]
+    col = lambda name: next((i for i, c in enumerate(head) if c.startswith(name)), None)
+    b, a = col("blocking"), col("response")
+    pick = lambda c, i, word: i is not None and len(c) > i and c[i].startswith(word)
+    return {"rows": len(body),
+            "blocking": None if b is None else sum(pick(c, b, "yes") for c in body),
+            "fixed": sum(pick(c, a, "fixed") for c in body),
+            "deferred": sum(pick(c, a, "deferred") or pick(c, a, "already deferred") for c in body)}
+
+
+def _claims_checks(mod, root: Path, study_dir: Path, report: dict) -> dict | None:
+    """Every claims check of one report, newest first, and the report's claims-check status:
+    current (the newest record still matches), stale, missing (a version-2 report never checked),
+    not_required (a version-1 report has no claims to check), history (superseded or retracted)."""
+    if mod is None or not report["id"].startswith("r"):
+        return None
+    fm = report["frontmatter"] if isinstance(report["frontmatter"], dict) else {}
+    v2 = fm.get("schema_version") == 2
+    runs = []
+    paths = mod.records(study_dir, report["id"])
+    for k, rec in enumerate(paths):
+        try:
+            header = mod.read_header(rec)
+        except Exception as e:
+            runs.append({"path": _rel(rec, root), "file": rec.name, "run": k + 1, "error": f"unreadable header: {e}"})
+            continue
+        if header.get("report") != str(Path(report["path"]).relative_to(_rel(study_dir, root))):
+            continue                     # a record of another report with the same rN (the checker flags it)
+        _, body = mod.split_frontmatter(rec.read_text())
+        sec = _record_sections(body)
+        response = _unfence(sec.get("Reviewer's response", ""))
+        newest = rec == paths[-1]
+        reasons = mod.stale_reasons(root, study_dir, header) if newest else None
+        runs.append({
+            "path": _rel(rec, root), "file": rec.name, "run": k + 1,
+            "checked_on": header.get("checked_on"), "model": header.get("model"),
+            "rubric_version": header.get("rubric_version"), "pr_comment": header.get("pr_comment"),
+            "inputs": len(header.get("inputs") or {}),
+            "current": (not reasons) if newest else None, "stale_reasons": reasons or [],
+            **_review_summary(response),
+            "responses_md": sec.get("Responses to the findings", ""),
+            "answers": _answers(sec.get("Responses to the findings", "")),
+        })
+    runs.reverse()
+    if report["status"] in ("superseded", "retracted"):
+        status = "history"
+    elif runs and runs[0].get("current") is True:
+        status = "current"
+    elif runs:
+        status = "stale"
+    else:
+        status = "missing" if v2 else "not_required"
+    return {"status": status, "schema_version": 2 if v2 else 1, "required": v2 and report["status"] == "live",
+            "runs": runs}
+
+
 # --- number links (click-a-number) -------------------------------------------------------------
 # A displayed decimal (any number of places; "−" is the typographic minus) is linked to a JSON leaf only when exactly
 # one leaf, across the JSON artifacts the block can be traced to, rounds to it at the displayed
@@ -678,9 +827,11 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
                   and (ok.paths is None or any(x.startswith(f"studies/{p.name}/") for x in ok.paths)))
     ids = {p.name for p in dirs}
     studies = [_study(p, root, ids, ok) for p in dirs]
-    for s in studies:
+    cc = _claims_check_module(root)
+    for s, d in zip(studies, dirs):
         for r in s["reports"]:
             r["history"] = _report_history(root, r["path"])
+            r["claims_check"] = _claims_checks(cc, root, d, r)
     _number_links(studies, root)
     wandb = {s["id"]: s["cover"]["wandb"] for s in studies}
 

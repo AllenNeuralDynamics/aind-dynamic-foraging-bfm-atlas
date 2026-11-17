@@ -200,6 +200,23 @@ def main(site: str, out: str) -> int:
         page.wait_for_timeout(500)
         if not page.evaluate("location.hash.startsWith('#/search/')") or not page.locator(".search-page li").count():
             failures.append("search: Enter did not open the full results page")
+        # claims check: Health counts reports per study; a checked report's page lists every run
+        checked = next(((s, r) for s in cat["studies"] for r in s["reports"]
+                        if (r.get("claims_check") or {}).get("runs")), None)
+        if any(r.get("claims_check") for s in cat["studies"] for r in s["reports"]):
+            page.goto(base + "#/health")
+            page.wait_for_timeout(500)
+            rows = page.locator(".cc-table tbody tr").count()
+            if rows != sum(1 for s in cat["studies"] if s["reports"]):
+                failures.append(f"claims check: Health table has {rows} rows, not one per study with reports")
+        if checked:
+            page.goto(base + f"#/report/{checked[0]['id']}/{checked[1]['id']}")
+            page.wait_for_selector(".cc-chip", timeout=10000)
+            page.click(".cc-chip")
+            page.wait_for_timeout(300)
+            runs = page.locator("#claims-history .cc-run").count()
+            if not page.evaluate("document.getElementById('claims-history').open") or runs != len(checked[1]["claims_check"]["runs"]):
+                failures.append(f"claims check: the chip did not open a history of every run ({runs} shown)")
         page.goto(base + "#/studies")
         page.wait_for_selector("#study-map .node", timeout=20000)
         if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
