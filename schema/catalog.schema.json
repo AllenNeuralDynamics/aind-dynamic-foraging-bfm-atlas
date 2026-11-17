@@ -1123,6 +1123,22 @@
                       }
                     }
                   },
+                  "scorecard": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "claims-check/3 and later: rubric item C0..C9 -> {severity: number of findings}; an item with no finding is {}. null for records whose entries carry no item.",
+                    "propertyNames": {
+                      "pattern": "^C[0-9]$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    }
+                  },
                   "summary_md": {
                     "type": "string",
                     "description": "the reviewer's markdown summary, verbatim"

@@ -48,6 +48,9 @@ draws how they connect; the About page embeds it.
   claims-check record still matches the report and its evidence (passed), the stale ones, and version-2 reports never
   checked; version-1 reports have no claims to check and are counted apart. Each report page's *Review history* lists
   every run, newest first: date, reviewer model, rubric, claim verdicts, findings, and the author's responses.
+  A claims-check/3 run also shows a scorecard, one cell per rubric item C0–C9 (green no finding, yellow Low only, red
+  any Medium or High); clicking a cell marks that item's rows in the responses table. The newest run's scorecard sits in
+  the section's title line.
 - **Leaderboard** (`#/leaderboard`): every model family's held-out choice likelihood on one axis:
   cognitive models (MLE and hierarchical Bayes), study 12's models from the literature by family, at their headline score (values
   below the axis drawn at its edge; each model's other fit as a hollow marker joined to it), GLM-HMM by number of states (refit per held-out

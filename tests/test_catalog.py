@@ -755,3 +755,32 @@ def test_an_ignored_helper_is_not_run(studies):
     (studies / "studies/util").mkdir(parents=True)
     (studies / "studies/util/claims_check.py").write_text(FAKE_CLAIMS_CHECK)
     assert by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"] is None
+
+
+def test_claims_check_3_scorecard_counts_findings_per_item(studies):
+    """claims-check/3: every entry names its rubric item; null severity is no finding, and a claim's
+    verdict comes from its C1 entry (its C2/C8/C9 entries are findings about it)."""
+    v3 = RECORD.replace('''  "claims": [{{"id": "F1", "verdict": "supported"}}, {{"id": "F2", "verdict": "contradicted"}}],
+  "stale_sentences": [{{"line": 3, "blocking": true}}],
+  "missing_caveats": [{{"claim": "F1", "severity": "Medium"}}, {{"claim": "F2"}}],
+  "producer_traces": [{{"claim": "F1", "severity": null}}, {{"claim": "F2", "severity": "High"}}]''',
+    '''  "claims": [{{"id": "F1", "verdict": "supported", "item": "C1", "severity": null}},
+             {{"id": "F1", "verdict": "supported", "item": "C2", "severity": "Low"}}],
+  "producer_traces": [{{"claim": "F1", "item": "C0", "severity": null}}],
+  "missing_caveats": [{{"claim": "F1", "item": "C5", "severity": "Medium"}}, {{"claim": "F1", "item": "C5", "severity": "Low"}}]''')
+    assert v3 != RECORD
+    _with_claims_checks(studies, records=())
+    p = studies / "studies/01-gru-alpha/analysis/provenance/claims_check_r1_2026-11-17.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(v3.format(date="2026-11-17", d="0" * 64))
+    _commit(studies, "v3 record")
+    run = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"]["runs"][0]
+    assert run["claims"] == {"supported": 1}
+    assert run["scorecard"] == {"C0": {}, "C1": {}, "C2": {"Low": 1}, "C3": {}, "C4": {}, "C5": {"Medium": 1, "Low": 1},
+                                "C6": {}, "C7": {}, "C8": {}, "C9": {}}
+    assert run["findings"]["total"] == 3
+
+
+def test_older_records_have_no_scorecard(studies):
+    assert all(r["scorecard"] is None for r in by_id(_with_claims_checks(studies), "01-gru-alpha")
+               ["reports"][0]["claims_check"]["runs"])

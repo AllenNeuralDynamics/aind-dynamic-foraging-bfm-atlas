@@ -384,6 +384,41 @@ function ccChip(r) {
     ${esc(CC_LABEL[c.status])}${n ? ` · ${n} run${n > 1 ? "s" : ""}` : ""}</button>`;
 }
 
+// The rubric's items (dispatcher claims-check-rubric.md); colours as the PR scorecard's 🟢🟡🔴: green no
+// finding, yellow Low only, red any Medium or High (someone must decide). Drawn as dots, not emoji, so
+// they show without an emoji font and follow the theme.
+const CC_ITEMS = {
+  C0: "Producer trace: the code computes the quantity the claim names",
+  C1: "Each claim against the value at its pointer",
+  C2: "Each claim against its figures and tables",
+  C3: "Numbers in hand-written prose trace to a source",
+  C4: "Stale text",
+  C5: "Missing caveats",
+  C6: "Estimands",
+  C7: "Uncertainty: n, interval type, unit of n",
+  C8: "A changed claim or title with no CHANGELOG entry",
+  C9: "Fixed-string conclusions; verdicts against their tables",
+};
+const SEV = ["High", "Medium", "Low"];
+function ccDot(cell) {
+  const n = (l) => cell[l] || 0;
+  const [cls, what] = n("High") + n("Medium") ? ["r", "Medium or High"] : Object.values(cell).some((x) => x) ? ["y", "Low only"] : ["g", "no finding"];
+  return `<i class="cc-dot cc-dot-${cls}" aria-label="${what}"></i>`;
+}
+const ccCounts = (cell) => SEV.filter((l) => cell[l]).map((l) => `${cell[l]}${l[0]}`).join(" ")
+  + Object.entries(cell).filter(([l]) => !SEV.includes(l)).map(([l, n]) => ` ${n} ${l}`).join("");
+function ccScorecard(sc, mini = false) {
+  if (!sc) return "";
+  const cells = Object.keys(CC_ITEMS).map((k) => {
+    const cell = sc[k] || {}, counts = ccCounts(cell);
+    const tip = `${k} · ${CC_ITEMS[k]}${counts ? ` · ${counts.replace(/(\d+)H/, "$1 High").replace(/(\d+)M/, "$1 Medium").replace(/(\d+)L/, "$1 Low")}` : " · no finding"}`;
+    return mini ? `<span class="cc-mini" title="${esc(tip)}">${k}${ccDot(cell)}</span>`
+      : `<button type="button" class="cc-cell" data-item="${k}" title="${esc(tip)}"><b>${k}</b><span>${ccDot(cell)}</span>
+          <small>${esc(counts) || "&nbsp;"}</small></button>`;
+  }).join("");
+  return mini ? `<span class="cc-minis">${cells}</span>` : `<div class="cc-score" role="group" aria-label="Findings per rubric item">${cells}</div>`;
+}
+
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 function ccRunLine(run) {
   if (run.error) return `<span class="lvl-error">${esc(run.error)}</span>`;
@@ -409,6 +444,7 @@ function ccHistory(r) {
       <b>Run ${run.run}</b> · ${esc(run.checked_on || "?")}
       ${run.current === true ? `<span class="badge ok">current</span>` : run.current === false ? `<span class="badge warn">stale</span>` : ""}
       <span class="muted">· ${esc(run.model || "")}</span></summary>
+      ${ccScorecard(run.scorecard)}
       <dl class="kv">
         <dt>Rubric</dt><dd><code>${esc(run.rubric_version || "?")}</code></dd>
         <dt>Result</dt><dd>${ccRunLine(run)}</dd>
@@ -418,7 +454,8 @@ function ccHistory(r) {
       ${run.responses_md ? `<h4>Author's responses</h4><div class="prose cc-md" data-md="responses"></div>` : ""}
       ${run.summary_md ? `<details class="cc-sub"><summary>Reviewer's summary (verbatim)</summary><div class="prose cc-md" data-md="summary"></div></details>` : ""}
     </details>`).join("");
-  return `<details id="claims-history" class="cc-history"><summary>Review history — claims check: ${esc(CC_LABEL[c.status])}${c.runs.length ? ` (${plural(c.runs.length, "run")})` : ""}</summary>
+  return `<details id="claims-history" class="cc-history"><summary>Review history — claims check: ${esc(CC_LABEL[c.status])}${c.runs.length ? ` (${plural(c.runs.length, "run")})` : ""}
+      ${ccScorecard(c.runs[0]?.scorecard, true)}</summary>
       <p class="muted">${intro} A claims check is a review, by a reader who did not write the report, of whether
         each claim and number matches its evidence. Each run is committed as a record: the prompt, the reviewer's
         response verbatim and the author's answer to each finding. Newest first.</p>
@@ -436,6 +473,16 @@ function mountCcHistory(r) {
       d.replaceChildren(renderMarkdown(md, run.path));
     }
   });
+  // a scorecard cell marks the author's answers to that item's findings (the table's "Check" column)
+  box.querySelectorAll(".cc-run").forEach((el) => el.querySelectorAll(".cc-cell").forEach((btn) => btn.addEventListener("click", () => {
+    const item = btn.dataset.item, re = new RegExp(`\\b${item}\\b`);
+    const pressed = btn.getAttribute("aria-pressed") !== "true";
+    el.querySelectorAll(".cc-cell").forEach((b) => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", String(pressed));
+    const rows = [...el.querySelectorAll(".cc-md table tbody tr")];
+    rows.forEach((tr) => tr.classList.toggle("cc-hit", pressed && re.test(tr.cells[1]?.textContent || "")));
+    el.querySelector(".cc-hit")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  })));
   document.querySelector(".cc-chip")?.addEventListener("click", () => {
     box.open = true;
     box.scrollIntoView({ behavior: "smooth", block: "start" });

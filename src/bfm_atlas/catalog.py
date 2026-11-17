@@ -620,12 +620,24 @@ def _review_summary(response: str) -> dict:
         except json.JSONDecodeError:
             data = None
     if not isinstance(data, dict):
-        return {"claims": None, "findings": None, "summary_md": response.strip()}
+        return {"claims": None, "findings": None, "scorecard": None, "summary_md": response.strip()}
+    entries = [f for v in data.values() if isinstance(v, list) for f in v if isinstance(f, dict)]
+    # claims-check/3 tags every entry with its rubric item; its claims list also holds C2/C8/C9 findings
+    # about a claim, so a claim's verdict is read from its C1 entry only
+    tagged = any("item" in f for f in entries)
     verdicts: dict[str, int] = {}
     for c in data.get("claims") or []:
-        if isinstance(c, dict):
+        if isinstance(c, dict) and (not tagged or c.get("item") == "C1"):
             v = str(c.get("verdict", "?"))
             verdicts[v] = verdicts.get(v, 0) + 1
+    # one cell per rubric item: findings per severity (the PR scorecard of studies#167 counts the same way)
+    scorecard = None
+    if tagged:
+        scorecard = {f"C{i}": {} for i in range(10)}
+        for f in entries:
+            item, lvl = f.get("item"), f.get("severity")
+            if item in scorecard and lvl is not None:
+                scorecard[item][str(lvl)] = scorecard[item].get(str(lvl), 0) + 1
     # From claims-check/3 (dispatcher#238) every entry carries "severity" (High/Medium/Low) and is a
     # finding exactly when it is not null: a supported claim or a matching producer trace is not.
     # Older records have no severity: every entry of a list other than "claims" is a finding, and
@@ -645,7 +657,7 @@ def _review_summary(response: str) -> dict:
                 levels[str(lvl)] = levels.get(str(lvl), 0) + 1
     rest = response[m.end():].strip().lstrip("`").strip()
     return {"claims": verdicts, "findings": {"total": sum(kinds.values()), "by_kind": kinds, "by_level": levels or None},
-            "summary_md": rest}
+            "scorecard": scorecard, "summary_md": rest}
 
 
 def _answers(responses: str) -> dict | None:

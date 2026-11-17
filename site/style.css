@@ -531,3 +531,16 @@ a.lchip { color: var(--accent); }
 .cc-sub { margin-top: 8px; }
 .cc-md { font-size: 0.9em; overflow-x: auto; }
 .cc-md table { font-size: 0.95em; }
+.cc-score { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; margin: 10px 0; max-width: 640px; }
+.cc-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px; font: inherit;
+  font-size: 0.82em; background: var(--surface); color: inherit; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.cc-cell small { color: var(--muted); font-size: 0.85em; white-space: nowrap; }
+.cc-cell[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.cc-minis { margin-left: 10px; font-weight: 400; font-size: 0.82em; white-space: normal; }
+.cc-mini { margin-right: 4px; white-space: nowrap; }
+.cc-md tr.cc-hit td { background: var(--warn-soft); }
+.cc-dot { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%; vertical-align: -0.05em; }
+.cc-dot-g { background: var(--ok); }
+.cc-dot-y { background: #e3b008; }
+.cc-dot-r { background: var(--error); }
+.cc-mini .cc-dot { margin-left: 2px; }
