@@ -623,17 +623,23 @@ def _review_summary(response: str) -> dict:
         if isinstance(c, dict):
             v = str(c.get("verdict", "?"))
             verdicts[v] = verdicts.get(v, 0) + 1
+    # From claims-check/3 (dispatcher#238) every entry carries "severity" (High/Medium/Low) and is a
+    # finding exactly when it is not null: a supported claim or a matching producer trace is not.
+    # Older records have no severity: every entry of a list other than "claims" is a finding, and
+    # claims-check/2 marks some "blocking": true.
     kinds: dict[str, int] = {}
     levels: dict[str, int] = {}
     for k, v in data.items():
-        if k == "claims" or not isinstance(v, list):
+        if not isinstance(v, list):
             continue
-        kinds[k] = len(v)
-        for f in v:
-            if isinstance(f, dict):
-                lvl = f.get("severity") or ("blocking" if f.get("blocking") is True else None)
-                if lvl:
-                    levels[str(lvl)] = levels.get(str(lvl), 0) + 1
+        found = [f for f in v if (f.get("severity") is not None if isinstance(f, dict) and "severity" in f
+                                  else k != "claims")]
+        if found:
+            kinds[k] = len(found)
+        for f in found:
+            lvl = f.get("severity") or ("blocking" if f.get("blocking") is True else None) if isinstance(f, dict) else None
+            if lvl:
+                levels[str(lvl)] = levels.get(str(lvl), 0) + 1
     rest = response[m.end():].strip().lstrip("`").strip()
     return {"claims": verdicts, "findings": {"total": sum(kinds.values()), "by_kind": kinds, "by_level": levels or None},
             "summary_md": rest}

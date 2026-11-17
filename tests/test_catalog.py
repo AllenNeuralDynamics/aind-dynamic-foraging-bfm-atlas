@@ -666,7 +666,8 @@ Check r1.
 {{
   "claims": [{{"id": "F1", "verdict": "supported"}}, {{"id": "F2", "verdict": "contradicted"}}],
   "stale_sentences": [{{"line": 3, "blocking": true}}],
-  "missing_caveats": [{{"claim": "F1", "severity": "Medium"}}, {{"claim": "F2"}}]
+  "missing_caveats": [{{"claim": "F1", "severity": "Medium"}}, {{"claim": "F2"}}],
+  "producer_traces": [{{"claim": "F1", "severity": null}}, {{"claim": "F2", "severity": "High"}}]
 }}
 ```
 
@@ -714,8 +715,9 @@ def test_claims_check_runs_newest_first_with_counts(studies):
     new, old = c["runs"]
     assert (new["run"], new["checked_on"], new["current"], old["current"]) == (2, "2026-11-16", True, None)
     assert new["claims"] == {"supported": 1, "contradicted": 1}
-    assert new["findings"] == {"total": 3, "by_kind": {"stale_sentences": 1, "missing_caveats": 2},
-                               "by_level": {"blocking": 1, "Medium": 1}}
+    # claims-check/3: an entry with "severity": null (a matching producer trace) is not a finding
+    assert new["findings"] == {"total": 4, "by_kind": {"stale_sentences": 1, "missing_caveats": 2, "producer_traces": 1},
+                               "by_level": {"blocking": 1, "Medium": 1, "High": 1}}
     # the reviewer's own "## " heading sits inside the fence: it neither starts a section nor ends the response
     assert new["summary_md"].startswith("## Summary written by the reviewer") and "F2 is contradicted." in new["summary_md"]
     assert new["responses_md"].startswith("| # |")
