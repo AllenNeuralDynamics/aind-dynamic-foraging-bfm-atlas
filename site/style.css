@@ -547,3 +547,15 @@ a.lchip { color: var(--accent); }
 .cc-history > .tip p { margin: 6px 0 0; }
 .cc-history > .tip .muted { color: inherit; opacity: 0.75; }
 .cc-mini { cursor: default; }
+
+/* Timeline: recently updated reports */
+.recent-updates { list-style: none; margin: 0; padding: 0; }
+.recent-updates .ru-day { border-left: 2px solid var(--line); margin-left: 6px; padding: 0 0 6px 14px; position: relative; }
+.recent-updates .ru-day::before { content: ""; position: absolute; left: -6px; top: 0.55em; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--accent); }
+.recent-updates h3 { margin: 0 0 4px; font-size: 0.95em; }
+.recent-updates ul { list-style: none; margin: 0; padding: 0; }
+.recent-updates li li { padding: 3px 0; }
+.ru-time { color: var(--muted); margin-right: 6px; }
+.ru-what { font-size: 0.85em; margin-left: 3.6em; }
+.ru-more { margin: 6px 0 10px; }

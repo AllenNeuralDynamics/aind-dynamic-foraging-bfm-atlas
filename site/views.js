@@ -8,6 +8,33 @@ document.addEventListener("atlas:ready", () => {
   const main = () => document.getElementById("main");
   const studyLabel = (id) => id.replace(/^(\d{2})-/, "$1 ");
 
+  // ------------------------------------------------------------ recently updated reports
+  // The newest commit on each report file, newest first and grouped by day (Seattle time), so a
+  // reader can jump to what changed lately. The first RECENT are shown; the rest fold away.
+  const RECENT = 15;
+  const ptDay = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" });
+  const ptTime = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hour12: false });
+  function recentReports() {
+    const ups = S.cat.studies.flatMap((s) => s.reports.filter((r) => r.updated).map((r) => ({ s, r, t: Date.parse(r.updated.date) })))
+      .filter((u) => !isNaN(u.t)).sort((a, b) => b.t - a.t);
+    if (!ups.length) return "";
+    const item = ({ s, r, t }) => `<li><span class="ru-time mono">${ptTime.format(t)}</span>
+        <a href="#/report/${esc(s.id)}/${esc(r.id)}"><b>${esc(studyLabel(s.id).split(" ")[0])} ${esc(r.id)}</b> ${esc(r.title.replace(/^r\d+\s*[—-]\s*/, ""))}</a>
+        ${statusChip(r.status)}
+        <div class="ru-what muted">${esc(r.updated.subject)} · <a class="mono" href="${window.Atlas.STUDIES_REPO}/commit/${esc(r.updated.sha)}"
+          target="_blank" rel="noopener">${esc(short(r.updated.sha))}</a></div></li>`;
+    const days = (list) => {
+      const by = new Map();
+      for (const u of list) { const d = ptDay.format(u.t); if (!by.has(d)) by.set(d, []); by.get(d).push(u); }
+      return [...by].map(([d, us]) => `<li class="ru-day"><h3>${esc(d)}</h3><ul>${us.map(item).join("")}</ul></li>`).join("");
+    };
+    return `<h2>Recently updated reports</h2>
+      <p class="muted">The newest commit on each report file, newest first, in Seattle time. A click opens the report.</p>
+      <ol class="recent-updates">${days(ups.slice(0, RECENT))}</ol>
+      ${ups.length > RECENT ? `<details class="ru-more"><summary>${ups.length - RECENT} more reports</summary>
+        <ol class="recent-updates">${days(ups.slice(RECENT))}</ol></details>` : ""}`;
+  }
+
   // ------------------------------------------------------------ launch timeline
   VIEWS.timeline = () => {
     const rows = S.cat.studies.map((s) => ({
@@ -16,7 +43,7 @@ document.addEventListener("atlas:ready", () => {
         .map((r) => ({ r, t: Date.parse(r.time) })).filter((p) => !isNaN(p.t)),
     }));
     const all = rows.flatMap((x) => x.pts.map((p) => p.t));
-    if (!all.length) { main().innerHTML = `<h1>Launch timeline</h1><div class="empty">No launch record carries a time.</div>`; return; }
+    if (!all.length) { main().innerHTML = `<h1>Timeline</h1>${recentReports()}<h2>Launch timeline</h2><div class="empty">No launch record carries a time.</div>`; return; }
     const t0 = Math.min(...all), t1 = Math.max(...all);
     const L = 250, R = 20, W = 1000, RH = 28, H = rows.length * RH + 40;
     const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
@@ -29,7 +56,9 @@ document.addEventListener("atlas:ready", () => {
     }
     const undated = rows.reduce((n, x) => n + [...x.s.variants.flatMap((v) => v.launch_records), ...(x.s.root_launch_records || [])]
       .filter((r) => r.format === "json" && isNaN(Date.parse(r.time))).length, 0);
-    main().innerHTML = `<h1>Launch timeline</h1>
+    main().innerHTML = `<h1>Timeline</h1>
+      ${recentReports()}
+      <h2>Launch timeline</h2>
       <p class="muted">Every launch record with a time, by study. <span style="color:var(--accent)">●</span> initial launch,
         <span style="color:var(--warn)">●</span> intervention (resubmit, rescue, probe, tier change, backfill, extend).
         ${undated ? `${undated} records carry no time and are not shown.` : ""}</p>

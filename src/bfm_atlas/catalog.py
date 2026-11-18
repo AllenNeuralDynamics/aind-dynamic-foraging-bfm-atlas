@@ -789,6 +789,15 @@ def _claims_check_rubrics(studies: list[dict], skills_dir) -> dict:
     return out
 
 
+def _last_commit(root: Path, rel: str) -> dict | None:
+    """The newest commit that touched a report file, any change (the Timeline's recent updates)."""
+    out = _git(root, "log", "-1", "--format=%H%x1f%cI%x1f%s", "--", rel)
+    if not out:
+        return None
+    sha, date, subject = out.split("\x1f", 2)
+    return {"sha": sha, "date": date, "subject": subject}
+
+
 # --- number links (click-a-number) -------------------------------------------------------------
 # A displayed decimal (any number of places; "−" is the typographic minus) is linked to a JSON leaf only when exactly
 # one leaf, across the JSON artifacts the block can be traced to, rounds to it at the displayed
@@ -918,6 +927,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
     for s, d in zip(studies, dirs):
         for r in s["reports"]:
             r["history"] = _report_history(root, r["path"])
+            r["updated"] = _last_commit(root, r["path"])
             r["claims_check"] = _claims_checks(cc, root, d, r, ok)
     _number_links(studies, root)
     wandb = {s["id"]: s["cover"]["wandb"] for s in studies}

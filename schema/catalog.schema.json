@@ -1021,6 +1021,30 @@
             }
           }
         },
+        "updated": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The newest commit that touched the report file (any change): git log -1.",
+          "required": [
+            "sha",
+            "date",
+            "subject"
+          ],
+          "properties": {
+            "sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "date": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            }
+          }
+        },
         "claims_check": {
           "type": [
             "object",
