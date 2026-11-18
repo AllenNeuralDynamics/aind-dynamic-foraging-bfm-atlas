@@ -883,3 +883,13 @@ def test_scorecard_items_read_the_rubric_at_the_runs_commit(studies, tmp_path):
 
 def test_no_rubrics_without_a_skills_pack(studies):
     assert build_catalog(studies, validate=False)["claims_check_rubrics"] == {}
+
+
+def test_report_updated_is_its_newest_commit(studies):
+    rep = studies / "studies/01-gru-alpha/analysis/reports/r1-curve.md"
+    rep.write_text(rep.read_text().replace("# r1 — the curve", "# r1 — the curve, retitled"))   # prose only
+    _commit(studies, "docs(01): retitle r1")
+    cat = build_catalog(studies)
+    u = by_id(cat, "01-gru-alpha")["reports"][0]["updated"]
+    assert u["subject"] == "docs(01): retitle r1" and len(u["sha"]) == 40
+    assert by_id(cat, "02-disrnn-beta")["reports"][0]["updated"]["subject"] == "init"

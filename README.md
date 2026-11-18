@@ -44,6 +44,8 @@ draws how they connect; the About page embeds it.
   so it runs, rather than as source on GitHub.
 - **Export SVG** on both, stamped with the studies commit, for slides.
 - **Figure zoom**: every figure in a report has a zoom button that opens it larger.
+- **Timeline** (`#/timeline`): the most recently updated reports first (the newest commit on each report file,
+  grouped by day in Seattle time, each a link to the report), then every launch record by study.
 - **Claims check** (studies#160): the Checks page (`#/checks`; `#/health` still opens it) counts, per study, the reports whose newest
   claims-check record still matches the report and its evidence and leaves no High finding unanswered by a fix (passed),
   those with a High finding open, the stale ones, and version-2 reports never checked; version-1 reports have no claims to check and are counted apart. Each report page's *Review history* lists
