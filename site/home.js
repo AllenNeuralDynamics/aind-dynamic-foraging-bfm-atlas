@@ -97,7 +97,7 @@ document.addEventListener("atlas:ready", () => {
     ["#/studies", "Studies", "Every study, how they connect, and each report traced to its inputs and commits."],
     ["#/leaderboard", "Leaderboard", "Every model family's held-out choice likelihood on one axis, with model cards."],
     ["#/timeline", "Timeline", "When each launch ran and what each study is waiting on."],
-    ["#/health", "Health", "What the provenance checker found across the studies repo."],
+    ["#/checks", "Checks", "Which reports passed the claims check, and what the provenance checker found across the studies repo."],
     ["#/workflow", "Workflow", "How people and AI agents run these studies, and the provenance system behind every number."],
   ];
 
