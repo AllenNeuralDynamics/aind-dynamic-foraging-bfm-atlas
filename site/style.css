@@ -543,3 +543,7 @@ a.lchip { color: var(--accent); }
 .cc-dot-y { background: #e3b008; }
 .cc-dot-r { background: var(--error); }
 .cc-mini .cc-dot { margin-left: 2px; }
+.cc-history > .tip { width: 440px; font-weight: 400; }
+.cc-history > .tip p { margin: 6px 0 0; }
+.cc-history > .tip .muted { color: inherit; opacity: 0.75; }
+.cc-mini { cursor: default; }

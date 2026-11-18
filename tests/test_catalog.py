@@ -1,3 +1,4 @@
+import subprocess
 import json
 from pathlib import Path
 
@@ -849,3 +850,36 @@ def test_a_high_with_no_answer_row_stays_open(studies):
     table = "| # | Check | Finding | Severity | Response |\n|---|---|---|---|---|\n"
     c = _v3_record(studies, table + "| 1 | C5 | caveat | Low | Fixed |\n")
     assert c["status"] == "open_high"
+
+
+def test_scorecard_items_read_the_rubric_at_the_runs_commit(studies, tmp_path):
+    """Each scorecard run names its rubric commit; the atlas reads C0..C9 from the dispatcher there."""
+    from bfm_atlas.catalog import RUBRIC_PATH
+    disp = tmp_path / "dispatcher"
+    pack = make_skills(disp)
+    rubric = disp / RUBRIC_PATH
+    rubric.parent.mkdir(parents=True, exist_ok=True)
+    row = lambda text: f"| Item | What to check | Output list |\n|---|---|---|\n| C0 | trace `x` | `producer_traces` |\n| C5 | {text} | `missing_caveats` |\n"
+    rubric.write_text(row("caveats, as they were"))
+    git(disp, "add", "-A"); git(disp, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "rubric v3")
+    old = subprocess.run(["git", "-C", str(disp), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    rubric.write_text(row("caveats, reworded later"))
+    git(disp, "add", "-A"); git(disp, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "rubric reworded")
+    _with_claims_checks(studies, records=())
+    p = studies / "studies/01-gru-alpha/analysis/provenance/claims_check_r1_2026-11-18.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(V3_HIGH.replace("claims-check/2 @ abcdef1", f"claims-check/3 @ {old}").format(date="2026-11-18", d="0" * 64))
+    q = studies / "studies/01-gru-alpha/analysis/provenance/claims_check_r1_2026-11-18_2.md"
+    q.write_text(V3_HIGH.replace("claims-check/2 @ abcdef1", "claims-check/3 @ " + "f" * 40).format(date="2026-11-18", d="0" * 64))
+    _commit(studies, "two v3 records")
+    cat = build_catalog(studies, validate=False, skills_dir=pack)
+    assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
+    runs = by_id(cat, "01-gru-alpha")["reports"][0]["claims_check"]["runs"]
+    assert [r["rubric_sha"] for r in runs] == ["f" * 40, old]
+    rub = cat["claims_check_rubrics"]
+    assert rub[old] == {"exact": True, "items": {"C0": "trace x", "C5": "caveats, as they were"}}
+    assert rub["f" * 40] == {"exact": False, "items": {"C0": "trace x", "C5": "caveats, reworded later"}}   # not in the clone: HEAD
+
+
+def test_no_rubrics_without_a_skills_pack(studies):
+    assert build_catalog(studies, validate=False)["claims_check_rubrics"] == {}

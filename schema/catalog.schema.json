@@ -775,6 +775,31 @@
           }
         }
       }
+    },
+    "claims_check_rubrics": {
+      "type": "object",
+      "description": "The claims-check rubric's items per dispatcher commit a scorecard run names (rubric_version '... @ <sha>'): what each of C0..C9 checks. exact is false when the dispatcher checkout lacked that commit and its HEAD was read instead.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "exact",
+          "items"
+        ],
+        "properties": {
+          "exact": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^C[0-9]$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
@@ -1184,6 +1209,10 @@
                         "description": "High rows answered Fixed, when the answers table has a Severity column"
                       }
                     }
+                  },
+                  "rubric_sha": {
+                    "type": "string",
+                    "description": "the dispatcher commit named in rubric_version (scorecard runs only); the key into claims_check_rubrics"
                   }
                 }
               }

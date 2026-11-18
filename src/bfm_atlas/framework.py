@@ -244,15 +244,16 @@ REVIEW_DIAGRAM = "docs/diagrams/report-review.html"
 DIAGRAMS = {"diagram": STACK_DIAGRAM, "review_diagram": REVIEW_DIAGRAM}   # catalog key -> dispatcher path
 
 
-def dispatcher_file(skills_dir: Path | str, path: str) -> bytes | None:
+def dispatcher_file(skills_dir: Path | str, path: str, rev: str = "HEAD") -> bytes | None:
     """A file of the dispatcher checkout holding the skills pack, read from the commit it records
     (``git show HEAD:<path>``) like the skills themselves, so the site never ships a local edit
-    under that SHA. None outside a git checkout or when the commit has no such file."""
+    under that SHA; ``rev`` reads it at another commit. None outside a git checkout or when the
+    commit (or the file in it) is not there."""
     top = _git(Path(skills_dir).resolve(), "rev-parse", "--show-toplevel")
     if not top:
         return None
     try:
-        out = subprocess.run(["git", "-C", top, "show", f"HEAD:{path}"], capture_output=True, check=True)
+        out = subprocess.run(["git", "-C", top, "show", f"{rev}:{path}"], capture_output=True, check=True)
     except (OSError, subprocess.CalledProcessError):
         return None
     return out.stdout

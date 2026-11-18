@@ -42,6 +42,7 @@ jobs:
         with:
           repository: AllenNeuralDynamics/aind-dynamic-foraging-bfm-dispatcher
           path: dispatcher     # the skills pack and stack diagram the About page shows
+          fetch-depth: 0       # whole history: a scorecard explains each item with the rubric at the commit its run names
 
       - name: Build the catalog and copy figures
         run: bfm-atlas build --studies studies --skills dispatcher/aind-behavior-foundation-model-skills --out site/data/catalog.json
