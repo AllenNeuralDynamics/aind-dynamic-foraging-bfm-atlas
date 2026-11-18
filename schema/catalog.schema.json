@@ -1175,6 +1175,13 @@
                           "null"
                         ],
                         "description": "High rows not answered Fixed, when the answers table has a Severity column"
+                      },
+                      "high_fixed": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "High rows answered Fixed, when the answers table has a Severity column"
                       }
                     }
                   }

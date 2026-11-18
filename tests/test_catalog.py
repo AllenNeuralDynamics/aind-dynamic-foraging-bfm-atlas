@@ -722,7 +722,7 @@ def test_claims_check_runs_newest_first_with_counts(studies):
     # the reviewer's own "## " heading sits inside the fence: it neither starts a section nor ends the response
     assert new["summary_md"].startswith("## Summary written by the reviewer") and "F2 is contradicted." in new["summary_md"]
     assert new["responses_md"].startswith("| # |")
-    assert new["answers"] == {"rows": 3, "blocking": 1, "high_not_fixed": None, "fixed": 1, "deferred": 2}
+    assert new["answers"] == {"rows": 3, "blocking": 1, "high_not_fixed": None, "high_fixed": None, "fixed": 1, "deferred": 2}
     assert (new["model"], new["rubric_version"], new["inputs"]) == ("reviewer-model", "claims-check/2 @ abcdef1", 1)
 
 
@@ -820,3 +820,32 @@ def test_a_deferred_high_is_open(studies):
     table = "| # | Check | Finding | Severity | Response |\n|---|---|---|---|---|\n"
     c = _v3_record(studies, table + "| 1 | C3 | number | **High** | Deferred (#9) |\n")
     assert (c["status"], c["runs"][0]["answers"]["high_not_fixed"]) == ("open_high", 1)
+
+
+def test_one_line_json_is_read(studies):
+    """The rubric JSON is read whatever its layout (Copilot on #82)."""
+    _with_claims_checks(studies, records=())
+    one_line = V3_HIGH.replace('''{{
+  "claims": [{{"id": "F1", "verdict": "supported", "item": "C1", "severity": null}}],
+  "unsourced_numbers": [{{"line": 9, "item": "C3", "severity": "High"}}]
+}}''', '''{{"claims": [{{"id": "F1", "verdict": "supported", "item": "C1", "severity": null}}], "unsourced_numbers": [{{"line": 9, "item": "C3", "severity": "High"}}]}}''')
+    assert one_line != V3_HIGH
+    p = studies / "studies/01-gru-alpha/analysis/provenance/claims_check_r1_2026-11-18.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(one_line.format(date="2026-11-18", d="0" * 64))
+    _commit(studies, "one-line record")
+    c = by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"]
+    assert c["status"] == "open_high" and c["runs"][0]["findings"]["by_level"] == {"High": 1}
+    assert "F2 is contradicted." in c["runs"][0]["summary_md"]
+
+
+def test_an_escaped_pipe_stays_in_its_cell(studies):
+    table = "| # | Check | Finding | Severity | Response |\n|---|---|---|---|---|\n"
+    c = _v3_record(studies, table + "| 1 | C3 | P(A \\| B) unsourced | High | Deferred (#9) |\n")
+    assert (c["status"], c["runs"][0]["answers"]["high_not_fixed"]) == ("open_high", 1)
+
+
+def test_a_high_with_no_answer_row_stays_open(studies):
+    table = "| # | Check | Finding | Severity | Response |\n|---|---|---|---|---|\n"
+    c = _v3_record(studies, table + "| 1 | C5 | caveat | Low | Fixed |\n")
+    assert c["status"] == "open_high"

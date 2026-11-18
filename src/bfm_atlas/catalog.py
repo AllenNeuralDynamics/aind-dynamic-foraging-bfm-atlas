@@ -560,7 +560,6 @@ def _report_history(root: Path, rel: str) -> list[dict]:
 # are read with the studies checkout's own studies/util/claims_check.py, so the atlas and the
 # checker agree; a checkout without that module yields no claims-check data.
 RECORD_SECTIONS = ("## Prompt given to the reviewer", "## Reviewer's response", "## Responses to the findings")
-REVIEW_JSON = re.compile(r"(?:```json\n)?(\{.*?\n\})", re.S)
 
 
 def _claims_check_module(root: Path, ok: "_Tracked"):
@@ -612,11 +611,12 @@ def _unfence(text: str) -> str:
 def _review_summary(response: str) -> dict:
     """Claim verdicts and finding counts from the rubric's JSON at the top of the response; the
     markdown after it is the reviewer's own summary."""
-    m = REVIEW_JSON.search(response)
-    data = None
-    if m:
+    # the first JSON object, whatever its layout: decode from the first "{" and keep where it ended
+    data, end = None, 0
+    start = response.find("{")
+    if start >= 0:
         try:
-            data = json.loads(m.group(1))
+            data, end = json.JSONDecoder().raw_decode(response, start)
         except json.JSONDecodeError:
             data = None
     if not isinstance(data, dict):
@@ -655,7 +655,7 @@ def _review_summary(response: str) -> dict:
             lvl = f.get("severity") or ("blocking" if f.get("blocking") is True else None) if isinstance(f, dict) else None
             if lvl:
                 levels[str(lvl)] = levels.get(str(lvl), 0) + 1
-    rest = response[m.end():].strip().lstrip("`").strip()
+    rest = response[end:].strip().lstrip("`").strip()
     return {"claims": verdicts, "findings": {"total": sum(kinds.values()), "by_kind": kinds, "by_level": levels or None},
             "scorecard": scorecard, "summary_md": rest}
 
@@ -666,7 +666,8 @@ def _answers(responses: str) -> dict | None:
     rows = [r for r in responses.splitlines() if r.startswith("|")]
     if len(rows) < 3:
         return None
-    cell = lambda r: [re.sub(r"[*_`]", "", c).strip().lower() for c in r.strip().strip("|").split("|")]
+    # cells split on unescaped pipes only: a finding may quote "P(A \\| B)"
+    cell = lambda r: [re.sub(r"[*_`]", "", c).strip().lower() for c in re.split(r"(?<!\\)\|", r.strip().strip("|"))]
     head, body = cell(rows[0]), [cell(r) for r in rows[2:]]
     col = lambda name: next((i for i, c in enumerate(head) if c.startswith(name)), None)
     b, a, sv = col("blocking"), col("response"), col("severity")
@@ -674,18 +675,22 @@ def _answers(responses: str) -> dict | None:
     return {"rows": len(body),
             "blocking": None if b is None else sum(pick(c, b, "yes") for c in body),
             "high_not_fixed": None if sv is None else sum(pick(c, sv, "high") and not pick(c, a, "fixed") for c in body),
+            "high_fixed": None if sv is None else sum(pick(c, sv, "high") and pick(c, a, "fixed") for c in body),
             "fixed": sum(pick(c, a, "fixed") for c in body),
             "deferred": sum(pick(c, a, "deferred") or pick(c, a, "already deferred") for c in body)}
 
 
 def _open_high(run: dict) -> int:
     """High findings (claims-check/3) the author did not answer "Fixed". With a Severity column in the
-    answers table, its High rows not answered Fixed; without one, every High finding counts, since a
-    fix to the report or its evidence would have made this record stale."""
+    answers table, the High findings not matched by a High row answered Fixed (a High with no row
+    stays open); without one, every High finding counts, since a fix to the report or its evidence
+    would have made this record stale."""
+    high = ((run.get("findings") or {}).get("by_level") or {}).get("High", 0)
     a = run.get("answers") or {}
-    if a.get("high_not_fixed") is not None:
-        return a["high_not_fixed"]
-    return ((run.get("findings") or {}).get("by_level") or {}).get("High", 0)
+    if a.get("high_not_fixed") is None:
+        return high
+    # a High finding with no answer row stays open: only rows answered Fixed close one
+    return max(high - a["high_fixed"], a["high_not_fixed"])
 
 
 def _claims_checks(mod, root: Path, study_dir: Path, report: dict, ok: "_Tracked") -> dict | None:
