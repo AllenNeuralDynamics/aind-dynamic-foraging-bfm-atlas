@@ -669,17 +669,29 @@ def _answers(responses: str) -> dict | None:
     cell = lambda r: [re.sub(r"[*_`]", "", c).strip().lower() for c in r.strip().strip("|").split("|")]
     head, body = cell(rows[0]), [cell(r) for r in rows[2:]]
     col = lambda name: next((i for i, c in enumerate(head) if c.startswith(name)), None)
-    b, a = col("blocking"), col("response")
+    b, a, sv = col("blocking"), col("response"), col("severity")
     pick = lambda c, i, word: i is not None and len(c) > i and c[i].startswith(word)
     return {"rows": len(body),
             "blocking": None if b is None else sum(pick(c, b, "yes") for c in body),
+            "high_not_fixed": None if sv is None else sum(pick(c, sv, "high") and not pick(c, a, "fixed") for c in body),
             "fixed": sum(pick(c, a, "fixed") for c in body),
             "deferred": sum(pick(c, a, "deferred") or pick(c, a, "already deferred") for c in body)}
 
 
+def _open_high(run: dict) -> int:
+    """High findings (claims-check/3) the author did not answer "Fixed". With a Severity column in the
+    answers table, its High rows not answered Fixed; without one, every High finding counts, since a
+    fix to the report or its evidence would have made this record stale."""
+    a = run.get("answers") or {}
+    if a.get("high_not_fixed") is not None:
+        return a["high_not_fixed"]
+    return ((run.get("findings") or {}).get("by_level") or {}).get("High", 0)
+
+
 def _claims_checks(mod, root: Path, study_dir: Path, report: dict, ok: "_Tracked") -> dict | None:
     """Every claims check of one report, newest first, and the report's claims-check status:
-    current (the newest record still matches), stale, missing (a version-2 report never checked),
+    current (the newest record still matches), open_high (it matches, but has a High finding not
+    answered Fixed), stale, missing (a version-2 report never checked),
     not_required (a version-1 report has no claims to check), history (superseded or retracted)."""
     if mod is None or not report["id"].startswith("r"):
         return None
@@ -713,6 +725,8 @@ def _claims_checks(mod, root: Path, study_dir: Path, report: dict, ok: "_Tracked
     runs.reverse()
     if report["status"] in ("superseded", "retracted"):
         status = "history"
+    elif runs and runs[0].get("current") is True and _open_high(runs[0]):
+        status = "open_high"
     elif runs and runs[0].get("current") is True:
         status = "current"
     elif runs:

@@ -711,7 +711,8 @@ def test_claims_check_runs_newest_first_with_counts(studies):
     cat = _with_claims_checks(studies)
     assert list(Draft202012Validator(SCHEMA).iter_errors(cat)) == []
     c = by_id(cat, "01-gru-alpha")["reports"][0]["claims_check"]
-    assert (c["status"], c["schema_version"], c["required"]) == ("current", 1, False)
+    # its producer trace F2 is a High finding and the record is current: not passed
+    assert (c["status"], c["schema_version"], c["required"]) == ("open_high", 1, False)
     new, old = c["runs"]
     assert (new["run"], new["checked_on"], new["current"], old["current"]) == (2, "2026-11-16", True, None)
     assert new["claims"] == {"supported": 1, "contradicted": 1}
@@ -721,7 +722,7 @@ def test_claims_check_runs_newest_first_with_counts(studies):
     # the reviewer's own "## " heading sits inside the fence: it neither starts a section nor ends the response
     assert new["summary_md"].startswith("## Summary written by the reviewer") and "F2 is contradicted." in new["summary_md"]
     assert new["responses_md"].startswith("| # |")
-    assert new["answers"] == {"rows": 3, "blocking": 1, "fixed": 1, "deferred": 2}
+    assert new["answers"] == {"rows": 3, "blocking": 1, "high_not_fixed": None, "fixed": 1, "deferred": 2}
     assert (new["model"], new["rubric_version"], new["inputs"]) == ("reviewer-model", "claims-check/2 @ abcdef1", 1)
 
 
@@ -784,3 +785,38 @@ def test_claims_check_3_scorecard_counts_findings_per_item(studies):
 def test_older_records_have_no_scorecard(studies):
     assert all(r["scorecard"] is None for r in by_id(_with_claims_checks(studies), "01-gru-alpha")
                ["reports"][0]["claims_check"]["runs"])
+
+
+V3_HIGH = RECORD.replace('''  "claims": [{{"id": "F1", "verdict": "supported"}}, {{"id": "F2", "verdict": "contradicted"}}],
+  "stale_sentences": [{{"line": 3, "blocking": true}}],
+  "missing_caveats": [{{"claim": "F1", "severity": "Medium"}}, {{"claim": "F2"}}],
+  "producer_traces": [{{"claim": "F1", "severity": null}}, {{"claim": "F2", "severity": "High"}}]''',
+    '''  "claims": [{{"id": "F1", "verdict": "supported", "item": "C1", "severity": null}}],
+  "unsourced_numbers": [{{"line": 9, "item": "C3", "severity": "High"}}]''')
+
+
+def _v3_record(studies, answers=None):
+    _with_claims_checks(studies, records=())
+    text = V3_HIGH if answers is None else V3_HIGH.split("## Responses to the findings")[0] + "## Responses to the findings\n\n" + answers
+    p = studies / "studies/01-gru-alpha/analysis/provenance/claims_check_r1_2026-11-18.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text.format(date="2026-11-18", d="0" * 64))
+    _commit(studies, "v3 record")
+    return by_id(build_catalog(studies), "01-gru-alpha")["reports"][0]["claims_check"]
+
+
+def test_a_high_finding_not_fixed_is_not_passed(studies):
+    """No Severity column: a current record with a High finding has not passed (a fix would have staled it)."""
+    assert _v3_record(studies)["status"] == "open_high"
+
+
+def test_a_severity_column_decides_which_high_is_open(studies):
+    table = "| # | Check | Finding | Severity | Response |\n|---|---|---|---|---|\n"
+    fixed = _v3_record(studies, table + "| 1 | C3 | number | High | Fixed in README (context) |\n")
+    assert (fixed["status"], fixed["runs"][0]["answers"]["high_not_fixed"]) == ("current", 0)
+
+
+def test_a_deferred_high_is_open(studies):
+    table = "| # | Check | Finding | Severity | Response |\n|---|---|---|---|---|\n"
+    c = _v3_record(studies, table + "| 1 | C3 | number | **High** | Deferred (#9) |\n")
+    assert (c["status"], c["runs"][0]["answers"]["high_not_fixed"]) == ("open_high", 1)

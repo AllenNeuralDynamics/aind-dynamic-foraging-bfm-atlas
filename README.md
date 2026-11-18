@@ -45,8 +45,8 @@ draws how they connect; the About page embeds it.
 - **Export SVG** on both, stamped with the studies commit, for slides.
 - **Figure zoom**: every figure in a report has a zoom button that opens it larger.
 - **Claims check** (studies#160): the Health page (`#/health`) counts, per study, the reports whose newest
-  claims-check record still matches the report and its evidence (passed), the stale ones, and version-2 reports never
-  checked; version-1 reports have no claims to check and are counted apart. Each report page's *Review history* lists
+  claims-check record still matches the report and its evidence and leaves no High finding unanswered by a fix (passed),
+  those with a High finding open, the stale ones, and version-2 reports never checked; version-1 reports have no claims to check and are counted apart. Each report page's *Review history* lists
   every run, newest first: date, reviewer model, rubric, claim verdicts, findings, and the author's responses.
   A claims-check/3 run also shows a scorecard, one cell per rubric item C0–C9 (green no finding, yellow Low only, red
   any Medium or High); clicking a cell marks that item's rows in the responses table. The newest run's scorecard sits in

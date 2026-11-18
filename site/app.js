@@ -367,9 +367,10 @@ function findingList(fs) {
 }
 
 // ---- claims check (records under analysis/provenance/, studies#160) -------------------------
-const CC_LABEL = { current: "passed", stale: "stale", missing: "not checked", not_required: "v1 (no claims)", history: "history" };
+const CC_LABEL = { current: "passed", open_high: "High open", stale: "stale", missing: "not checked", not_required: "v1 (no claims)", history: "history" };
 const CC_TIP = {
   current: "The newest claims-check record still matches the report and its evidence",
+  open_high: "The newest claims check matches the report, but it has a High finding not answered Fixed",
   stale: "The report or a file the reviewer read changed after the newest claims check",
   missing: "A version-2 report with no claims-check record",
   not_required: "A version-1 report: it has no frontmatter claims for a claims check to read",
@@ -378,7 +379,7 @@ const CC_TIP = {
 function ccChip(r) {
   const c = r.claims_check;
   if (!c) return "";
-  const cls = { current: "ok", stale: "warn", missing: c.required ? "error" : "warn" }[c.status] || "";
+  const cls = { current: "ok", open_high: "error", stale: "warn", missing: c.required ? "error" : "warn" }[c.status] || "";
   const n = c.runs.length;
   return `<button type="button" class="chip cc-chip ${cls ? `cc-${cls}` : ""}" title="${esc(CC_TIP[c.status])}">claims check:
     ${esc(CC_LABEL[c.status])}${n ? ` · ${n} run${n > 1 ? "s" : ""}` : ""}</button>`;
@@ -435,6 +436,7 @@ function ccHistory(r) {
   if (!c) return "";
   const intro = {
     current: "The newest claims check still matches this report and the evidence its reviewer read.",
+    open_high: "The newest claims check still matches this report, but it has a High finding not answered Fixed: the report must not stay live as it is.",
     stale: `The report or its evidence changed after the newest claims check: ${esc((c.runs[0]?.stale_reasons || []).join("; "))}.`,
     missing: c.required ? "This live version-2 report has no claims check yet." : "This draft has no claims check yet; it needs one before it goes live.",
     not_required: "A version-1 report has no frontmatter claims, so it has no claims check. It moves to version 2 before its next live revision.",
@@ -604,7 +606,7 @@ function ccHealth() {
   const all = S.cat.studies.flatMap((s) => s.reports.map((r) => ({ s, r, c: r.claims_check })));
   if (!all.some((x) => x.c)) return `<h2>Claims check</h2><p class="muted">This build has no claims-check data
     (the studies checkout has no <code>studies/util/claims_check.py</code>).</p>`;
-  const KEYS = ["current", "stale", "missing", "not_required", "history"];
+  const KEYS = ["current", "open_high", "stale", "missing", "not_required", "history"];
   // version-1 reports are counted apart whatever their review history: the pass counts are of version-2 reports
   const bucket = (c) => !c ? null : c.status === "history" ? "history" : c.schema_version === 1 ? "not_required" : c.status;
   const count = (xs) => Object.fromEntries(KEYS.map((k) => [k, xs.filter((x) => bucket(x.c) === k)]));
@@ -612,26 +614,26 @@ function ccHealth() {
   const cell = (xs, cls, list) => !xs.length ? `<td class="muted">0</td>` : !cls ? `<td>${xs.length}</td>`
     : `<td><span class="badge ${cls}">${xs.length}</span>${list ? ` <span class="cc-ids">${xs.map(link).join(" ")}</span>` : ""}</td>`;
   const tot = count(all);
-  const v2 = [...tot.current, ...tot.stale, ...tot.missing];
-  const failing = tot.stale.length + tot.missing.length;
+  const v2 = [...tot.current, ...tot.open_high, ...tot.stale, ...tot.missing];
+  const failing = tot.open_high.length + tot.stale.length + tot.missing.length;
   const rows = S.cat.studies.filter((s) => s.reports.length).map((s) => {
     const c = count(all.filter((x) => x.s === s));
     return `<tr><td><a href="#/study/${esc(s.id)}">${esc(s.id)}</a></td><td>${s.reports.length}</td>
-      ${cell(c.current, "ok", true)}${cell(c.stale, "warn", true)}${cell(c.missing, "error", true)}
+      ${cell(c.current, "ok", true)}${cell(c.open_high, "error", true)}${cell(c.stale, "warn", true)}${cell(c.missing, "error", true)}
       ${cell(c.not_required, "", false)}${cell(c.history, "", false)}</tr>`;
   }).join("");
   return `<h2>Claims check</h2>
     <div class="stats cc-stats">
       <div class="stat"><b>${tot.current.length} / ${v2.length}</b><span>version-2 reports passed</span></div>
-      <div class="stat"><b class="${failing ? "lvl-warn" : ""}">${failing}</b><span>not passed (stale or never checked)</span></div>
+      <div class="stat"><b class="${failing ? "lvl-warn" : ""}">${failing}</b><span>not passed (High open, stale or never checked)</span></div>
       <div class="stat"><b>${tot.not_required.length}</b><span>version-1 reports (no claims to check)</span></div>
     </div>
     <p class="muted">Each claims check is a committed record under <code>analysis/provenance/</code>. A report has
-      <b>passed</b> while its newest record still matches the report's claims and text and every file the reviewer read;
-      it is <b>stale</b> once one of them changes, and <b>not checked</b> if a version-2 report has no record. A live
+      <b>passed</b> while its newest record still matches the report's claims and text and every file the reviewer read
+      and has no High finding left unfixed (<b>High open</b> if it has one); it is <b>stale</b> once one of them changes, and <b>not checked</b> if a version-2 report has no record. A live
       report needs a current check. Version-1 reports predate frontmatter claims and are counted apart; superseded and
       retracted reports are history. Each report's page lists every run.</p>
-    <div class="table-wrap"><table class="cc-table"><thead><tr><th>Study</th><th>Reports</th><th>Passed</th><th>Stale</th>
+    <div class="table-wrap"><table class="cc-table"><thead><tr><th>Study</th><th>Reports</th><th>Passed</th><th>High open</th><th>Stale</th>
       <th>Not checked</th><th>v1 (no claims)</th><th>History</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

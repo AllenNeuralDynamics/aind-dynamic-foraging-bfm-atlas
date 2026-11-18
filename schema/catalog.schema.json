@@ -1012,12 +1012,13 @@
             "status": {
               "enum": [
                 "current",
+                "open_high",
                 "stale",
                 "missing",
                 "not_required",
                 "history"
               ],
-              "description": "current: the newest record still matches the report and its evidence; stale: it does not; missing: a version-2 report with no record; not_required: a version-1 report (no claims); history: superseded or retracted"
+              "description": "current: the newest record still matches the report and its evidence; open_high: it matches but has a High finding not answered Fixed; stale: it does not; missing: a version-2 report with no record; not_required: a version-1 report (no claims); history: superseded or retracted"
             },
             "schema_version": {
               "enum": [
@@ -1167,6 +1168,13 @@
                       },
                       "deferred": {
                         "type": "integer"
+                      },
+                      "high_not_fixed": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "High rows not answered Fixed, when the answers table has a Severity column"
                       }
                     }
                   }
