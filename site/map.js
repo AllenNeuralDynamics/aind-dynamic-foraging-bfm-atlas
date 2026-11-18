@@ -196,10 +196,8 @@ document.addEventListener("atlas:ready", () => {
 
     const nodes = studies.map((s) => ({ id: s.id, s }));
     const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const list = aggregate(S.cat.dependencies, (d) => byId[d.from] && (byId[d.to] || d.to.startsWith("issue:")));
-    for (const e of list) {          // one node per issue, however many studies it motivated
-      if (!byId[e.to]) { byId[e.to] = { id: e.to, issue: e.to.slice(6) }; nodes.push(byId[e.to]); }
-    }
+    // studies only: an issue a study was motivated by is listed in its card, not drawn as a node
+    const list = aggregate(S.cat.dependencies, (d) => byId[d.from] && byId[d.to]);
     const links = list.map((e) => ({ e, source: byId[arrowFrom(e)[0]], target: byId[arrowFrom(e)[1]] }));
 
     const chips = FACETS.map((f, i) => `<div class="facet"><span class="facet-name" title="${esc(VOCAB[f].description || "")}">${esc(VOCAB[f].label)}</span>
@@ -257,11 +255,6 @@ document.addEventListener("atlas:ready", () => {
       g.append("text").attr("class", "nn").attr("text-anchor", "middle").attr("dy", "0.35em").text(n.id.slice(0, 2));
       lines.forEach((l, k) => g.append("text").attr("class", "lbl").attr("text-anchor", "middle").attr("y", y0 + k * 13).text(l));
       n.below = y0 + 13 * (lines.length - 1) + 6;      // how far the label reaches below the centre
-    });
-    nodeSel.filter((n) => !n.s).each(function (n) {
-      const g = d3.select(this);
-      g.append("rect").attr("x", -22).attr("y", -10).attr("width", 44).attr("height", 20).attr("rx", 10);
-      g.append("text").attr("class", "lbl").attr("text-anchor", "middle").attr("y", 4).text(`#${String(n.issue).split("#").pop()}`);
     });
 
     // ---- physics
@@ -537,7 +530,7 @@ document.addEventListener("atlas:ready", () => {
   A.drawLocal = (host, sid) => {
     const s0 = S.study[sid];
     if (!s0) return;
-    const list = aggregate(S.cat.dependencies, (d) => (d.from === sid && (S.study[d.to] || d.to.startsWith("issue:"))) || (d.to === sid && S.study[d.from]));
+    const list = aggregate(S.cat.dependencies, (d) => (d.from === sid && S.study[d.to]) || (d.to === sid && S.study[d.from]));
     const back = uniq(list.filter((e) => e.from === sid).map((e) => e.to));
     const fwd = uniq(list.filter((e) => e.to === sid).map((e) => e.from)).filter((id) => !back.includes(id));
     if (!list.length) { host.innerHTML = `<p class="muted">This study has no relationships to other studies yet.</p>`; return; }
@@ -557,8 +550,6 @@ document.addEventListener("atlas:ready", () => {
     Object.keys(off).forEach((id) => { pos[id] = { x: id === sid ? cx : back.includes(id) ? cx - colX : cx + colX, y: cy + off[id] }; });
     const nodeSvg = Object.keys(pos).map((id) => {
       const p = pos[id], s = S.study[id];
-      if (!s) return `<g class="node issue" data-id="${esc(id)}" transform="translate(${p.x},${p.y})">
-          <rect x="-22" y="-10" width="44" height="20" rx="10"/><text class="lbl" text-anchor="middle" y="4">#${esc(id.slice(6).split("#").pop())}</text></g>`;
       return `<g class="node st-${esc(s.cover.status || "unknown")}${id === sid ? " focused" : ""}" data-id="${esc(id)}" transform="translate(${p.x},${p.y})"
           ${id === sid ? "" : `tabindex="0" role="link" aria-label="${esc(id)}"`}>
         <circle class="body" r="${rOf(id)}" style="fill:${modelColor(modelsOf(s)[0] || "other")}"/>

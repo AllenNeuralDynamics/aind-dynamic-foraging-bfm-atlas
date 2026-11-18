@@ -223,8 +223,8 @@ def main(site: str, out: str) -> int:
                 failures.append(f"claims check: the chip did not open a history of every run ({runs} shown)")
         page.goto(base + "#/studies")
         page.wait_for_selector("#study-map .node", timeout=20000)
-        if page.locator("#study-map .node[data-id]:not(.issue)").count() != len(cat["studies"]):
-            failures.append("study map: not one node per study")
+        if page.locator("#study-map .node[data-id]").count() != len(cat["studies"]):
+            failures.append("study map: not one node per study (an issue a study cites is not a node)")
         # a node's label is its whole name after the number; it draws one ring per model after the first
         for s in cat["studies"]:
             node = page.locator(f'#study-map .node[data-id="{s["id"]}"]')
