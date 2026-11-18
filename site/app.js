@@ -408,13 +408,23 @@ function ccDot(cell) {
 }
 const ccCounts = (cell) => SEV.filter((l) => cell[l]).map((l) => `${cell[l]}${l[0]}`).join(" ")
   + Object.entries(cell).filter(([l]) => !SEV.includes(l)).map(([l, n]) => ` ${n} ${l}`).join("");
-function ccScorecard(sc, mini = false) {
+const SEV_WORD = { H: "High", M: "Medium", L: "Low" };
+// A cell's hover card: the item's rubric text as the run's reviewer had it (the dispatcher commit its
+// rubric_version names), then this run's findings for it. data-run indexes the report's runs.
+function ccCellTip(run, k) {
+  const rub = run.rubric_sha && S.cat.claims_check_rubrics?.[run.rubric_sha];
+  const counts = ccCounts(run.scorecard[k] || {}).replace(/(\d+)([HML])/g, (_, n, l) => `${n} ${SEV_WORD[l]}`);
+  return `<b>${k} · ${esc(CC_ITEMS[k])}</b>
+    ${rub?.items[k] ? `<p class="cc-rubric">${esc(rub.items[k])}</p>` : ""}
+    <p class="muted">This run: ${counts ? esc(counts) : "no finding"}.${rub ? ` Rubric text at dispatcher
+      <code>${esc(run.rubric_sha.slice(0, 7))}</code>${rub.exact ? "" : " (that commit was not available; the current rubric is shown)"}.` : ""}</p>`;
+}
+function ccScorecard(sc, mini = false, k0 = 0) {
   if (!sc) return "";
   const cells = Object.keys(CC_ITEMS).map((k) => {
     const cell = sc[k] || {}, counts = ccCounts(cell);
-    const tip = `${k} · ${CC_ITEMS[k]}${counts ? ` · ${counts.replace(/(\d+)H/, "$1 High").replace(/(\d+)M/, "$1 Medium").replace(/(\d+)L/, "$1 Low")}` : " · no finding"}`;
-    return mini ? `<span class="cc-mini" title="${esc(tip)}">${k}${ccDot(cell)}</span>`
-      : `<button type="button" class="cc-cell" data-item="${k}" title="${esc(tip)}"><b>${k}</b><span>${ccDot(cell)}</span>
+    return mini ? `<span class="cc-mini" data-item="${k}" data-run="${k0}" tabindex="0">${k}${ccDot(cell)}</span>`
+      : `<button type="button" class="cc-cell" data-item="${k}" data-run="${k0}"><b>${k}</b><span>${ccDot(cell)}</span>
           <small>${esc(counts) || "&nbsp;"}</small></button>`;
   }).join("");
   return mini ? `<span class="cc-minis">${cells}</span>` : `<div class="cc-score" role="group" aria-label="Findings per rubric item">${cells}</div>`;
@@ -446,7 +456,7 @@ function ccHistory(r) {
       <b>Run ${run.run}</b> · ${esc(run.checked_on || "?")}
       ${run.current === true ? `<span class="badge ok">current</span>` : run.current === false ? `<span class="badge warn">stale</span>` : ""}
       <span class="muted">· ${esc(run.model || "")}</span></summary>
-      ${ccScorecard(run.scorecard)}
+      ${ccScorecard(run.scorecard, false, k)}
       <dl class="kv">
         <dt>Rubric</dt><dd><code>${esc(run.rubric_version || "?")}</code></dd>
         <dt>Result</dt><dd>${ccRunLine(run)}</dd>
@@ -474,6 +484,15 @@ function mountCcHistory(r) {
       const md = d.dataset.md === "responses" ? run.responses_md : run.summary_md;
       d.replaceChildren(renderMarkdown(md, run.path));
     }
+  });
+  // hovering or focusing a scorecard cell shows what that rubric item checks
+  const tip = window.Atlas.tooltip(box), tipEl = box.querySelector(":scope > .tip");
+  box.querySelectorAll(".cc-cell, .cc-mini").forEach((el) => {
+    const show = () => tip.show(el, ccCellTip(r.claims_check.runs[+el.dataset.run], el.dataset.item));
+    el.addEventListener("pointerenter", show);
+    el.addEventListener("focus", show);
+    el.addEventListener("pointerleave", () => tip.hide());
+    el.addEventListener("blur", (ev) => { if (!tipEl?.contains(ev.relatedTarget)) tip.hide(); });
   });
   // a scorecard cell marks the author's answers to that item's findings (the table's "Check" column)
   box.querySelectorAll(".cc-run").forEach((el) => el.querySelectorAll(".cc-cell").forEach((btn) => btn.addEventListener("click", () => {

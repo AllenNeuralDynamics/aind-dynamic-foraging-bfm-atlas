@@ -742,6 +742,53 @@ def _claims_checks(mod, root: Path, study_dir: Path, report: dict, ok: "_Tracked
             "runs": runs}
 
 
+# The claims-check rubric's items (C0..C9), read from the dispatcher at the commit each run names
+# ("claims-check/3 @ <sha>"), so a scorecard cell explains the check as that reviewer had it.
+RUBRIC_PATH = "aind-behavior-foundation-model-skills/skills/posthoc-reporting/references/claims-check-rubric.md"
+RUBRIC_ROW = re.compile(r"^C[0-9]$")
+
+
+def _rubric_items(text: str) -> dict[str, str]:
+    """Item -> what it checks, from the rubric's table rows ``| C0 | <text> | <JSON list> |``."""
+    items = {}
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+        if len(cells) >= 2 and RUBRIC_ROW.match(cells[0]):
+            items[cells[0]] = cells[1].replace("`", "")
+    return items
+
+
+def _claims_check_rubrics(studies: list[dict], skills_dir) -> dict:
+    """Rubric items for every rubric commit a scorecard run names: {sha: {"exact", "items"}}.
+    A commit the dispatcher checkout lacks (a shallow clone) falls back to its HEAD, marked inexact."""
+    from .framework import dispatcher_file
+    out: dict[str, dict] = {}
+    if skills_dir is None:
+        return out
+    head = None
+    for s in studies:
+        for r in s["reports"]:
+            for run in (r.get("claims_check") or {}).get("runs", []):
+                m = re.search(r"@\s*([0-9a-f]{7,40})", run.get("rubric_version") or "")
+                if not run.get("scorecard") or not m:
+                    continue
+                sha = m.group(1)
+                run["rubric_sha"] = sha
+                if sha in out:
+                    continue
+                raw = dispatcher_file(skills_dir, RUBRIC_PATH, sha)
+                exact = raw is not None
+                if raw is None:
+                    head = head if head is not None else (dispatcher_file(skills_dir, RUBRIC_PATH) or b"")
+                    raw = head
+                items = _rubric_items(raw.decode(errors="replace"))
+                if items:
+                    out[sha] = {"exact": exact, "items": items}
+    return out
+
+
 # --- number links (click-a-number) -------------------------------------------------------------
 # A displayed decimal (any number of places; "−" is the typographic minus) is linked to a JSON leaf only when exactly
 # one leaf, across the JSON artifacts the block can be traced to, rounds to it at the displayed
@@ -1008,6 +1055,7 @@ def build_catalog(studies_root: Path | str, validate: bool = True, allow_dirty: 
         "leaderboard_ignore": build_ignore_leaderboards(root, report_index, ok),
         "wandb_groups": dict(sorted(groups.items())),
         "dependencies": dependencies,
+        "claims_check_rubrics": _claims_check_rubrics(studies, skills_dir),
         "health": run_validator(root) if validate else {"ran": False, "error": "skipped", "findings": []},
     }
 
