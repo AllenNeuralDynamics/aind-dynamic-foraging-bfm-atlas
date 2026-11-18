@@ -366,6 +366,131 @@ function findingList(fs) {
     </details>`).join("");
 }
 
+// ---- claims check (records under analysis/provenance/, studies#160) -------------------------
+const CC_LABEL = { current: "passed", open_high: "High open", stale: "stale", missing: "not checked", not_required: "v1 (no claims)", history: "history" };
+const CC_TIP = {
+  current: "The newest claims-check record still matches the report and its evidence",
+  open_high: "The newest claims check matches the report, but it has a High finding not answered Fixed",
+  stale: "The report or a file the reviewer read changed after the newest claims check",
+  missing: "A version-2 report with no claims-check record",
+  not_required: "A version-1 report: it has no frontmatter claims for a claims check to read",
+  history: "Superseded or retracted: history, not checked",
+};
+function ccChip(r) {
+  const c = r.claims_check;
+  if (!c) return "";
+  const cls = { current: "ok", open_high: "error", stale: "warn", missing: c.required ? "error" : "warn" }[c.status] || "";
+  const n = c.runs.length;
+  return `<button type="button" class="chip cc-chip ${cls ? `cc-${cls}` : ""}" title="${esc(CC_TIP[c.status])}">claims check:
+    ${esc(CC_LABEL[c.status])}${n ? ` · ${n} run${n > 1 ? "s" : ""}` : ""}</button>`;
+}
+
+// The rubric's items (dispatcher claims-check-rubric.md); colours as the PR scorecard's 🟢🟡🔴: green no
+// finding, yellow Low only, red any Medium or High (someone must decide). Drawn as dots, not emoji, so
+// they show without an emoji font and follow the theme.
+const CC_ITEMS = {
+  C0: "Producer trace: the code computes the quantity the claim names",
+  C1: "Each claim against the value at its pointer",
+  C2: "Each claim against its figures and tables",
+  C3: "Numbers in hand-written prose trace to a source",
+  C4: "Stale text",
+  C5: "Missing caveats",
+  C6: "Estimands",
+  C7: "Uncertainty: n, interval type, unit of n",
+  C8: "A changed claim or title with no CHANGELOG entry",
+  C9: "Fixed-string conclusions; verdicts against their tables",
+};
+const SEV = ["High", "Medium", "Low"];
+function ccDot(cell) {
+  const n = (l) => cell[l] || 0;
+  const [cls, what] = n("High") + n("Medium") ? ["r", "Medium or High"] : Object.values(cell).some((x) => x) ? ["y", "Low only"] : ["g", "no finding"];
+  return `<i class="cc-dot cc-dot-${cls}" aria-label="${what}"></i>`;
+}
+const ccCounts = (cell) => SEV.filter((l) => cell[l]).map((l) => `${cell[l]}${l[0]}`).join(" ")
+  + Object.entries(cell).filter(([l]) => !SEV.includes(l)).map(([l, n]) => ` ${n} ${l}`).join("");
+function ccScorecard(sc, mini = false) {
+  if (!sc) return "";
+  const cells = Object.keys(CC_ITEMS).map((k) => {
+    const cell = sc[k] || {}, counts = ccCounts(cell);
+    const tip = `${k} · ${CC_ITEMS[k]}${counts ? ` · ${counts.replace(/(\d+)H/, "$1 High").replace(/(\d+)M/, "$1 Medium").replace(/(\d+)L/, "$1 Low")}` : " · no finding"}`;
+    return mini ? `<span class="cc-mini" title="${esc(tip)}">${k}${ccDot(cell)}</span>`
+      : `<button type="button" class="cc-cell" data-item="${k}" title="${esc(tip)}"><b>${k}</b><span>${ccDot(cell)}</span>
+          <small>${esc(counts) || "&nbsp;"}</small></button>`;
+  }).join("");
+  return mini ? `<span class="cc-minis">${cells}</span>` : `<div class="cc-score" role="group" aria-label="Findings per rubric item">${cells}</div>`;
+}
+
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+function ccRunLine(run) {
+  if (run.error) return `<span class="lvl-error">${esc(run.error)}</span>`;
+  const claims = run.claims ? Object.entries(run.claims).map(([v, n]) => `${n} ${esc(v.replace(/_/g, " "))}`).join(", ") : "—";
+  const f = run.findings, a = run.answers;
+  const lv = f?.by_level ? Object.entries(f.by_level).map(([l, n]) => `${n} ${esc(l)}`).join(", ") : "";
+  const ans = a ? [a.blocking != null ? `${a.blocking} blocking` : "", a.fixed ? `${a.fixed} fixed` : "",
+    a.deferred ? `${a.deferred} deferred` : ""].filter(Boolean).join(", ") : "";
+  return `claims: ${claims} · findings: ${f ? f.total : "—"}${lv ? ` (${lv})` : ""}${ans ? ` · answers: ${ans}` : ""}`;
+}
+
+function ccHistory(r) {
+  const c = r.claims_check;
+  if (!c) return "";
+  const intro = {
+    current: "The newest claims check still matches this report and the evidence its reviewer read.",
+    open_high: "The newest claims check still matches this report, but it has a High finding not answered Fixed: the report must not stay live as it is.",
+    stale: `The report or its evidence changed after the newest claims check: ${esc((c.runs[0]?.stale_reasons || []).join("; "))}.`,
+    missing: c.required ? "This live version-2 report has no claims check yet." : "This draft has no claims check yet; it needs one before it goes live.",
+    not_required: "A version-1 report has no frontmatter claims, so it has no claims check. It moves to version 2 before its next live revision.",
+    history: "Superseded or retracted reports are history and are not checked.",
+  }[c.status];
+  const runs = c.runs.map((run, k) => `<details class="cc-run" ${k === 0 ? "open" : ""}><summary>
+      <b>Run ${run.run}</b> · ${esc(run.checked_on || "?")}
+      ${run.current === true ? `<span class="badge ok">current</span>` : run.current === false ? `<span class="badge warn">stale</span>` : ""}
+      <span class="muted">· ${esc(run.model || "")}</span></summary>
+      ${ccScorecard(run.scorecard)}
+      <dl class="kv">
+        <dt>Rubric</dt><dd><code>${esc(run.rubric_version || "?")}</code></dd>
+        <dt>Result</dt><dd>${ccRunLine(run)}</dd>
+        <dt>Evidence</dt><dd>${run.inputs != null ? `${run.inputs} files digested` : "—"}</dd>
+        <dt>Record</dt><dd>${srcLink(run.path, run.file)}${run.pr_comment ? ` · <a href="${esc(run.pr_comment)}" target="_blank" rel="noopener">PR comment</a>` : ""}</dd>
+      </dl>
+      ${run.responses_md ? `<h4>Author's responses</h4><div class="prose cc-md" data-md="responses"></div>` : ""}
+      ${run.summary_md ? `<details class="cc-sub"><summary>Reviewer's summary (verbatim)</summary><div class="prose cc-md" data-md="summary"></div></details>` : ""}
+    </details>`).join("");
+  return `<details id="claims-history" class="cc-history"><summary>Review history — claims check: ${esc(CC_LABEL[c.status])}${c.runs.length ? ` (${plural(c.runs.length, "run")})` : ""}
+      ${ccScorecard(c.runs[0]?.scorecard, true)}</summary>
+      <p class="muted">${intro} A claims check is a review, by a reader who did not write the report, of whether
+        each claim and number matches its evidence. Each run is committed as a record: the prompt, the reviewer's
+        response verbatim and the author's answer to each finding. Newest first.</p>
+      ${runs}
+    </details>`;
+}
+
+function mountCcHistory(r) {
+  const box = document.getElementById("claims-history");
+  if (!box) return;
+  box.querySelectorAll(".cc-run").forEach((el, k) => {
+    const run = r.claims_check.runs[k];
+    for (const d of el.querySelectorAll(".cc-md")) {
+      const md = d.dataset.md === "responses" ? run.responses_md : run.summary_md;
+      d.replaceChildren(renderMarkdown(md, run.path));
+    }
+  });
+  // a scorecard cell marks the author's answers to that item's findings (the table's "Check" column)
+  box.querySelectorAll(".cc-run").forEach((el) => el.querySelectorAll(".cc-cell").forEach((btn) => btn.addEventListener("click", () => {
+    const item = btn.dataset.item, re = new RegExp(`\\b${item}\\b`);
+    const pressed = btn.getAttribute("aria-pressed") !== "true";
+    el.querySelectorAll(".cc-cell").forEach((b) => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", String(pressed));
+    const rows = [...el.querySelectorAll(".cc-md table tbody tr")];
+    rows.forEach((tr) => tr.classList.toggle("cc-hit", pressed && re.test(tr.cells[1]?.textContent || "")));
+    el.querySelector(".cc-hit")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  })));
+  document.querySelector(".cc-chip")?.addEventListener("click", () => {
+    box.open = true;
+    box.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function viewReport(sid, rid) {
   const r = S.reportByKey[`${sid}/${rid}`];
   if (!r) return notFound(`report ${sid}/${rid}`);
@@ -380,7 +505,7 @@ function viewReport(sid, rid) {
     <h1>${esc(r.title)}</h1>
     <div class="chips">${statusChip(r.status)}${r.authors.map((a) => chip(a)).join("")}
       ${srcLink(r.path, `source @ ${short(S.sha)}`)} <span class="chip">health ${healthBadges(r.path, { exact: true })}</span>
-      ${VIEWS.history ? `<a class="chip" href="#/history/${esc(sid)}/${esc(r.id)}">history</a>` : ""}</div>
+      ${VIEWS.history ? `<a class="chip" href="#/history/${esc(sid)}/${esc(r.id)}">history</a>` : ""}${ccChip(r)}</div>
     ${r.status === "superseded" && r.superseded_by ? `<div class="banner superseded"><b>Superseded</b> by ${ref(r.superseded_by)}.</div>` : ""}
     ${r.status === "retracted" ? `<div class="banner superseded"><b>Retracted.</b> Its conclusion is wrong and nothing replaces it.</div>` : ""}
     ${corrections.map((c) => `<div class="banner correction"><b>Correction</b> by
@@ -395,7 +520,9 @@ function viewReport(sid, rid) {
       </dl>
       ${findingList(findingsFor(r.path, { exact: true }))}
     </details>
+    ${ccHistory(r)}
     <div class="prose" id="body"></div>`;
+  mountCcHistory(r);
   const body = renderMarkdown(r.markdown, r.path);
   body.querySelector("h1")?.remove();      // the page heading already shows the report title
   for (const div of body.querySelectorAll(".result-block")) {
@@ -475,9 +602,46 @@ function viewGroup(g) {
     <h2>Artifacts reading it</h2><ul>${e.artifacts.map((p) => `<li>${srcLink(p)}</li>`).join("") || "<li class=muted>none</li>"}</ul>`;
 }
 
+function ccHealth() {
+  const all = S.cat.studies.flatMap((s) => s.reports.map((r) => ({ s, r, c: r.claims_check })));
+  if (!all.some((x) => x.c)) return `<h2>Claims check</h2><p class="muted">This build has no claims-check data
+    (the studies checkout has no <code>studies/util/claims_check.py</code>).</p>`;
+  const KEYS = ["current", "open_high", "stale", "missing", "not_required", "history"];
+  // version-1 reports are counted apart whatever their review history: the pass counts are of version-2 reports
+  const bucket = (c) => !c ? null : c.status === "history" ? "history" : c.schema_version === 1 ? "not_required" : c.status;
+  const count = (xs) => Object.fromEntries(KEYS.map((k) => [k, xs.filter((x) => bucket(x.c) === k)]));
+  const link = (x) => `<a href="#/report/${esc(x.s.id)}/${esc(x.r.id)}" title="${esc(x.r.title)}">${esc(x.r.id)}</a>`;
+  const cell = (xs, cls, list) => !xs.length ? `<td class="muted">0</td>` : !cls ? `<td>${xs.length}</td>`
+    : `<td><span class="badge ${cls}">${xs.length}</span>${list ? ` <span class="cc-ids">${xs.map(link).join(" ")}</span>` : ""}</td>`;
+  const tot = count(all);
+  const v2 = [...tot.current, ...tot.open_high, ...tot.stale, ...tot.missing];
+  const failing = tot.open_high.length + tot.stale.length + tot.missing.length;
+  const rows = S.cat.studies.filter((s) => s.reports.length).map((s) => {
+    const c = count(all.filter((x) => x.s === s));
+    return `<tr><td><a href="#/study/${esc(s.id)}">${esc(s.id)}</a></td><td>${s.reports.length}</td>
+      ${cell(c.current, "ok", true)}${cell(c.open_high, "error", true)}${cell(c.stale, "warn", true)}${cell(c.missing, "error", true)}
+      ${cell(c.not_required, "", false)}${cell(c.history, "", false)}</tr>`;
+  }).join("");
+  return `<h2>Claims check</h2>
+    <div class="stats cc-stats">
+      <div class="stat"><b>${tot.current.length} / ${v2.length}</b><span>version-2 reports passed</span></div>
+      <div class="stat"><b class="${failing ? "lvl-warn" : ""}">${failing}</b><span>not passed (High open, stale or never checked)</span></div>
+      <div class="stat"><b>${tot.not_required.length}</b><span>version-1 reports (no claims to check)</span></div>
+    </div>
+    <p class="muted">Each claims check is a committed record under <code>analysis/provenance/</code>. A report has
+      <b>passed</b> while its newest record still matches the report's claims and text and every file the reviewer read
+      and has no High finding left unfixed (<b>High open</b> if it has one); it is <b>stale</b> once one of them changes, and <b>not checked</b> if a version-2 report has no record. A live
+      report needs a current check. Version-1 reports predate frontmatter claims and are counted apart; superseded and
+      retracted reports are history. Each report's page lists every run.</p>
+    <div class="table-wrap"><table class="cc-table"><thead><tr><th>Study</th><th>Reports</th><th>Passed</th><th>High open</th><th>Stale</th>
+      <th>Not checked</th><th>v1 (no claims)</th><th>History</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 function viewHealth() {
   const h = S.cat.health;
   $main().innerHTML = `<h1>Provenance health</h1>
+    ${ccHealth()}
+    <h2>Provenance findings</h2>
     <p class="muted">Findings from the studies repo's <code>scripts/check_provenance.py</code> at
       ${commitLink("studies", S.cat._meta.studies_git_sha)}. Errors and warnings in files that predate a rule sit in its
       baseline; any new one fails the studies CI.${h.ran ? ` Baseline: ${esc(h.baseline_size)} findings.` : ""}</p>

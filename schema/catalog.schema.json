@@ -996,6 +996,200 @@
             }
           }
         },
+        "claims_check": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The report's claims checks (records under analysis/provenance/, studies#160), read with the studies checkout's studies/util/claims_check.py; null when the checkout has no such module.",
+          "required": [
+            "status",
+            "schema_version",
+            "required",
+            "runs"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "current",
+                "open_high",
+                "stale",
+                "missing",
+                "not_required",
+                "history"
+              ],
+              "description": "current: the newest record still matches the report and its evidence; open_high: it matches but has a High finding not answered Fixed; stale: it does not; missing: a version-2 report with no record; not_required: a version-1 report (no claims); history: superseded or retracted"
+            },
+            "schema_version": {
+              "enum": [
+                1,
+                2
+              ]
+            },
+            "required": {
+              "type": "boolean",
+              "description": "a live version-2 report, which needs a current record"
+            },
+            "runs": {
+              "type": "array",
+              "description": "every record of this report, newest first",
+              "items": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "file",
+                  "run"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "run": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "checked_on": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rubric_version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "pr_comment": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "inputs": {
+                    "type": "integer"
+                  },
+                  "current": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ],
+                    "description": "newest run only; null for older runs"
+                  },
+                  "stale_reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "claims": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": {
+                      "type": "integer"
+                    },
+                    "description": "claim verdict -> count, from the rubric JSON in the reviewer's response"
+                  },
+                  "findings": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "total": {
+                        "type": "integer"
+                      },
+                      "by_kind": {
+                        "type": "object"
+                      },
+                      "by_level": {
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      }
+                    }
+                  },
+                  "scorecard": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "claims-check/3 and later: rubric item C0..C9 -> {severity: number of findings}; an item with no finding is {}. null for records whose entries carry no item.",
+                    "propertyNames": {
+                      "pattern": "^C[0-9]$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  "summary_md": {
+                    "type": "string",
+                    "description": "the reviewer's markdown summary, verbatim"
+                  },
+                  "responses_md": {
+                    "type": "string",
+                    "description": "the record's 'Responses to the findings' section"
+                  },
+                  "answers": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "rows": {
+                        "type": "integer"
+                      },
+                      "blocking": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "fixed": {
+                        "type": "integer"
+                      },
+                      "deferred": {
+                        "type": "integer"
+                      },
+                      "high_not_fixed": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "High rows not answered Fixed, when the answers table has a Severity column"
+                      },
+                      "high_fixed": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "High rows answered Fixed, when the answers table has a Severity column"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "tags": {
           "$ref": "#/$defs/tags"
         }
