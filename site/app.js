@@ -253,7 +253,7 @@ function viewStudies() {
       <div class="stat"><b>${reports}</b><span>reports</span></div>
       <div class="stat"><b>${launches}</b><span>launch records</span></div>
       <div class="stat"><b>${Object.keys(c.wandb_groups).length}</b><span>W&amp;B groups</span></div>
-      <div class="stat"><b><a href="#/health">${S.healthRan ? `${err} / ${warn}` : "—"}</a></b>
+      <div class="stat"><b><a href="#/checks">${S.healthRan ? `${err} / ${warn}` : "—"}</a></b>
         <span>provenance errors / warnings</span></div>
     </div>
     <h2>How the studies connect</h2>
@@ -293,7 +293,7 @@ function viewStudy(id) {
     <div class="chips">${tagChips(s)}${statusChip(s.cover.status)}
       ${w ? `<a class="chip" href="https://wandb.ai/${esc(w.entity)}/${esc(w.project)}" target="_blank" rel="noopener">W&amp;B ${esc(w.project)}</a>` : ""}
       <a class="chip" href="${STUDIES_REPO}/tree/${S.sha}/${esc(s.path)}" target="_blank" rel="noopener">source @ ${short(S.sha)}</a>
-      <span class="chip">health ${healthBadges(s.path)}</span>
+      <span class="chip">provenance ${healthBadges(s.path)}</span>
       ${s.cover.source === "readme" ? chip("cover parsed from README prose") : ""}</div>
     ${s.cover.question ? `<p><b>Question.</b> ${esc(s.cover.question)}</p>` : ""}
     ${s.cover.verdict ? `<p><b>Verdict.</b> ${esc(s.cover.verdict)}</p>` : ""}
@@ -303,7 +303,7 @@ function viewStudy(id) {
     <h2>How it connects</h2>
     <section class="map" id="local-map-host" aria-label="Studies this one builds on and those that built on it"></section>
     <h2>Reports</h2>
-    <div class="table-wrap"><table><thead><tr><th>Report</th><th>Status</th><th>Result blocks</th><th>W&amp;B groups</th><th>Health</th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>Report</th><th>Status</th><th>Result blocks</th><th>W&amp;B groups</th><th>Provenance</th></tr></thead><tbody>
     ${s.reports.map((r) => `<tr>
       <td><a href="#/report/${s.id}/${esc(r.id)}">${esc(r.title)}</a></td>
       <td>${statusChip(r.status)}${(S.correctedBy[`${s.id}/${r.id}`] || []).length ? chip("corrected", "status-superseded") : ""}</td>
@@ -317,7 +317,7 @@ function viewStudy(id) {
     ${(s.root_launch_records || []).length ? variantBlock(s, { name: "(study root, no variant)", path: s.path,
       launch_records: s.root_launch_records, wandb_groups: [...new Set(s.root_launch_records.flatMap((r) => r.wandb_groups))],
       notes: null }) : ""}
-    <h2>Provenance findings</h2>
+    <h2>Provenance check</h2>
     ${findingList(findingsFor(s.path))}
     <details><summary>README</summary><div class="prose" id="readme"></div></details>`;
   document.getElementById("readme").appendChild(renderMarkdown(s.readme, `${s.path}/README.md`));
@@ -504,7 +504,7 @@ function viewReport(sid, rid) {
     <div class="crumbs"><a href="#/studies">Studies</a> / <a href="#/study/${esc(sid)}">${esc(sid)}</a> / ${esc(r.id)}</div>
     <h1>${esc(r.title)}</h1>
     <div class="chips">${statusChip(r.status)}${r.authors.map((a) => chip(a)).join("")}
-      ${srcLink(r.path, `source @ ${short(S.sha)}`)} <span class="chip">health ${healthBadges(r.path, { exact: true })}</span>
+      ${srcLink(r.path, `source @ ${short(S.sha)}`)} <span class="chip">provenance ${healthBadges(r.path, { exact: true })}</span>
       ${VIEWS.history ? `<a class="chip" href="#/history/${esc(sid)}/${esc(r.id)}">history</a>` : ""}${ccChip(r)}</div>
     ${r.status === "superseded" && r.superseded_by ? `<div class="banner superseded"><b>Superseded</b> by ${ref(r.superseded_by)}.</div>` : ""}
     ${r.status === "retracted" ? `<div class="banner superseded"><b>Retracted.</b> Its conclusion is wrong and nothing replaces it.</div>` : ""}
@@ -639,9 +639,9 @@ function ccHealth() {
 
 function viewHealth() {
   const h = S.cat.health;
-  $main().innerHTML = `<h1>Provenance health</h1>
+  $main().innerHTML = `<h1>Checks on reports and provenance</h1>
     ${ccHealth()}
-    <h2>Provenance findings</h2>
+    <h2>Provenance check</h2>
     <p class="muted">Findings from the studies repo's <code>scripts/check_provenance.py</code> at
       ${commitLink("studies", S.cat._meta.studies_git_sha)}. Errors and warnings in files that predate a rule sit in its
       baseline; any new one fails the studies CI.${h.ran ? ` Baseline: ${esc(h.baseline_size)} findings.` : ""}</p>
@@ -684,7 +684,7 @@ function renderRoute(parts) {
   if (view === "study") return viewStudy(a);
   if (view === "report") return viewReport(a, b);
   if (view === "group") return viewGroup(parts.slice(1).join("/"));
-  if (view === "health") return viewHealth();
+  if (view === "checks" || view === "health") return viewHealth();   // #/health: the page's old name
   if (VIEWS[view]) return VIEWS[view](...parts.slice(1));
   return notFound(`page ${view}`);
 }

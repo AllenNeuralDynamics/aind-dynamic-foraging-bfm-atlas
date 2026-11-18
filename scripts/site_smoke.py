@@ -97,7 +97,7 @@ def main(site: str, out: str) -> int:
     lin = next(((s, r, b["name"]) for s, r in pairs for b in r["result_blocks"] if f'{r["path"]}#{b["name"]}' in declared),
                (study, report, report["result_blocks"][0]["name"]))
     views = {"landing": "#/", "studies": "#/studies", "study": f"#/study/{study['id']}",
-             "report": f"#/report/{study['id']}/{report['id']}", "health": "#/health",
+             "report": f"#/report/{study['id']}/{report['id']}", "checks": "#/checks",
              "group": f"#/group/{group}", "history": f"#/history/{study['id']}/{report['id']}",
              "lineage": f"#/lineage/{lin[0]['id']}/{lin[1]['id']}/{lin[2]}"}
     # Navigation to optional views is shown only once a module registers them; visit those.
@@ -200,15 +200,19 @@ def main(site: str, out: str) -> int:
         page.wait_for_timeout(500)
         if not page.evaluate("location.hash.startsWith('#/search/')") or not page.locator(".search-page li").count():
             failures.append("search: Enter did not open the full results page")
-        # claims check: Health counts reports per study; a checked report's page lists every run
+        # claims check: Checks counts reports per study; a checked report's page lists every run
         checked = next(((s, r) for s in cat["studies"] for r in s["reports"]
                         if (r.get("claims_check") or {}).get("runs")), None)
         if any(r.get("claims_check") for s in cat["studies"] for r in s["reports"]):
-            page.goto(base + "#/health")
+            page.goto(base + "#/health")              # the page's old address still opens it
+            page.wait_for_timeout(300)
+            if not page.locator(".cc-table").count():
+                failures.append("checks: #/health no longer opens the Checks page")
+            page.goto(base + "#/checks")
             page.wait_for_timeout(500)
             rows = page.locator(".cc-table tbody tr").count()
             if rows != sum(1 for s in cat["studies"] if s["reports"]):
-                failures.append(f"claims check: Health table has {rows} rows, not one per study with reports")
+                failures.append(f"claims check: Checks table has {rows} rows, not one per study with reports")
         if checked:
             page.goto(base + f"#/report/{checked[0]['id']}/{checked[1]['id']}")
             page.wait_for_selector(".cc-chip", timeout=10000)
